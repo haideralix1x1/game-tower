@@ -39,3 +39,13 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Build binaries
+*.apk
+*.aab
+
+# Local test dumps & captures
+/scr.png
+/gt_screen.png
+/dump*.xml
+/window_dump.xml
