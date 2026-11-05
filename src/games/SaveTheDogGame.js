@@ -8,7 +8,17 @@ import {
   useWindowDimensions,
   Platform,
 } from 'react-native';
-import Svg, { Path, Circle, Rect, G, Line, Defs, LinearGradient, Stop } from 'react-native-svg';
+import Svg, {
+  Path,
+  Circle,
+  Rect,
+  G,
+  Line,
+  Defs,
+  LinearGradient,
+  Stop,
+  Text as SvgText,
+} from 'react-native-svg';
 import { COLORS } from '../../styles';
 import MiniGameHeader from '../components/MiniGameHeader';
 import GameResultModal from '../components/GameResultModal';
@@ -25,6 +35,8 @@ const monoFont = Platform.select({
 const DOG_RADIUS = 26;
 const BEE_RADIUS = 9;
 const SURVIVE_TIME = 6;
+const PLATFORM_WIDTH = 96;
+const PLATFORM_HEIGHT = 16;
 
 // Helper: distance from point (px, py) to line segment (x1, y1)-(x2, y2)
 function distPointToSegment(px, py, x1, y1, x2, y2) {
@@ -40,8 +52,19 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate }) {
   const arenaWidth = width;
   const arenaHeight = height - 130;
 
-  // Floor positioned in the middle of the screen (slightly below mid)
-  const groundY = Math.round(arenaHeight * 0.54);
+  // Short Platform elevated in the middle of the screen
+  const platformY = Math.round(arenaHeight * 0.48);
+  // Toxic Acid Water pool down below
+  const acidY = arenaHeight - 65;
+
+  const [platform, setPlatform] = useState({
+    x: (arenaWidth - PLATFORM_WIDTH) / 2,
+    y: platformY,
+    width: PLATFORM_WIDTH,
+    height: PLATFORM_HEIGHT,
+  });
+  const platformRef = useRef(platform);
+  platformRef.current = platform;
 
   const [level, setLevel] = useState(1);
   const [score, setScore] = useState(0);
@@ -100,8 +123,20 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate }) {
       gameStateRef.current = 'DRAWING';
       setModalVisible(false);
 
-      const dX = arenaWidth * 0.5 + ((lvl % 2 === 0 ? 1 : -1) * 35);
-      const dY = groundY - DOG_RADIUS;
+      const platX = Math.round(
+        arenaWidth * 0.5 + ((lvl % 2 === 0 ? 1 : -1) * 36) - PLATFORM_WIDTH / 2
+      );
+      const newPlat = {
+        x: Math.max(24, Math.min(arenaWidth - PLATFORM_WIDTH - 24, platX)),
+        y: platformY,
+        width: PLATFORM_WIDTH,
+        height: PLATFORM_HEIGHT,
+      };
+      setPlatform(newPlat);
+      platformRef.current = newPlat;
+
+      const dX = newPlat.x + newPlat.width / 2;
+      const dY = newPlat.y - DOG_RADIUS;
       const newDog = { x: dX, y: dY, vy: 0 };
       setDog(newDog);
       dogRef.current = newDog;
@@ -132,7 +167,7 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate }) {
       setBees(initialBees);
       beesRef.current = initialBees;
     },
-    [arenaWidth, groundY]
+    [arenaWidth, platformY]
   );
 
   useEffect(() => {
@@ -347,11 +382,27 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate }) {
         lVel.vx *= 0.90;
         lVel.vy *= 0.95;
 
-        // Ground collision & high surface friction
-        const onGround = lowestY >= groundY - 4;
+        // Platform & Acid pool surface collision check
+        const plat = platformRef.current;
+        let restsOnPlatform = false;
+        for (const line of lines) {
+          for (const pt of line) {
+            if (
+              pt.x >= plat.x - 4 &&
+              pt.x <= plat.x + plat.width + 4 &&
+              Math.abs(pt.y - (plat.y - 2)) < 6
+            ) {
+              restsOnPlatform = true;
+              break;
+            }
+          }
+          if (restsOnPlatform) break;
+        }
+
+        const onGround = lowestY >= acidY - 4 || restsOnPlatform;
         if (onGround) {
-          lVel.vx *= 0.78; // Ground friction resists sliding
-          if (lVel.vy > 0) lVel.vy = 0; // Resting on ground
+          lVel.vx *= 0.78; // Surface friction resists sliding
+          if (lVel.vy > 0) lVel.vy = 0; // Resting
         }
 
         // Left / Right screen boundary
@@ -381,23 +432,73 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate }) {
 
         if (Math.abs(dx) > 0.02 || Math.abs(dy) > 0.02) {
           lines = lines.map((line) =>
-            line.map((pt) => ({
-              x: Math.max(4, Math.min(arenaWidth - 4, pt.x + dx)),
-              y: Math.min(groundY - 4, pt.y + dy),
-            }))
+            line.map((pt) => {
+              let ny = pt.y + dy;
+              // If resting on top of short platform
+              if (
+                pt.x >= plat.x - 4 &&
+                pt.x <= plat.x + plat.width + 4 &&
+                pt.y <= plat.y &&
+                ny >= plat.y - 2
+              ) {
+                ny = plat.y - 2;
+              }
+              return {
+                x: Math.max(4, Math.min(arenaWidth - 4, pt.x + dx)),
+                y: Math.min(acidY - 4, ny),
+              };
+            })
           );
           savedLinesRef.current = lines;
           setSavedLines(lines);
         }
       }
 
-      // 3. Dog Gravity & Ground Collision
+      // 3. Dog Gravity, Short Platform Landing & Acid Water Hazard
       currentDog.vy += 0.32;
       let nextDogY = currentDog.y + currentDog.vy;
-      if (nextDogY >= groundY - DOG_RADIUS) {
-        nextDogY = groundY - DOG_RADIUS;
+
+      const plat = platformRef.current;
+      const isOverPlatform =
+        currentDog.x >= plat.x - 6 &&
+        currentDog.x <= plat.x + plat.width + 6;
+
+      // Platform Landing: Dog lands on short platform top
+      if (
+        isOverPlatform &&
+        currentDog.y <= plat.y - DOG_RADIUS + 4 &&
+        nextDogY >= plat.y - DOG_RADIUS
+      ) {
+        nextDogY = plat.y - DOG_RADIUS;
         currentDog.vy = 0;
       }
+
+      // Check Dog collision with drawn lines (drawn line can catch/support dog if falling!)
+      for (const line of lines) {
+        for (let i = 0; i < line.length - 1; i++) {
+          const p1 = line[i];
+          const p2 = line[i + 1];
+          const d = distPointToSegment(currentDog.x, nextDogY, p1.x, p1.y, p2.x, p2.y);
+          if (d < DOG_RADIUS + 3) {
+            nextDogY = currentDog.y;
+            currentDog.vy = 0;
+            break;
+          }
+        }
+      }
+
+      // ACID WATER HAZARD: If dog falls off short platform into the bubbling acid lake!
+      if (nextDogY >= acidY - DOG_RADIUS) {
+        nextDogY = acidY - DOG_RADIUS;
+        currentDog.y = nextDogY;
+        dogRef.current = currentDog;
+        setDog(currentDog);
+        if (gameStateRef.current === 'SWARMING') {
+          handleLose();
+        }
+        return;
+      }
+
       currentDog.x = Math.max(DOG_RADIUS + 4, Math.min(arenaWidth - DOG_RADIUS - 4, currentDog.x));
       currentDog.y = nextDogY;
       dogRef.current = currentDog;
@@ -412,7 +513,7 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate }) {
       active = false;
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     };
-  }, [gameState, groundY, level]);
+  }, [gameState, acidY, level]);
 
   const handleWin = () => {
     if (gameStateRef.current !== 'SWARMING') return;
@@ -519,38 +620,123 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate }) {
               <Stop offset="0%" stopColor="#00F5FF" stopOpacity="0.95" />
               <Stop offset="100%" stopColor="#7928CA" stopOpacity="0.9" />
             </LinearGradient>
-            <LinearGradient id="groundGrad" x1="0" y1="0" x2="0" y2="1">
-              <Stop offset="0%" stopColor="#1E1442" stopOpacity="0.96" />
-              <Stop offset="100%" stopColor="#0B051E" stopOpacity="0.96" />
+            <LinearGradient id="platGrad" x1="0" y1="0" x2="0" y2="1">
+              <Stop offset="0%" stopColor="#25184B" stopOpacity="0.98" />
+              <Stop offset="100%" stopColor="#0F0922" stopOpacity="0.98" />
+            </LinearGradient>
+            <LinearGradient id="acidGrad" x1="0" y1="0" x2="0" y2="1">
+              <Stop offset="0%" stopColor="#39FF14" stopOpacity="0.95" />
+              <Stop offset="22%" stopColor="#00E676" stopOpacity="0.9" />
+              <Stop offset="100%" stopColor="#064E3B" stopOpacity="0.98" />
             </LinearGradient>
           </Defs>
 
-          {/* Elevated Mid-Screen Ground Platform */}
-          <Rect
-            x={0}
-            y={groundY}
-            width={arenaWidth}
-            height={arenaHeight - groundY}
-            fill="url(#groundGrad)"
-          />
-          <Line
-            x1={0}
-            y1={groundY}
-            x2={arenaWidth}
-            y2={groundY}
-            stroke="#00F5FF"
-            strokeWidth={3}
-          />
-          <Line
-            x1={0}
-            y1={groundY + 4}
-            x2={arenaWidth}
-            y2={groundY + 4}
-            stroke="#FF007F"
-            strokeWidth={1}
-            strokeDasharray="6 6"
-            opacity={0.6}
-          />
+          {/* Short Elevated Cyber Platform Under Dog */}
+          <G>
+            {/* Structural Support Pylons */}
+            <Line
+              x1={platform.x + 18}
+              y1={platform.y + platform.height}
+              x2={platform.x + 30}
+              y2={platform.y + platform.height + 42}
+              stroke="#FF007F"
+              strokeWidth={3}
+            />
+            <Line
+              x1={platform.x + platform.width - 18}
+              y1={platform.y + platform.height}
+              x2={platform.x + platform.width - 30}
+              y2={platform.y + platform.height + 42}
+              stroke="#FF007F"
+              strokeWidth={3}
+            />
+            <Line
+              x1={platform.x + 28}
+              y1={platform.y + platform.height + 42}
+              x2={platform.x + platform.width - 28}
+              y2={platform.y + platform.height + 42}
+              stroke="#00F5FF"
+              strokeWidth={2}
+            />
+
+            {/* Platform Main Body */}
+            <Rect
+              x={platform.x}
+              y={platform.y}
+              width={platform.width}
+              height={platform.height}
+              rx={4}
+              fill="url(#platGrad)"
+              stroke="#00F5FF"
+              strokeWidth={2}
+            />
+            {/* Glowing Top Ledge */}
+            <Line
+              x1={platform.x}
+              y1={platform.y}
+              x2={platform.x + platform.width}
+              y2={platform.y}
+              stroke="#00F5FF"
+              strokeWidth={3.5}
+            />
+            <Line
+              x1={platform.x + 4}
+              y1={platform.y + 4}
+              x2={platform.x + platform.width - 4}
+              y2={platform.y + 4}
+              stroke="#FFD166"
+              strokeWidth={1.2}
+              strokeDasharray="4 4"
+            />
+          </G>
+
+          {/* Toxic Acid Water Hazard Down Below */}
+          <G>
+            {/* Acid Water Lake */}
+            <Rect
+              x={0}
+              y={acidY}
+              width={arenaWidth}
+              height={arenaHeight - acidY}
+              fill="url(#acidGrad)"
+            />
+            {/* Acid Surface Wave Crest */}
+            <Line
+              x1={0}
+              y1={acidY}
+              x2={arenaWidth}
+              y2={acidY}
+              stroke="#39FF14"
+              strokeWidth={4}
+            />
+            <Line
+              x1={0}
+              y1={acidY + 4}
+              x2={arenaWidth}
+              y2={acidY + 4}
+              stroke="#FFFFFF"
+              strokeWidth={1.5}
+              strokeDasharray="8 6"
+              opacity={0.8}
+            />
+            {/* Bubbling Acid Droplets */}
+            <Circle cx={arenaWidth * 0.16} cy={acidY + 12} r={6} fill="#70FF00" opacity={0.7} />
+            <Circle cx={arenaWidth * 0.36} cy={acidY + 18} r={9} fill="#39FF14" opacity={0.8} />
+            <Circle cx={arenaWidth * 0.64} cy={acidY + 14} r={7} fill="#70FF00" opacity={0.75} />
+            <Circle cx={arenaWidth * 0.86} cy={acidY + 20} r={10} fill="#39FF14" opacity={0.85} />
+            {/* Danger Hazard Text */}
+            <SvgText
+              x={arenaWidth * 0.5}
+              y={acidY + 34}
+              textAnchor="middle"
+              fill="#062F12"
+              fontSize={12}
+              fontFamily={monoFont}
+              fontWeight="900"
+            >
+              ☣ TOXIC ACID WATER - PROTECT FROM FALL ☣
+            </SvgText>
+          </G>
 
           {/* Bee Hives */}
           {hives.map((hive) => (
