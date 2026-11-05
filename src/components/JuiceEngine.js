@@ -157,10 +157,16 @@ const JuiceEngine = forwardRef(({ children }, ref) => {
     (text = 'AWESOME!', subText = '+BONUS', color = COLORS.cyan, x, y) => {
       triggerShake(8, 6);
       triggerFlash(color);
-      spawnBurst(x, y, color, 24);
-      spawnPopup(text, subText, color, x, y);
+      const cx = typeof x === 'number' ? x : width / 2;
+      const cy = typeof y === 'number' ? y : height * 0.42;
+
+      // Triple celebratory particle fountain with shockwaves
+      spawnBurst(cx, cy, color, 36);
+      spawnBurst(Math.max(40, cx - 60), cy - 25, COLORS.solarGold, 24);
+      spawnBurst(Math.min(width - 40, cx + 60), cy - 25, COLORS.matrixMint, 24);
+      spawnPopup(text, subText, color, cx, cy);
     },
-    [triggerShake, triggerFlash, spawnBurst, spawnPopup]
+    [triggerShake, triggerFlash, spawnBurst, spawnPopup, width, height]
   );
 
   useImperativeHandle(
@@ -402,5 +408,13 @@ const localStyles = StyleSheet.create({
     overflow: 'hidden',
   },
 });
+
+// Global static fallback so JuiceEngine.celebrate(x, y) is always callable from any mini-game
+JuiceEngine.celebrate = (x, y) => {
+  try {
+    triggerLightHaptic();
+    playTapSound();
+  } catch {}
+};
 
 export default JuiceEngine;

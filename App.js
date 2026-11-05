@@ -9,7 +9,7 @@ export default function App() {
   return (
     <GestureHandlerRootView style={styles.rootContainer}>
       <SafeAreaProvider style={styles.rootContainer}>
-        <StatusBar style="light" />
+        <StatusBar hidden={true} />
         <GameTowerHub />
       </SafeAreaProvider>
     </GestureHandlerRootView>

@@ -6,14 +6,15 @@ import {
   StyleSheet,
   Platform,
   useWindowDimensions,
+  PanResponder,
 } from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { ZoomIn, FadeIn } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS } from '../../styles';
 import MiniGameHeader from '../components/MiniGameHeader';
 import JuiceEngine from '../components/JuiceEngine';
+import GameResultModal from '../components/GameResultModal';
 import {
   triggerLightHaptic,
   triggerSliceHaptic,
@@ -27,22 +28,30 @@ import {
   playGameOverSound,
 } from '../utils/sound';
 
-const STORAGE_KEY = '@game_tower:best_2048_v1';
-const GRID_SIZE = 4;
+const STORAGE_KEY = '@game_tower:best_2048_drop_v1';
+const COLS = 5;
+const ROWS = 7;
 
 const TILE_THEMES = {
-  0: { colors: ['rgba(255,255,255,0.03)', 'rgba(255,255,255,0.02)'], border: 'rgba(0, 245, 255, 0.12)', text: 'transparent' },
-  2: { colors: ['#0B2545', '#134074'], border: '#00F5FF', text: '#E0FFFF' },
-  4: { colors: ['#005F73', '#0A9396'], border: '#00F5D4', text: '#FFFFFF' },
-  8: { colors: ['#3A0CA3', '#4361EE'], border: '#72EFDD', text: '#FFFFFF' },
-  16: { colors: ['#5A189A', '#7209B7'], border: '#C77DFF', text: '#FFFFFF' },
-  32: { colors: ['#7209B7', '#B5179E'], border: '#FF66D9', text: '#FFFFFF' },
-  64: { colors: ['#B5179E', '#F72585'], border: '#FF007F', text: '#FFFFFF' },
-  128: { colors: ['#D00000', '#FF2A55'], border: '#FF9E00', text: '#FFFFFF' },
-  256: { colors: ['#E85D04', '#FF9E00'], border: '#FFD166', text: '#FFFFFF' },
-  512: { colors: ['#F77F00', '#FFD166'], border: '#FFFFFF', text: '#05050C' },
-  1024: { colors: ['#06D6A0', '#00F5D4'], border: '#FFFFFF', text: '#05050C' },
-  2048: { colors: ['#00F5FF', '#FF007F'], border: '#FFD166', text: '#FFFFFF' },
+  0: { bg: ['rgba(255,255,255,0.02)', 'rgba(255,255,255,0.01)'], border: 'rgba(255, 255, 255, 0.08)', text: 'transparent' },
+  2: { bg: ['#0077B6', '#0096C7'], border: '#00F5FF', text: '#FFFFFF' },
+  4: { bg: ['#008080', '#0A9396'], border: '#00F5D4', text: '#FFFFFF' },
+  8: { bg: ['#4361EE', '#3A0CA3'], border: '#72EFDD', text: '#FFFFFF' },
+  16: { bg: ['#7209B7', '#560BAD'], border: '#C77DFF', text: '#FFFFFF' },
+  32: { bg: ['#B5179E', '#7209B7'], border: '#FF66D9', text: '#FFFFFF' },
+  64: { bg: ['#D00000', '#F72585'], border: '#FF007F', text: '#FFFFFF' },
+  128: { bg: ['#E85D04', '#FF5E00'], border: '#FF9E00', text: '#FFFFFF' },
+  256: { bg: ['#F77F00', '#FFD166'], border: '#FFD166', text: '#05050C' },
+  512: { bg: ['#06D6A0', '#00F5D4'], border: '#FFFFFF', text: '#05050C' },
+  1024: { bg: ['#00F5FF', '#00B4D8'], border: '#FFFFFF', text: '#05050C' },
+  2048: { bg: ['#FF007F', '#FFD166'], border: '#FFFFFF', text: '#05050C' },
+  4096: { bg: ['#7928CA', '#FF007F'], border: '#00F5FF', text: '#FFFFFF' },
+  8192: { bg: ['#00F5FF', '#7928CA'], border: '#FFD166', text: '#FFFFFF' },
+};
+
+const getTileTheme = (val) => {
+  if (TILE_THEMES[val]) return TILE_THEMES[val];
+  return { bg: ['#FF0055', '#7928CA'], border: '#00F5FF', text: '#FFFFFF' };
 };
 
 const monoFont = Platform.select({
@@ -52,91 +61,54 @@ const monoFont = Platform.select({
 });
 
 const createEmptyGrid = () =>
-  Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(0));
+  Array.from({ length: ROWS }, () => Array(COLS).fill(0));
 
-const cloneGrid = (g) => g.map((row) => [...row]);
-
-const addRandomTile = (grid) => {
-  const empty = [];
-  for (let r = 0; r < GRID_SIZE; r += 1) {
-    for (let c = 0; c < GRID_SIZE; c += 1) {
-      if (grid[r][c] === 0) empty.push([r, c]);
-    }
-  }
-  if (empty.length === 0) return grid;
-  const [r, c] = empty[Math.floor(Math.random() * empty.length)];
-  const next = cloneGrid(grid);
-  next[r][c] = Math.random() < 0.88 ? 2 : 4;
-  return next;
-};
-
-const slideAndMergeRow = (row) => {
-  const nonZero = row.filter((v) => v !== 0);
-  const merged = [];
-  let gainedScore = 0;
-  let maxMerged = 0;
-
-  let i = 0;
-  while (i < nonZero.length) {
-    if (i + 1 < nonZero.length && nonZero[i] === nonZero[i + 1]) {
-      const val = nonZero[i] * 2;
-      merged.push(val);
-      gainedScore += val;
-      if (val > maxMerged) maxMerged = val;
-      i += 2;
-    } else {
-      merged.push(nonZero[i]);
-      i += 1;
-    }
-  }
-  while (merged.length < GRID_SIZE) {
-    merged.push(0);
-  }
-  return { row: merged, gainedScore, maxMerged };
-};
-
-const canAnyMove = (grid) => {
-  for (let r = 0; r < GRID_SIZE; r += 1) {
-    for (let c = 0; c < GRID_SIZE; c += 1) {
-      if (grid[r][c] === 0) return true;
-      if (c + 1 < GRID_SIZE && grid[r][c] === grid[r][c + 1]) return true;
-      if (r + 1 < GRID_SIZE && grid[r][c] === grid[r + 1][c]) return true;
-    }
-  }
-  return false;
+const pickSpawnValue = (highestTile = 2) => {
+  const pool = [2, 2, 2, 4, 4, 8];
+  if (highestTile >= 64) pool.push(8, 16);
+  if (highestTile >= 256) pool.push(16, 32);
+  if (highestTile >= 1024) pool.push(32, 64);
+  return pool[Math.floor(Math.random() * pool.length)];
 };
 
 export default function Game2048({ onBackToHub, onScoreUpdate }) {
   const { width } = useWindowDimensions();
-  const boardWidth = Math.min(360, width - 32);
-  const cellSize = Math.floor((boardWidth - 40) / 4);
+  const boardWidth = Math.min(360, width - 24);
+  const cellWidth = Math.floor((boardWidth - 16) / COLS);
+  const cellHeight = Math.floor(cellWidth * 1.05);
+  const boardHeight = cellHeight * ROWS + 16;
+
   const juiceRef = useRef(null);
 
-  const [grid, setGrid] = useState(() =>
-    addRandomTile(addRandomTile(createEmptyGrid()))
-  );
-  const [prevSnapshot, setPrevSnapshot] = useState(null);
+  const [grid, setGrid] = useState(() => createEmptyGrid());
+  const [aimCol, setAimCol] = useState(2);
+  const [currentVal, setCurrentVal] = useState(2);
+  const [nextVal, setNextVal] = useState(4);
   const [score, setScore] = useState(0);
   const [bestScore, setBestScore] = useState(0);
   const [maxTile, setMaxTile] = useState(2);
   const [isGameOver, setIsGameOver] = useState(false);
+  const [isDropping, setIsDropping] = useState(false);
 
   useEffect(() => {
     (async () => {
       try {
         const saved = await AsyncStorage.getItem(STORAGE_KEY);
-        if (saved) setBestScore(parseInt(saved, 10) || 0);
+        if (saved) {
+          const parsed = parseInt(saved, 10) || 0;
+          setBestScore(parsed);
+        }
       } catch {}
     })();
   }, []);
 
   const saveBest = useCallback(
-    async (newScore) => {
-      if (onScoreUpdate) onScoreUpdate(newScore);
-      if (newScore > bestScore) {
-        setBestScore(newScore);
+    async (nextScore) => {
+      if (onScoreUpdate) onScoreUpdate(nextScore);
+      if (nextScore > bestScore) {
+        setBestScore(nextScore);
         try {
-          await AsyncStorage.setItem(STORAGE_KEY, String(newScore));
+          await AsyncStorage.setItem(STORAGE_KEY, String(nextScore));
         } catch {}
       }
     },
@@ -144,147 +116,265 @@ export default function Game2048({ onBackToHub, onScoreUpdate }) {
   );
 
   const startNewGame = useCallback(() => {
-    const fresh = addRandomTile(addRandomTile(createEmptyGrid()));
-    setGrid(fresh);
-    setPrevSnapshot(null);
+    setGrid(createEmptyGrid());
     setScore(0);
     setMaxTile(2);
+    setAimCol(2);
+    setCurrentVal(pickSpawnValue(2));
+    setNextVal(pickSpawnValue(2));
     setIsGameOver(false);
-    if (juiceRef.current) {
-      juiceRef.current.flash(COLORS.cyan);
-    }
+    setIsDropping(false);
+    if (juiceRef.current) juiceRef.current.flash(COLORS.cyan);
   }, []);
 
-  const performMove = useCallback(
-    (direction) => {
-      if (isGameOver) return;
+  // Calculate lowest empty row in aimed column
+  const getLowestEmptyRow = (g, col) => {
+    for (let r = ROWS - 1; r >= 0; r -= 1) {
+      if (g[r][col] === 0) return r;
+    }
+    return -1;
+  };
 
-      let working = cloneGrid(grid);
-      let totalGained = 0;
-      let highestMerge = 0;
+  // Process merges and gravity cascade across all 4 directions (left, right, up, down)
+  const processCascade = (startGrid) => {
+    let current = startGrid.map((row) => [...row]);
+    let totalGained = 0;
+    let highestMerged = 0;
+    let comboChain = 0;
+    let keepMerging = true;
 
-      const rotateRight = (m) =>
-        m[0].map((_, index) => m.map((row) => row[index]).reverse());
-      const rotateLeft = (m) =>
-        m[0].map((_, index) => m.map((row) => row[row.length - 1 - index]));
+    while (keepMerging) {
+      keepMerging = false;
 
-      if (direction === 'RIGHT') {
-        working = working.map((r) => [...r].reverse());
-      } else if (direction === 'UP') {
-        working = rotateLeft(working);
-      } else if (direction === 'DOWN') {
-        working = rotateRight(working);
-      }
-
-      const processed = working.map((row) => {
-        const res = slideAndMergeRow(row);
-        totalGained += res.gainedScore;
-        if (res.maxMerged > highestMerge) highestMerge = res.maxMerged;
-        return res.row;
-      });
-
-      let restored = processed;
-      if (direction === 'RIGHT') {
-        restored = processed.map((r) => [...r].reverse());
-      } else if (direction === 'UP') {
-        restored = rotateRight(processed);
-      } else if (direction === 'DOWN') {
-        restored = rotateLeft(processed);
-      }
-
-      const changed = JSON.stringify(grid) !== JSON.stringify(restored);
-      if (!changed) return;
-
-      setPrevSnapshot({ grid: cloneGrid(grid), score });
-
-      const withRandom = addRandomTile(restored);
-      const nextScore = score + totalGained;
-      let currentMax = maxTile;
-      for (let r = 0; r < GRID_SIZE; r += 1) {
-        for (let c = 0; c < GRID_SIZE; c += 1) {
-          if (withRandom[r][c] > currentMax) currentMax = withRandom[r][c];
+      // 1. Gravity: drop blocks down in each column to fill holes
+      for (let c = 0; c < COLS; c += 1) {
+        let writeRow = ROWS - 1;
+        for (let r = ROWS - 1; r >= 0; r -= 1) {
+          if (current[r][c] !== 0) {
+            if (writeRow !== r) {
+              current[writeRow][c] = current[r][c];
+              current[r][c] = 0;
+            }
+            writeRow -= 1;
+          }
         }
       }
 
-      setGrid(withRandom);
-      setScore(nextScore);
-      setMaxTile(currentMax);
-      saveBest(nextScore);
+      // 2. Scan for adjacent matching blocks in all 4 directions (Left, Right, Bottom, Top)
+      let foundMerge = false;
+      for (let r = ROWS - 1; r >= 0; r -= 1) {
+        for (let c = 0; c < COLS; c += 1) {
+          const val = current[r][c];
+          if (val === 0) continue;
 
-      if (highestMerge >= 64) {
-        triggerPerfectHaptic(3);
-        playPerfectSound(Math.min(8, Math.log2(highestMerge)));
-        if (juiceRef.current) {
-          juiceRef.current.celebrate(
-            `${highestMerge} CORE!`,
-            `+${totalGained} PTS`,
-            COLORS.magenta
-          );
+          // Check orthogonal neighbors
+          const neighbors = [
+            [r + 1, c], // Bottom
+            [r, c - 1], // Left
+            [r, c + 1], // Right
+            [r - 1, c], // Top
+          ];
+
+          const matchingNeighbors = [];
+          for (const [nr, nc] of neighbors) {
+            if (
+              nr >= 0 &&
+              nr < ROWS &&
+              nc >= 0 &&
+              nc < COLS &&
+              current[nr][nc] === val
+            ) {
+              matchingNeighbors.push([nr, nc]);
+            }
+          }
+
+          if (matchingNeighbors.length > 0) {
+            // Merge matching neighbors into (r, c)
+            comboChain += 1;
+            const multiplier = Math.pow(2, matchingNeighbors.length);
+            const newVal = val * multiplier;
+            current[r][c] = newVal;
+
+            for (const [mr, mc] of matchingNeighbors) {
+              current[mr][mc] = 0;
+            }
+
+            const stepPoints = newVal * (comboChain > 1 ? comboChain : 1);
+            totalGained += stepPoints;
+            if (newVal > highestMerged) highestMerged = newVal;
+
+            foundMerge = true;
+            keepMerging = true;
+            break; // Break inner loop to apply gravity and chain reaction
+          }
         }
-      } else if (totalGained > 0) {
+        if (foundMerge) break;
+      }
+    }
+
+    return {
+      finalGrid: current,
+      scoreGained: totalGained,
+      maxTile: highestMerged,
+      combos: comboChain,
+    };
+  };
+
+  // Perform drop of current box into selected column
+  const dropBox = useCallback(
+    (targetCol) => {
+      if (isGameOver || isDropping) return;
+
+      const col = typeof targetCol === 'number' ? targetCol : aimCol;
+      const targetRow = getLowestEmptyRow(grid, col);
+
+      // If column is completely full to the top -> check if game over
+      if (targetRow === -1) {
         triggerSliceHaptic();
-        playPerfectSound(2);
         if (juiceRef.current) {
-          juiceRef.current.shake(5, 4);
-          juiceRef.current.burst(undefined, undefined, COLORS.cyan, 14);
-          juiceRef.current.popup(
-            `+${totalGained}`,
-            `MERGED ${highestMerge}`,
-            COLORS.cyan
-          );
+          juiceRef.current.shake(6, 4);
+          juiceRef.current.popup('COLUMN FULL', 'CHOOSE ANOTHER', COLORS.danger);
         }
-      } else {
-        triggerLightHaptic();
-        playTapSound();
+
+        // Check if all columns are full
+        const allFull = grid[0].every((v) => v !== 0);
+        if (allFull) {
+          setIsGameOver(true);
+          triggerGameOverHaptic();
+          playGameOverSound();
+          if (juiceRef.current) {
+            juiceRef.current.shake(14, 10);
+            juiceRef.current.flash(COLORS.danger);
+          }
+        }
+        return;
       }
 
-      if (!canAnyMove(withRandom)) {
-        setIsGameOver(true);
-        triggerGameOverHaptic();
-        playGameOverSound();
-        if (juiceRef.current) {
-          juiceRef.current.shake(12, 9);
-          juiceRef.current.flash(COLORS.danger);
+      setIsDropping(true);
+      triggerLightHaptic();
+      playTapSound();
+
+      // Place block at target position
+      const initialPlaced = grid.map((row) => [...row]);
+      initialPlaced[targetRow][col] = currentVal;
+      setGrid(initialPlaced);
+
+      setTimeout(() => {
+        // Run full merge & gravity cascade
+        const { finalGrid, scoreGained, maxTile: highestMerged, combos } =
+          processCascade(initialPlaced);
+
+        setGrid(finalGrid);
+        setIsDropping(false);
+
+        const nextScore = score + scoreGained;
+        setScore(nextScore);
+        saveBest(nextScore);
+
+        let newMax = Math.max(maxTile, highestMerged, currentVal);
+        setMaxTile(newMax);
+
+        // Feedback & Celebrations
+        if (highestMerged >= 2048) {
+          triggerPerfectHaptic(4);
+          playPerfectSound(8);
+          if (juiceRef.current) {
+            juiceRef.current.celebrate(
+              '2048 TRANSCENDENCE!',
+              `+${scoreGained} PTS // QUANTUM CORE`,
+              COLORS.solarGold
+            );
+          }
+        } else if (highestMerged >= 64 || combos >= 2) {
+          triggerPerfectHaptic(combos);
+          playPerfectSound(Math.min(8, combos + 3));
+          if (juiceRef.current) {
+            juiceRef.current.celebrate(
+              combos >= 2 ? `${combos}X CHAIN MERGE!` : `${highestMerged} MERGED!`,
+              `+${scoreGained} PTS`,
+              COLORS.cyan
+            );
+          }
+        } else if (scoreGained > 0) {
+          triggerSliceHaptic();
+          playSliceSound();
+          if (juiceRef.current) {
+            juiceRef.current.shake(4, 3);
+            juiceRef.current.burst(undefined, undefined, COLORS.cyan, 12);
+          }
         }
-      }
+
+        // Advance Next Drop Block
+        setCurrentVal(nextVal);
+        setNextVal(pickSpawnValue(newMax));
+
+        // Check Game Over condition: all top row cells filled and no adjacent merges exist
+        const topRowFull = finalGrid[0].every((v) => v !== 0);
+        if (topRowFull) {
+          // Check if any move is possible in the full grid
+          let anyPossible = false;
+          for (let r = 0; r < ROWS; r += 1) {
+            for (let c = 0; c < COLS; c += 1) {
+              const val = finalGrid[r][c];
+              if (
+                (r + 1 < ROWS && finalGrid[r + 1][c] === val) ||
+                (c + 1 < COLS && finalGrid[r][c + 1] === val)
+              ) {
+                anyPossible = true;
+                break;
+              }
+            }
+            if (anyPossible) break;
+          }
+
+          if (!anyPossible) {
+            setIsGameOver(true);
+            triggerGameOverHaptic();
+            playGameOverSound();
+            if (juiceRef.current) {
+              juiceRef.current.shake(14, 10);
+              juiceRef.current.flash(COLORS.danger);
+            }
+          }
+        }
+      }, 90);
     },
-    [grid, isGameOver, score, maxTile, saveBest]
+    [isGameOver, isDropping, aimCol, grid, currentVal, nextVal, score, maxTile, saveBest]
   );
 
-  const handleUndo = useCallback(() => {
-    if (!prevSnapshot) return;
-    triggerLightHaptic();
-    playSliceSound();
-    setGrid(prevSnapshot.grid);
-    setScore(prevSnapshot.score);
-    setPrevSnapshot(null);
-    setIsGameOver(false);
-  }, [prevSnapshot]);
+  // PanResponder to drag aimCol across columns
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderMove: (evt) => {
+        const touchX = evt.nativeEvent.locationX;
+        const col = Math.max(0, Math.min(COLS - 1, Math.floor(touchX / cellWidth)));
+        setAimCol(col);
+      },
+      onPanResponderRelease: (evt) => {
+        const touchX = evt.nativeEvent.locationX;
+        const col = Math.max(0, Math.min(COLS - 1, Math.floor(touchX / cellWidth)));
+        setAimCol(col);
+        dropBox(col);
+      },
+    })
+  ).current;
 
-  const panGesture = Gesture.Pan()
-    .runOnJS(true)
-    .minDistance(18)
-    .onEnd((e) => {
-      const dx = e.translationX;
-      const dy = e.translationY;
-      if (Math.abs(dx) > Math.abs(dy)) {
-        performMove(dx > 0 ? 'RIGHT' : 'LEFT');
-      } else {
-        performMove(dy > 0 ? 'DOWN' : 'UP');
-      }
-    });
+  // Ghost landing indicator row for aimed column
+  const landingRow = getLowestEmptyRow(grid, aimCol);
 
   return (
     <JuiceEngine ref={juiceRef}>
       <View style={localStyles.container}>
         <LinearGradient
-          colors={['#03030A', '#0A081C', '#180B30']}
+          colors={['#03030A', '#080E24', '#15143A']}
           style={StyleSheet.absoluteFillObject}
         />
 
         <MiniGameHeader
-          title="CYBER 2048"
-          floorLabel="FLOOR 02 // MERGE PUZZLE"
+          title="DROP 2048 NEO"
+          floorLabel="FLOOR 02 // VERTICAL MERGE"
           score={score}
           bestScore={bestScore}
           accentColor={COLORS.cyan}
@@ -293,146 +383,190 @@ export default function Game2048({ onBackToHub, onScoreUpdate }) {
         />
 
         <View style={localStyles.body}>
-          <View style={[localStyles.statusRow, { width: boardWidth }]}>
-            <View style={localStyles.badgePill}>
-              <Text style={localStyles.badgeLabel}>PEAK MODULE // </Text>
-              <Text style={localStyles.badgeValue}>{maxTile}</Text>
+          {/* Top Drop Launcher HUD */}
+          <View style={[localStyles.launcherHud, { width: boardWidth }]}>
+            <View style={localStyles.launcherInfoBox}>
+              <Text style={localStyles.launcherLabel}>AIMING BOX</Text>
+              <View
+                style={[
+                  localStyles.previewTile,
+                  {
+                    backgroundColor: getTileTheme(currentVal).bg[0],
+                    borderColor: getTileTheme(currentVal).border,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    localStyles.previewTileText,
+                    { color: getTileTheme(currentVal).text },
+                  ]}
+                >
+                  {currentVal}
+                </Text>
+              </View>
             </View>
 
-            <Pressable
-              onPress={handleUndo}
-              disabled={!prevSnapshot}
-              style={({ pressed }) => [
-                localStyles.undoBtn,
-                !prevSnapshot && { opacity: 0.35 },
-                pressed && { transform: [{ scale: 0.95 }] },
-              ]}
-            >
-              <Text style={localStyles.undoText}>UNDO MOVE</Text>
-            </Pressable>
+            <View style={localStyles.launcherDivider} />
+
+            <View style={localStyles.launcherInfoBox}>
+              <Text style={localStyles.launcherLabel}>NEXT BOX</Text>
+              <View
+                style={[
+                  localStyles.previewTileSmall,
+                  {
+                    backgroundColor: getTileTheme(nextVal).bg[0],
+                    borderColor: getTileTheme(nextVal).border,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    localStyles.previewTileSmallText,
+                    { color: getTileTheme(nextVal).text },
+                  ]}
+                >
+                  {nextVal}
+                </Text>
+              </View>
+            </View>
+
+            <View style={localStyles.launcherDivider} />
+
+            <View style={localStyles.launcherInfoBox}>
+              <Text style={localStyles.launcherLabel}>PEAK TILE</Text>
+              <Text style={localStyles.maxTileText}>{maxTile}</Text>
+            </View>
           </View>
 
-          <GestureDetector gesture={panGesture}>
+          {/* Interactive Drop Board Container */}
+          <View
+            {...panResponder.panHandlers}
+            style={[
+              localStyles.board,
+              { width: boardWidth, height: boardHeight },
+            ]}
+          >
+            {/* Aiming Beam Column Glow */}
             <View
+              pointerEvents="none"
               style={[
-                localStyles.boardContainer,
-                { width: boardWidth, height: boardWidth },
+                localStyles.aimBeam,
+                {
+                  left: 8 + aimCol * cellWidth,
+                  width: cellWidth,
+                  height: boardHeight - 16,
+                },
               ]}
-            >
-              {grid.map((row, rIdx) => (
-                <View key={`row_${rIdx}`} style={localStyles.gridRow}>
-                  {row.map((val, cIdx) => {
-                    const theme = TILE_THEMES[val] || TILE_THEMES[2048];
-                    return (
-                      <View
-                        key={`cell_${rIdx}_${cIdx}`}
-                        style={[
-                          localStyles.tileCell,
-                          {
-                            width: cellSize,
-                            height: cellSize,
-                            borderColor: theme.border,
-                          },
-                        ]}
-                      >
-                        <LinearGradient
-                          colors={theme.colors}
-                          style={StyleSheet.absoluteFillObject}
-                        />
-                        {val > 0 && (
-                          <Animated.View
-                            entering={ZoomIn.duration(140)}
-                            style={localStyles.tileInner}
-                          >
-                            <View
-                              style={[
-                                localStyles.tileTopBevel,
-                                { backgroundColor: theme.border },
-                              ]}
-                            />
-                            <Text
-                              style={[
-                                localStyles.tileText,
-                                {
-                                  color: theme.text,
-                                  fontSize:
-                                    val >= 1024 ? 19 : val >= 128 ? 22 : 26,
-                                },
-                              ]}
-                            >
-                              {val}
-                            </Text>
-                          </Animated.View>
-                        )}
-                      </View>
-                    );
-                  })}
-                </View>
-              ))}
+            />
 
-              {isGameOver && (
-                <Animated.View
-                  entering={FadeIn.duration(220)}
-                  style={localStyles.gameOverOverlay}
-                >
-                  <Text style={localStyles.gameOverTitle}>GRID LOCKED</Text>
-                  <Text style={localStyles.gameOverSub}>
-                    {`FINAL SCORE: ${score} // MAX TILE: ${maxTile}`}
-                  </Text>
+            {/* Matrix Grid of Blocks */}
+            {grid.map((row, rIdx) => (
+              <View key={`row_${rIdx}`} style={localStyles.row}>
+                {row.map((val, cIdx) => {
+                  const theme = getTileTheme(val);
+                  const isGhostTarget =
+                    val === 0 && rIdx === landingRow && cIdx === aimCol;
+
+                  return (
+                    <Pressable
+                      key={`cell_${rIdx}_${cIdx}`}
+                      onPress={() => dropBox(cIdx)}
+                      style={[
+                        localStyles.cell,
+                        {
+                          width: cellWidth,
+                          height: cellHeight,
+                          borderColor: isGhostTarget
+                            ? getTileTheme(currentVal).border
+                            : theme.border,
+                          borderStyle: isGhostTarget ? 'dashed' : 'solid',
+                          borderWidth: isGhostTarget ? 2 : 1.2,
+                          backgroundColor: isGhostTarget
+                            ? 'rgba(0, 245, 255, 0.12)'
+                            : theme.bg[0],
+                        },
+                      ]}
+                    >
+                      {val > 0 ? (
+                        <Text
+                          style={[
+                            localStyles.tileNumber,
+                            {
+                              color: theme.text,
+                              fontSize:
+                                val >= 1024 ? 13 : val >= 128 ? 15 : 18,
+                            },
+                          ]}
+                        >
+                          {val}
+                        </Text>
+                      ) : isGhostTarget ? (
+                        <Text style={localStyles.ghostText}>▼</Text>
+                      ) : null}
+                    </Pressable>
+                  );
+                })}
+              </View>
+            ))}
+
+            {/* Game Over Modal */}
+            <GameResultModal
+              visible={isGameOver}
+              type="GAME_OVER"
+              title="BOARD FULL // GAME OVER"
+              subtitle={`MAX TILE MERGED: ${maxTile} // COLUMNS OVERFLOWED`}
+              score={score}
+              bestScore={bestScore}
+              accentColor={COLORS.magenta}
+              onRetry={startNewGame}
+              retryLabel="PLAY AGAIN"
+              onBackToHub={onBackToHub}
+            />
+          </View>
+
+          {/* Quick Column Selection & Fast Drop Buttons */}
+          <View style={[localStyles.bottomControls, { width: boardWidth }]}>
+            <View style={localStyles.columnSelectorRow}>
+              {[0, 1, 2, 3, 4].map((c) => {
+                const isSelected = aimCol === c;
+                return (
                   <Pressable
-                    onPress={startNewGame}
-                    style={localStyles.playAgainBtn}
+                    key={`col_btn_${c}`}
+                    onPress={() => {
+                      setAimCol(c);
+                      dropBox(c);
+                    }}
+                    style={[
+                      localStyles.colBtn,
+                      { width: cellWidth - 4 },
+                      isSelected && localStyles.colBtnActive,
+                    ]}
                   >
-                    <Text style={localStyles.playAgainText}>REBOOT GRID</Text>
+                    <Text
+                      style={[
+                        localStyles.colBtnText,
+                        isSelected && { color: COLORS.cyan, fontWeight: '900' },
+                      ]}
+                    >
+                      {`COL ${c + 1}`}
+                    </Text>
                   </Pressable>
-                </Animated.View>
-              )}
+                );
+              })}
             </View>
-          </GestureDetector>
 
-          <Text style={localStyles.hintText}>
-            SWIPE ANYWHERE ON GRID OR TAP DIRECTIONAL CONTROLS
-          </Text>
-
-          <View style={localStyles.dpadContainer}>
             <Pressable
-              onPress={() => performMove('UP')}
+              onPress={() => dropBox(aimCol)}
               style={({ pressed }) => [
-                localStyles.dpadBtn,
-                pressed && localStyles.dpadPressed,
+                localStyles.dropActionBtn,
+                pressed && { transform: [{ scale: 0.96 }], opacity: 0.85 },
               ]}
             >
-              <Text style={localStyles.dpadArrow}>▲</Text>
+              <Text style={localStyles.dropActionText}>
+                DROP INTO COLUMN {aimCol + 1} ▾
+              </Text>
             </Pressable>
-            <View style={localStyles.dpadMidRow}>
-              <Pressable
-                onPress={() => performMove('LEFT')}
-                style={({ pressed }) => [
-                  localStyles.dpadBtn,
-                  pressed && localStyles.dpadPressed,
-                ]}
-              >
-                <Text style={localStyles.dpadArrow}>◀</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => performMove('DOWN')}
-                style={({ pressed }) => [
-                  localStyles.dpadBtn,
-                  pressed && localStyles.dpadPressed,
-                ]}
-              >
-                <Text style={localStyles.dpadArrow}>▼</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => performMove('RIGHT')}
-                style={({ pressed }) => [
-                  localStyles.dpadBtn,
-                  pressed && localStyles.dpadPressed,
-                ]}
-              >
-                <Text style={localStyles.dpadArrow}>▶</Text>
-              </Pressable>
-            </View>
           </View>
         </View>
       </View>
@@ -445,159 +579,146 @@ const localStyles = StyleSheet.create({
   body: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingBottom: 16,
-  },
-  statusRow: {
-    flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  badgePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 245, 255, 0.1)',
-    borderWidth: 1,
-    borderColor: 'rgba(0, 245, 255, 0.35)',
-    borderRadius: 12,
-    paddingHorizontal: 12,
     paddingVertical: 6,
   },
-  badgeLabel: {
-    fontSize: 10,
+  launcherHud: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(8, 12, 28, 0.92)',
+    borderRadius: 14,
+    borderWidth: 1.2,
+    borderColor: 'rgba(0, 245, 255, 0.35)',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    marginBottom: 6,
+  },
+  launcherInfoBox: {
+    alignItems: 'center',
+  },
+  launcherLabel: {
+    fontSize: 8,
     fontFamily: monoFont,
     fontWeight: '800',
     color: COLORS.textSecondary,
+    marginBottom: 4,
+    letterSpacing: 0.8,
   },
-  badgeValue: {
-    fontSize: 14,
-    fontFamily: monoFont,
-    fontWeight: '900',
-    color: COLORS.cyan,
+  launcherDivider: {
+    width: 1,
+    height: 30,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
   },
-  undoBtn: {
-    backgroundColor: 'rgba(255, 0, 127, 0.16)',
-    borderWidth: 1,
-    borderColor: COLORS.magenta,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-  },
-  undoText: {
-    fontSize: 10.5,
-    fontFamily: monoFont,
-    fontWeight: '900',
-    color: '#FF75B5',
-    letterSpacing: 1,
-  },
-  boardContainer: {
-    backgroundColor: 'rgba(8, 8, 22, 0.92)',
-    borderRadius: 20,
+  previewTile: {
+    width: 44,
+    height: 34,
+    borderRadius: 8,
     borderWidth: 1.5,
-    borderColor: 'rgba(0, 245, 255, 0.35)',
-    padding: 8,
-    justifyContent: 'space-between',
-    position: 'relative',
-    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  gridRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  previewTileText: {
+    fontFamily: monoFont,
+    fontSize: 15,
+    fontWeight: '900',
   },
-  tileCell: {
-    borderRadius: 12,
+  previewTileSmall: {
+    width: 36,
+    height: 28,
+    borderRadius: 6,
     borderWidth: 1.2,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  previewTileSmallText: {
+    fontFamily: monoFont,
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  maxTileText: {
+    fontFamily: monoFont,
+    fontSize: 18,
+    fontWeight: '900',
+    color: COLORS.solarGold,
+  },
+  board: {
+    backgroundColor: 'rgba(6, 8, 20, 0.96)',
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: 'rgba(0, 245, 255, 0.38)',
+    padding: 8,
+    position: 'relative',
     overflow: 'hidden',
+    justifyContent: 'space-between',
   },
-  tileInner: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  tileTopBevel: {
+  aimBeam: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 3,
-    opacity: 0.85,
+    top: 8,
+    backgroundColor: 'rgba(0, 245, 255, 0.08)',
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderColor: 'rgba(0, 245, 255, 0.22)',
   },
-  tileText: {
-    fontFamily: monoFont,
-    fontWeight: '900',
-  },
-  hintText: {
-    fontSize: 9.5,
-    fontFamily: monoFont,
-    fontWeight: '700',
-    color: COLORS.textSecondary,
-    letterSpacing: 1,
-    marginTop: 14,
-    marginBottom: 10,
-  },
-  dpadContainer: {
-    alignItems: 'center',
-    gap: 6,
-  },
-  dpadMidRow: {
+  row: {
     flexDirection: 'row',
-    gap: 8,
+    justifyContent: 'space-between',
   },
-  dpadBtn: {
-    width: 58,
-    height: 42,
-    borderRadius: 12,
-    backgroundColor: 'rgba(0, 245, 255, 0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(0, 245, 255, 0.4)',
+  cell: {
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  dpadPressed: {
-    backgroundColor: 'rgba(0, 245, 255, 0.3)',
-    transform: [{ scale: 0.94 }],
-  },
-  dpadArrow: {
-    fontSize: 16,
-    color: COLORS.cyan,
-    fontWeight: '900',
-  },
-  gameOverOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(4, 4, 14, 0.88)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
-  },
-  gameOverTitle: {
-    fontSize: 28,
+  tileNumber: {
     fontFamily: monoFont,
     fontWeight: '900',
-    color: COLORS.magenta,
-    letterSpacing: 2,
   },
-  gameOverSub: {
+  ghostText: {
+    fontSize: 12,
+    color: 'rgba(0, 245, 255, 0.65)',
+  },
+  bottomControls: {
+    marginTop: 6,
+    alignItems: 'center',
+  },
+  columnSelectorRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+    marginBottom: 6,
+  },
+  colBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 6,
+    backgroundColor: 'rgba(10, 16, 36, 0.85)',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+  },
+  colBtnActive: {
+    borderColor: COLORS.cyan,
+    backgroundColor: 'rgba(0, 245, 255, 0.22)',
+  },
+  colBtnText: {
+    fontSize: 9,
+    fontFamily: monoFont,
+    color: COLORS.textSecondary,
+    fontWeight: '700',
+  },
+  dropActionBtn: {
+    width: '100%',
+    backgroundColor: COLORS.cyan,
+    borderRadius: 12,
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dropActionText: {
     fontSize: 12,
     fontFamily: monoFont,
-    fontWeight: '800',
-    color: COLORS.textPrimary,
-    marginVertical: 12,
-  },
-  playAgainBtn: {
-    backgroundColor: COLORS.cyan,
-    paddingHorizontal: 22,
-    paddingVertical: 12,
-    borderRadius: 14,
-    marginTop: 6,
-  },
-  playAgainText: {
-    fontSize: 13,
-    fontFamily: monoFont,
     fontWeight: '900',
-    color: '#030308',
-    letterSpacing: 1.5,
+    color: '#030208',
+    letterSpacing: 1.1,
   },
 });

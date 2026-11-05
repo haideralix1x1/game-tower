@@ -11,6 +11,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS } from '../../styles';
 import MiniGameHeader from '../components/MiniGameHeader';
 import JuiceEngine from '../components/JuiceEngine';
+import GameResultModal from '../components/GameResultModal';
 import {
   triggerLightHaptic,
   triggerSliceHaptic,
@@ -38,6 +39,7 @@ export default function HanoiTowerGame({ onBackToHub, onScoreUpdate }) {
   const [moves, setMoves] = useState(0);
   const [score, setScore] = useState(0);
   const [bestScore, setBestScore] = useState(0);
+  const [isSolved, setIsSolved] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -66,6 +68,7 @@ export default function HanoiTowerGame({ onBackToHub, onScoreUpdate }) {
     setRods([initial, [], []]);
     setSelectedRod(null);
     setMoves(0);
+    setIsSolved(false);
     if (juiceRef.current) juiceRef.current.flash(COLORS.solarGold);
   }, [discCount]);
 
@@ -115,6 +118,7 @@ export default function HanoiTowerGame({ onBackToHub, onScoreUpdate }) {
         const nextScore = score + gained;
         setScore(nextScore);
         updateBest(nextScore);
+        setIsSolved(true);
         triggerPerfectHaptic(3);
         playPerfectSound(6);
         if (juiceRef.current) {
@@ -148,18 +152,47 @@ export default function HanoiTowerGame({ onBackToHub, onScoreUpdate }) {
         />
 
         <View style={localStyles.body}>
+          {/* Mode Selector (EASY / MEDIUM / HARD) */}
+          <View style={localStyles.modeSelectorBar}>
+            {[
+              { id: 3, label: 'EASY (3)', color: '#00F5D4' },
+              { id: 4, label: 'MED (4)', color: '#FFD166' },
+              { id: 5, label: 'HARD (5)', color: '#FF007F' },
+            ].map((m) => {
+              const isSelected = discCount === m.id;
+              return (
+                <Pressable
+                  key={`mode_${m.id}`}
+                  onPress={() => {
+                    if (discCount === m.id) return;
+                    triggerLightHaptic();
+                    playTapSound();
+                    setDiscCount(m.id);
+                    resetRods(m.id);
+                  }}
+                  style={[
+                    localStyles.modePill,
+                    isSelected && {
+                      backgroundColor: `${m.color}25`,
+                      borderColor: m.color,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      localStyles.modePillText,
+                      { color: isSelected ? m.color : COLORS.textMuted },
+                    ]}
+                  >
+                    {m.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
           <View style={localStyles.topRow}>
-            <Text style={localStyles.movesText}>{`MOVES: ${moves} (MIN ${Math.pow(2, discCount) - 1})`}</Text>
-            <Pressable
-              onPress={() => {
-                const nextCount = discCount === 3 ? 4 : discCount === 4 ? 5 : 3;
-                setDiscCount(nextCount);
-                resetRods(nextCount);
-              }}
-              style={localStyles.diffBtn}
-            >
-              <Text style={localStyles.diffBtnText}>{`${discCount} RINGS`}</Text>
-            </Pressable>
+            <Text style={localStyles.movesText}>{`MOVES: ${moves} // MIN: ${Math.pow(2, discCount) - 1}`}</Text>
           </View>
 
           <Text style={localStyles.hintText}>
@@ -204,6 +237,19 @@ export default function HanoiTowerGame({ onBackToHub, onScoreUpdate }) {
               );
             })}
           </View>
+
+          <GameResultModal
+            visible={isSolved}
+            type="VICTORY"
+            title="SPIRE SYNCHRONIZED!"
+            subtitle={`ALL ${discCount} QUANTUM RINGS MOVED IN ${moves} MOVES`}
+            score={score}
+            bestScore={bestScore}
+            accentColor={COLORS.solarGold}
+            onRetry={() => resetRods(discCount)}
+            retryLabel="NEW RINGS RUN"
+            onBackToHub={onBackToHub}
+          />
         </View>
       </View>
     </JuiceEngine>
@@ -219,29 +265,34 @@ const localStyles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingBottom: 20,
   },
+  modeSelectorBar: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+  modePill: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.16)',
+    backgroundColor: 'rgba(8, 8, 24, 0.65)',
+  },
+  modePillText: {
+    fontFamily: monoFont,
+    fontSize: 10.5,
+    fontWeight: '900',
+    letterSpacing: 0.8,
+  },
   topRow: {
     width: '94%',
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 8,
   },
   movesText: {
     fontSize: 12,
-    fontFamily: monoFont,
-    fontWeight: '900',
-    color: COLORS.solarGold,
-  },
-  diffBtn: {
-    backgroundColor: 'rgba(255, 209, 102, 0.2)',
-    borderWidth: 1,
-    borderColor: COLORS.solarGold,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 10,
-  },
-  diffBtnText: {
-    fontSize: 10.5,
     fontFamily: monoFont,
     fontWeight: '900',
     color: COLORS.solarGold,

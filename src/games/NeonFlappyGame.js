@@ -12,6 +12,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS } from '../../styles';
 import MiniGameHeader from '../components/MiniGameHeader';
 import JuiceEngine from '../components/JuiceEngine';
+import GameResultModal from '../components/GameResultModal';
 import {
   triggerLightHaptic,
   triggerPerfectHaptic,
@@ -285,14 +286,18 @@ export default function NeonFlappyGame({ onBackToHub, onScoreUpdate }) {
               </View>
             )}
 
-            {status === 'GAME_OVER' && (
-              <View style={localStyles.overlay}>
-                <Text style={localStyles.overTitle}>DRONE DOWN</Text>
-                <Pressable onPress={resetGame} style={localStyles.retryBtn}>
-                  <Text style={localStyles.retryText}>RELAUNCH DRONE</Text>
-                </Pressable>
-              </View>
-            )}
+            <GameResultModal
+              visible={status === 'GAME_OVER'}
+              type="GAME_OVER"
+              title="DRONE CRASHED!"
+              subtitle="COLLISION WITH PLASMA GATE"
+              score={score}
+              bestScore={bestScore}
+              accentColor="#00F5D4"
+              onRetry={resetGame}
+              retryLabel="RELAUNCH DRONE"
+              onBackToHub={onBackToHub}
+            />
           </Pressable>
         </View>
       </View>

@@ -12,6 +12,15 @@ export const triggerLightHaptic = async () => {
   }
 };
 
+export const triggerMediumHaptic = async () => {
+  if (!isHapticsAvailable) return;
+  try {
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  } catch {
+    // Ignore on unsupported hardware/simulators
+  }
+};
+
 export const triggerSliceHaptic = async () => {
   if (!isHapticsAvailable) return;
   try {
@@ -29,6 +38,15 @@ export const triggerPerfectHaptic = async (comboCount = 1) => {
     } else {
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     }
+  } catch {
+    // Ignore on unsupported hardware/simulators
+  }
+};
+
+export const triggerSelectionHaptic = async () => {
+  if (!isHapticsAvailable) return;
+  try {
+    await Haptics.selectionAsync();
   } catch {
     // Ignore on unsupported hardware/simulators
   }

@@ -1,5 +1,16 @@
 import { Platform } from 'react-native';
-import { createAudioPlayer } from 'expo-audio';
+import { setAudioModeAsync } from 'expo-audio';
+
+// Configure non-intrusive audio mode (mix with others, no exclusive focus hijacking)
+if (Platform.OS !== 'web') {
+  try {
+    setAudioModeAsync({
+      playsInSilentMode: true,
+      shouldPlayInBackground: false,
+      interruptionMode: 'mixWithOthers',
+    }).catch(() => {});
+  } catch {}
+}
 
 const SAMPLE_RATE = 22050;
 
@@ -80,6 +91,7 @@ const cachedUris = {
   slice: null,
   speedUp: null,
   gameOver: null,
+  snapTick: null,
   perfect: [],
 };
 
@@ -135,6 +147,15 @@ const ensureSoundsBuilt = () => {
     const sub = Math.sin(2 * Math.PI * freq * 0.5 * t);
     return (saw * 0.4 + sub * 0.6) * env * 0.6;
   });
+
+  // 6. Cyber Scroll Ratchet / Snap Tick Sound (Crisp high-frequency mechanical tactile click)
+  cachedUris.snapTick = buildWavDataUri(0.038, (t, p) => {
+    const env = Math.pow(1 - p, 3.8);
+    const freq = 1450 - p * 900;
+    const tone = Math.sin(2 * Math.PI * freq * t);
+    const click = (Math.random() * 2 - 1) * (p < 0.2 ? 0.35 : 0);
+    return (tone * 0.75 + click) * env * 0.42;
+  });
 };
 
 const playDataUri = (key, uri) => {
@@ -147,14 +168,11 @@ const playDataUri = (key, uri) => {
       return;
     }
 
-    if (!playerPool[key]) {
-      playerPool[key] = createAudioPlayer({ uri });
-    }
-    const player = playerPool[key];
-    player.seekTo(0);
-    player.play();
+    // On native mobile (Android/iOS), expo-audio Media3/ExoPlayer cannot decode data: URIs
+    // and creates unreleased MediaSessions that steal focus and crash the app.
+    // Tactile haptics handle immediate mobile touch feedback safely.
   } catch {
-    // Gracefully ignore audio playback errors on unsupported simulators
+    // Gracefully ignore audio playback errors
   }
 };
 
@@ -186,6 +204,20 @@ export const playPerfectSound = (comboCount = 1) => {
 export const playSpeedUpSound = () => {
   ensureSoundsBuilt();
   playDataUri('speedUp', cachedUris.speedUp);
+};
+
+let lastSnapTime = 0;
+let snapPoolIndex = 0;
+
+export const playSnapTickSound = () => {
+  const now = Date.now();
+  if (now - lastSnapTime < 42) return;
+  lastSnapTime = now;
+
+  ensureSoundsBuilt();
+  const poolKey = `snapTick_${snapPoolIndex % 4}`;
+  snapPoolIndex += 1;
+  playDataUri(poolKey, cachedUris.snapTick);
 };
 
 export const playGameOverSound = () => {

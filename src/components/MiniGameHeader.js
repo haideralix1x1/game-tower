@@ -14,6 +14,18 @@ import { COLORS } from '../../styles';
 import { triggerLightHaptic } from '../utils/haptics';
 import { playTapSound } from '../utils/sound';
 
+const hexToRgba = (hex, alpha = 1) => {
+  if (!hex || typeof hex !== 'string') return `rgba(0, 245, 255, ${alpha})`;
+  const clean = hex.replace('#', '');
+  if (clean.length === 6) {
+    const r = parseInt(clean.substring(0, 2), 16);
+    const g = parseInt(clean.substring(2, 4), 16);
+    const b = parseInt(clean.substring(4, 6), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
+  return hex;
+};
+
 const monoFont = Platform.select({
   ios: 'Menlo',
   android: 'monospace',
@@ -22,16 +34,28 @@ const monoFont = Platform.select({
 
 export default function MiniGameHeader({
   title,
-  floorLabel = 'FLOOR',
+  gameTitle,
+  floorLabel,
+  floorNum,
+  category,
   score = 0,
   bestScore = 0,
   accentColor = COLORS.cyan,
   onBack,
+  onBackToHub,
   onReset,
   rightExtra = null,
 }) {
   const insets = useSafeAreaInsets();
   const scoreScale = useSharedValue(1);
+
+  const displayTitle = title || gameTitle || 'MINI GAME';
+  const displayFloor =
+    floorLabel ||
+    (floorNum
+      ? `FLOOR ${String(floorNum).padStart(2, '0')}${category ? ` // ${category}` : ''}`
+      : 'FLOOR');
+  const actualBack = onBack || onBackToHub;
 
   useEffect(() => {
     if (score > 0) {
@@ -47,15 +71,23 @@ export default function MiniGameHeader({
   }));
 
   const handleBack = () => {
-    triggerLightHaptic();
-    playTapSound();
-    if (onBack) onBack();
+    try {
+      triggerLightHaptic();
+      playTapSound();
+    } catch {}
+    if (actualBack && typeof actualBack === 'function') {
+      actualBack();
+    }
   };
 
   const handleReset = () => {
-    triggerLightHaptic();
-    playTapSound();
-    if (onReset) onReset();
+    try {
+      triggerLightHaptic();
+      playTapSound();
+    } catch {}
+    if (onReset && typeof onReset === 'function') {
+      onReset();
+    }
   };
 
   return (
@@ -64,29 +96,33 @@ export default function MiniGameHeader({
         localStyles.wrapper,
         { paddingTop: Math.max(insets.top + 6, Platform.OS === 'android' ? 36 : 12) },
       ]}
+      pointerEvents="box-none"
     >
       <LinearGradient
-        colors={['rgba(8, 8, 22, 0.96)', 'rgba(16, 10, 34, 0.92)']}
+        colors={['rgba(8, 8, 22, 0.98)', 'rgba(16, 10, 34, 0.96)']}
         style={[
           localStyles.bar,
-          { borderColor: `${accentColor}66`, shadowColor: accentColor },
+          {
+            borderColor: hexToRgba(accentColor, 0.4),
+            shadowColor: accentColor,
+          },
         ]}
       >
         <View style={localStyles.leftRow}>
           <Pressable
             onPress={handleBack}
-            hitSlop={10}
+            hitSlop={{ top: 20, bottom: 20, left: 20, right: 30 }}
             style={({ pressed }) => [
               localStyles.backBtn,
-              { borderColor: `${accentColor}88` },
-              pressed && { opacity: 0.7, transform: [{ scale: 0.94 }] },
+              { borderColor: hexToRgba(accentColor, 0.65) },
+              pressed && { opacity: 0.65, transform: [{ scale: 0.92 }] },
             ]}
           >
-            <Svg width={15} height={15} viewBox="0 0 24 24" fill="none">
+            <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
               <Path
                 d="M15 18L9 12L15 6"
                 stroke={accentColor}
-                strokeWidth={2.8}
+                strokeWidth={3.0}
                 strokeLinecap="round"
                 strokeLinejoin="round"
               />
@@ -98,10 +134,10 @@ export default function MiniGameHeader({
 
           <View style={localStyles.titleGroup}>
             <Text style={[localStyles.floorTag, { color: accentColor }]}>
-              {floorLabel}
+              {displayFloor}
             </Text>
             <Text numberOfLines={1} style={localStyles.titleText}>
-              {title}
+              {displayTitle}
             </Text>
           </View>
         </View>
@@ -132,10 +168,10 @@ export default function MiniGameHeader({
           {onReset && (
             <Pressable
               onPress={handleReset}
-              hitSlop={8}
+              hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
               style={({ pressed }) => [
                 localStyles.resetBtn,
-                { borderColor: `${accentColor}66` },
+                { borderColor: hexToRgba(accentColor, 0.4) },
                 pressed && { opacity: 0.7, transform: [{ scale: 0.94 }] },
               ]}
             >
@@ -155,7 +191,8 @@ const localStyles = StyleSheet.create({
     width: '100%',
     paddingHorizontal: 12,
     paddingBottom: 6,
-    zIndex: 30,
+    zIndex: 9999,
+    elevation: 9999,
   },
   bar: {
     flexDirection: 'row',
@@ -166,9 +203,9 @@ const localStyles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 9,
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.35,
     shadowRadius: 10,
-    elevation: 6,
+    elevation: 10000,
   },
   leftRow: {
     flexDirection: 'row',
@@ -179,12 +216,14 @@ const localStyles = StyleSheet.create({
   backBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 9,
-    paddingVertical: 7,
-    borderRadius: 10,
-    borderWidth: 1,
-    backgroundColor: 'rgba(0, 245, 255, 0.12)',
-    gap: 2,
+    paddingHorizontal: 11,
+    paddingVertical: 8,
+    borderRadius: 12,
+    borderWidth: 1.2,
+    backgroundColor: 'rgba(0, 245, 255, 0.16)',
+    gap: 3,
+    minHeight: 38,
+    minWidth: 54,
   },
   backText: {
     fontSize: 10.5,

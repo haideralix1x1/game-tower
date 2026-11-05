@@ -12,17 +12,44 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS } from '../../styles';
 import MiniGameHeader from '../components/MiniGameHeader';
 import JuiceEngine from '../components/JuiceEngine';
+import GameResultModal from '../components/GameResultModal';
 import {
   triggerLightHaptic,
+  triggerSliceHaptic,
   triggerPerfectHaptic,
   triggerGameOverHaptic,
 } from '../utils/haptics';
 import {
+  playTapSound,
+  playSliceSound,
   playPerfectSound,
   playGameOverSound,
 } from '../utils/sound';
 
-const STORAGE_KEY = '@game_tower:best_whack_v1';
+const STORAGE_KEY = '@game_tower:best_whack_v2';
+
+const WHACK_MODES = {
+  GRID_16: {
+    id: 'GRID_16',
+    label: '16 BOTS (4×4)',
+    cols: 4,
+    total: 16,
+    maxActive: 3,
+    spawnMs: 440,
+    time: 30,
+    accent: COLORS.magenta,
+  },
+  GRID_25: {
+    id: 'GRID_25',
+    label: '25 BOTS (5×5)',
+    cols: 5,
+    total: 25,
+    maxActive: 5,
+    spawnMs: 360,
+    time: 35,
+    accent: COLORS.cyan,
+  },
+};
 
 const monoFont = Platform.select({
   ios: 'Menlo',
@@ -32,12 +59,21 @@ const monoFont = Platform.select({
 
 export default function WhackABotGame({ onBackToHub, onScoreUpdate }) {
   const { width } = useWindowDimensions();
-  const boardSize = Math.min(348, width - 32);
-  const holeSize = Math.floor((boardSize - 34) / 3);
+  const boardSize = Math.min(360, width - 24);
+
+  const [modeKey, setModeKey] = useState('GRID_16');
+  const activeMode = WHACK_MODES[modeKey] || WHACK_MODES.GRID_16;
+  const cols = activeMode.cols;
+  const totalHoles = activeMode.total;
+
+  const gap = cols === 5 ? 6 : 8;
+  const holeSize = Math.floor((boardSize - 16 - (cols - 1) * gap) / cols);
+
   const juiceRef = useRef(null);
 
-  const [activeSlot, setActiveSlot] = useState({ idx: -1, type: 'BOT' });
-  const [timeLeft, setTimeLeft] = useState(30);
+  // Active bots: map of holeIndex -> { type: 'BOT'|'GOLD'|'BOMB', expireAt: timestamp, id: string }
+  const [activeBots, setActiveBots] = useState({});
+  const [timeLeft, setTimeLeft] = useState(activeMode.time);
   const [combo, setCombo] = useState(0);
   const [score, setScore] = useState(0);
   const [bestScore, setBestScore] = useState(0);
@@ -65,28 +101,74 @@ export default function WhackABotGame({ onBackToHub, onScoreUpdate }) {
     [bestScore, onScoreUpdate]
   );
 
-  const startNewGame = useCallback(() => {
+  const startNewGame = useCallback((overrideModeKey) => {
+    const m = overrideModeKey ? WHACK_MODES[overrideModeKey] : activeMode;
     setScore(0);
     setCombo(0);
-    setTimeLeft(30);
+    setTimeLeft(m.time);
+    setActiveBots({});
     setRunning(true);
-    if (juiceRef.current) juiceRef.current.flash(COLORS.cyan);
-  }, []);
+    if (juiceRef.current) juiceRef.current.flash(m.accent);
+  }, [activeMode]);
 
+  const switchMode = (newKey) => {
+    if (newKey === modeKey) return;
+    triggerLightHaptic();
+    playTapSound();
+    setModeKey(newKey);
+    startNewGame(newKey);
+  };
+
+  // Bot spawn & expiration loop
   useEffect(() => {
     if (!running) return undefined;
-    const spawnInterval = setInterval(() => {
-      const idx = Math.floor(Math.random() * 9);
-      const roll = Math.random();
-      const type = roll < 0.16 ? 'BOMB' : roll < 0.38 ? 'GOLD' : 'BOT';
-      setActiveSlot({ idx, type });
-    }, 580);
 
-    const clockInterval = setInterval(() => {
+    const spawnTimer = setInterval(() => {
+      setActiveBots((prev) => {
+        const now = Date.now();
+        const next = {};
+
+        // Remove expired bots
+        Object.entries(prev).forEach(([idx, bot]) => {
+          if (bot.expireAt > now) {
+            next[idx] = bot;
+          }
+        });
+
+        // Spawn new bot if under maxActive threshold
+        const activeCount = Object.keys(next).length;
+        if (activeCount < activeMode.maxActive) {
+          const emptyIndices = [];
+          for (let i = 0; i < totalHoles; i += 1) {
+            if (!next[i]) emptyIndices.push(i);
+          }
+
+          if (emptyIndices.length > 0) {
+            const chosenHole =
+              emptyIndices[Math.floor(Math.random() * emptyIndices.length)];
+            const roll = Math.random();
+            const type = roll < 0.16 ? 'BOMB' : roll < 0.38 ? 'GOLD' : 'BOT';
+            const duration = type === 'BOMB' ? 1800 : type === 'GOLD' ? 1100 : 1400;
+
+            next[chosenHole] = {
+              id: `b_${now}_${chosenHole}`,
+              type,
+              expireAt: now + duration,
+            };
+          }
+        }
+
+        return next;
+      });
+    }, activeMode.spawnMs);
+
+    const clockTimer = setInterval(() => {
       setTimeLeft((t) => {
         if (t <= 1) {
           setRunning(false);
-          setActiveSlot({ idx: -1, type: 'BOT' });
+          setActiveBots({});
+          triggerGameOverHaptic();
+          playGameOverSound();
           return 0;
         }
         return t - 1;
@@ -94,42 +176,50 @@ export default function WhackABotGame({ onBackToHub, onScoreUpdate }) {
     }, 1000);
 
     return () => {
-      clearInterval(spawnInterval);
-      clearInterval(clockInterval);
+      clearInterval(spawnTimer);
+      clearInterval(clockTimer);
     };
-  }, [running]);
+  }, [running, activeMode, totalHoles]);
 
   const handleHoleTap = useCallback(
     (idx) => {
-      if (!running || activeSlot.idx !== idx) return;
+      if (!running || !activeBots[idx]) return;
 
-      const { type } = activeSlot;
-      setActiveSlot({ idx: -1, type: 'BOT' });
+      const bot = activeBots[idx];
 
-      if (type === 'BOMB') {
+      // Immediately clear tapped bot
+      setActiveBots((prev) => {
+        const next = { ...prev };
+        delete next[idx];
+        return next;
+      });
+
+      if (bot.type === 'BOMB') {
         setCombo(0);
-        const nextScore = Math.max(0, score - 40);
+        const nextScore = Math.max(0, score - 50);
         setScore(nextScore);
         triggerGameOverHaptic();
         playGameOverSound();
         if (juiceRef.current) {
-          juiceRef.current.celebrate('PLASMA BOMB!', '-40 PTS', COLORS.danger);
+          juiceRef.current.shake(12, 8);
+          juiceRef.current.flash(COLORS.danger);
+          juiceRef.current.popup('PLASMA BOMB!', '-50 PTS', COLORS.danger);
         }
         return;
       }
 
       const nextCombo = combo + 1;
-      const base = type === 'GOLD' ? 50 : 20;
-      const gained = base + Math.min(40, nextCombo * 5);
+      const base = bot.type === 'GOLD' ? 60 : 25;
+      const gained = base + Math.min(50, nextCombo * 5);
       const nextScore = score + gained;
 
       setCombo(nextCombo);
       setScore(nextScore);
       updateBest(nextScore);
 
-      if (type === 'GOLD') {
+      if (bot.type === 'GOLD') {
         triggerPerfectHaptic(3);
-        playPerfectSound(6);
+        playPerfectSound(7);
         if (juiceRef.current) {
           juiceRef.current.celebrate(
             `GOLDEN BOT! +${gained}`,
@@ -139,19 +229,17 @@ export default function WhackABotGame({ onBackToHub, onScoreUpdate }) {
         }
       } else {
         triggerLightHaptic();
-        playPerfectSound(Math.min(8, nextCombo));
+        playTapSound();
         if (juiceRef.current) {
           juiceRef.current.shake(4, 3);
-          juiceRef.current.burst(undefined, undefined, COLORS.cyan, 12);
-          juiceRef.current.popup(
-            `+${gained}`,
-            `COMBO x${nextCombo}`,
-            COLORS.cyan
-          );
+          juiceRef.current.burst(undefined, undefined, COLORS.cyan, 10);
+          if (nextCombo >= 3) {
+            juiceRef.current.popup(`+${gained}`, `x${nextCombo} STREAK`, COLORS.cyan);
+          }
         }
       }
     },
-    [running, activeSlot, combo, score, updateBest]
+    [running, activeBots, combo, score, updateBest]
   );
 
   return (
@@ -163,31 +251,77 @@ export default function WhackABotGame({ onBackToHub, onScoreUpdate }) {
         />
 
         <MiniGameHeader
-          title="WHACK-A-BOT"
-          floorLabel="FLOOR 15 // CYBER REFLEX"
+          title={`WHACK-A-BOT // ${totalHoles} HOLES`}
+          floorLabel="FLOOR 15 // MULTI-REFLEX"
           score={score}
           bestScore={bestScore}
-          accentColor={COLORS.magenta}
+          accentColor={activeMode.accent}
           onBack={onBackToHub}
-          onReset={startNewGame}
+          onReset={() => startNewGame()}
         />
 
         <View style={localStyles.body}>
-          <View style={[localStyles.statusRow, { width: boardSize }]}>
-            <Text style={localStyles.timerText}>{`TIME: ${timeLeft}S`}</Text>
-            <Text style={localStyles.comboText}>{`STREAK x${combo + 1}`}</Text>
+          {/* Mode Selector Bar (16 vs 25 Holes) */}
+          <View style={localStyles.modeSelectorBar}>
+            {Object.keys(WHACK_MODES).map((k) => {
+              const m = WHACK_MODES[k];
+              const isSelected = k === modeKey;
+              return (
+                <Pressable
+                  key={m.id}
+                  onPress={() => switchMode(k)}
+                  style={[
+                    localStyles.modePill,
+                    isSelected && {
+                      backgroundColor: `${m.accent}25`,
+                      borderColor: m.accent,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      localStyles.modePillText,
+                      { color: isSelected ? m.accent : COLORS.textMuted },
+                    ]}
+                  >
+                    {m.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
           </View>
 
+          {/* Time & Streak Status Bar */}
+          <View style={[localStyles.statusRow, { width: boardSize }]}>
+            <Text
+              style={[
+                localStyles.timerText,
+                { color: timeLeft <= 5 ? COLORS.danger : activeMode.accent },
+              ]}
+            >
+              {`CLOCK: ${timeLeft}S`}
+            </Text>
+            <Text style={[localStyles.comboText, { color: activeMode.accent }]}>
+              {`STREAK x${combo + 1}`}
+            </Text>
+          </View>
+
+          {/* 16 or 25 Cyber Bot Holes Matrix */}
           <View
             style={[
               localStyles.grid,
-              { width: boardSize, height: boardSize },
+              {
+                width: boardSize,
+                height: boardSize,
+                borderColor: activeMode.accent,
+              },
             ]}
           >
-            {Array.from({ length: 9 }).map((_, idx) => {
-              const active = activeSlot.idx === idx;
-              const isGold = active && activeSlot.type === 'GOLD';
-              const isBomb = active && activeSlot.type === 'BOMB';
+            {Array.from({ length: totalHoles }).map((_, idx) => {
+              const bot = activeBots[idx];
+              const active = !!bot;
+              const isGold = active && bot.type === 'GOLD';
+              const isBomb = active && bot.type === 'BOMB';
               const color = isBomb
                 ? COLORS.danger
                 : isGold
@@ -203,35 +337,54 @@ export default function WhackABotGame({ onBackToHub, onScoreUpdate }) {
                     {
                       width: holeSize,
                       height: holeSize,
-                      borderColor: active ? color : 'rgba(255,255,255,0.15)',
+                      borderColor: active ? color : 'rgba(255, 255, 255, 0.14)',
                       backgroundColor: active
                         ? `${color}2E`
-                        : 'rgba(255,255,255,0.04)',
+                        : 'rgba(255, 255, 255, 0.04)',
                     },
                   ]}
                 >
                   {active && (
-                    <>
-                      <Text style={localStyles.botGlyph}>
+                    <View style={localStyles.botContent}>
+                      <Text
+                        style={[
+                          localStyles.botGlyph,
+                          { fontSize: cols === 5 ? 22 : 28 },
+                        ]}
+                      >
                         {isBomb ? '💣' : isGold ? '👑' : '🤖'}
                       </Text>
-                      <Text style={[localStyles.botTag, { color }]}>
-                        {isBomb ? 'AVOID!' : isGold ? '+50 GOLD' : 'SMASH!'}
+                      <Text
+                        style={[
+                          localStyles.botTag,
+                          {
+                            color,
+                            fontSize: cols === 5 ? 7 : 8.5,
+                          },
+                        ]}
+                      >
+                        {isBomb ? 'AVOID!' : isGold ? '+60 GOLD' : 'SMASH!'}
                       </Text>
-                    </>
+                    </View>
                   )}
                 </Pressable>
               );
             })}
           </View>
 
-          {!running && (
-            <Pressable onPress={startNewGame} style={localStyles.retryBtn}>
-              <Text style={localStyles.retryText}>
-                {`TIME UP! SCORE: ${score} // PLAY AGAIN`}
-              </Text>
-            </Pressable>
-          )}
+          {/* Game Over / Purge Complete Modal */}
+          <GameResultModal
+            visible={!running}
+            type={score > 120 ? 'VICTORY' : 'GAME_OVER'}
+            title={score > 120 ? 'CYBER BOTS PURGED!' : 'TIME DEPLETED'}
+            subtitle={`PURGED ${totalHoles}-BOT GRID // MAXIMUM STREAK: x${combo + 1}`}
+            score={score}
+            bestScore={bestScore}
+            accentColor={activeMode.accent}
+            onRetry={() => startNewGame()}
+            retryLabel="PLAY AGAIN"
+            onBackToHub={onBackToHub}
+          />
         </View>
       </View>
     </JuiceEngine>
@@ -244,62 +397,70 @@ const localStyles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingBottom: 20,
+    paddingBottom: 16,
+  },
+  modeSelectorBar: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 10,
+  },
+  modePill: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.16)',
+    backgroundColor: 'rgba(8, 8, 24, 0.65)',
+  },
+  modePillText: {
+    fontFamily: monoFont,
+    fontSize: 10.5,
+    fontWeight: '900',
+    letterSpacing: 0.8,
   },
   statusRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 14,
+    marginBottom: 12,
+    paddingHorizontal: 4,
   },
   timerText: {
     fontSize: 13,
     fontFamily: monoFont,
     fontWeight: '900',
-    color: COLORS.cyan,
   },
   comboText: {
     fontSize: 13,
     fontFamily: monoFont,
     fontWeight: '900',
-    color: COLORS.solarGold,
   },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
     alignContent: 'space-between',
-    backgroundColor: 'rgba(8, 8, 22, 0.92)',
-    borderRadius: 22,
+    backgroundColor: 'rgba(8, 8, 22, 0.94)',
+    borderRadius: 20,
     borderWidth: 1.5,
-    borderColor: 'rgba(255, 0, 127, 0.38)',
     padding: 8,
   },
   hole: {
-    borderRadius: 16,
-    borderWidth: 2,
+    borderRadius: 14,
+    borderWidth: 1.2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  botContent: {
     alignItems: 'center',
     justifyContent: 'center',
   },
   botGlyph: {
-    fontSize: 32,
+    textAlign: 'center',
   },
   botTag: {
-    fontSize: 9,
     fontFamily: monoFont,
     fontWeight: '900',
-    marginTop: 4,
-  },
-  retryBtn: {
-    marginTop: 18,
-    backgroundColor: COLORS.cyan,
-    paddingHorizontal: 22,
-    paddingVertical: 12,
-    borderRadius: 14,
-  },
-  retryText: {
-    fontSize: 12,
-    fontFamily: monoFont,
-    fontWeight: '900',
-    color: '#030308',
+    marginTop: 2,
+    letterSpacing: 0.5,
   },
 });

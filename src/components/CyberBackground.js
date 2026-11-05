@@ -13,6 +13,18 @@ import Svg, {
 } from 'react-native-svg';
 import { styles, THEMES, GAME_CONFIG } from '../../styles';
 
+const hexToRgba = (hex, alpha = 1) => {
+  if (!hex || typeof hex !== 'string') return `rgba(0, 245, 255, ${alpha})`;
+  const clean = hex.replace('#', '');
+  if (clean.length === 6) {
+    const r = parseInt(clean.substring(0, 2), 16);
+    const g = parseInt(clean.substring(2, 4), 16);
+    const b = parseInt(clean.substring(4, 6), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
+  return hex;
+};
+
 const VERTICAL_COLUMNS = [0.15, 0.32, 0.5, 0.68, 0.85];
 const ELEVATION_MARKERS = Array.from({ length: 40 }, (_, idx) => (idx + 1) * 5);
 
@@ -88,13 +100,13 @@ export default function CyberBackground({
       <View
         style={[
           styles.ambientOrbCyan,
-          { backgroundColor: `${theme.accent}15` },
+          { backgroundColor: hexToRgba(theme.accent, 0.08) },
         ]}
       />
       <View
         style={[
           styles.ambientOrbMagenta,
-          { backgroundColor: `${theme.secondaryAccent}15` },
+          { backgroundColor: hexToRgba(theme.secondaryAccent, 0.08) },
         ]}
       />
 

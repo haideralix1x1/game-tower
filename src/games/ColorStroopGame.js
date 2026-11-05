@@ -11,6 +11,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS } from '../../styles';
 import MiniGameHeader from '../components/MiniGameHeader';
 import JuiceEngine from '../components/JuiceEngine';
+import GameResultModal from '../components/GameResultModal';
 import {
   triggerPerfectHaptic,
   triggerGameOverHaptic,
@@ -197,13 +198,18 @@ export default function ColorStroopGame({ onBackToHub, onScoreUpdate }) {
             </Pressable>
           </View>
 
-          {!running && (
-            <Pressable onPress={resetGame} style={localStyles.retryBtn}>
-              <Text style={localStyles.retryText}>
-                {`TIME UP! SCORE: ${score} // PLAY AGAIN`}
-              </Text>
-            </Pressable>
-          )}
+          <GameResultModal
+            visible={!running}
+            type={score > 100 ? 'VICTORY' : 'GAME_OVER'}
+            title={score > 100 ? 'CORTEX OVERDRIVE!' : 'TIMER DEPLETED'}
+            subtitle={`STROOP REFLEX TEST COMPLETED // STREAK: x${streak + 1}`}
+            score={score}
+            bestScore={bestScore}
+            accentColor={COLORS.magenta}
+            onRetry={resetGame}
+            retryLabel="PLAY AGAIN"
+            onBackToHub={onBackToHub}
+          />
         </View>
       </View>
     </JuiceEngine>

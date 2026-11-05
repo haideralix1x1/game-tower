@@ -13,6 +13,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS } from '../../styles';
 import MiniGameHeader from '../components/MiniGameHeader';
 import JuiceEngine from '../components/JuiceEngine';
+import GameResultModal from '../components/GameResultModal';
 import {
   triggerLightHaptic,
   triggerPerfectHaptic,
@@ -278,14 +279,18 @@ export default function CyberSnakeGame({ onBackToHub, onScoreUpdate }) {
                 />
               ))}
 
-              {status === 'GAME_OVER' && (
-                <View style={localStyles.overlay}>
-                  <Text style={localStyles.overTitle}>SERPENT CRASHED</Text>
-                  <Pressable onPress={resetGame} style={localStyles.retryBtn}>
-                    <Text style={localStyles.retryText}>PLAY AGAIN</Text>
-                  </Pressable>
-                </View>
-              )}
+              <GameResultModal
+                visible={status === 'GAME_OVER'}
+                type="GAME_OVER"
+                title="SERPENT CRASHED!"
+                subtitle={`NEON TAIL LENGTH: ${snake.length} BLOCKS`}
+                score={score}
+                bestScore={bestScore}
+                accentColor={COLORS.matrixMint}
+                onRetry={resetGame}
+                retryLabel="PLAY AGAIN"
+                onBackToHub={onBackToHub}
+              />
             </View>
           </GestureDetector>
 

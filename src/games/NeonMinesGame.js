@@ -12,6 +12,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS } from '../../styles';
 import MiniGameHeader from '../components/MiniGameHeader';
 import JuiceEngine from '../components/JuiceEngine';
+import GameResultModal from '../components/GameResultModal';
 import {
   triggerLightHaptic,
   triggerSliceHaptic,
@@ -20,14 +21,35 @@ import {
 } from '../utils/haptics';
 import {
   playTapSound,
-  playSliceSound,
   playPerfectSound,
   playGameOverSound,
 } from '../utils/sound';
 
 const STORAGE_KEY = '@game_tower:best_mines_v1';
-const GRID_SIZE = 7;
-const MINE_COUNT = 8;
+
+export const MINE_MODES = {
+  EASY: {
+    id: 'EASY',
+    label: 'EASY (6×6)',
+    size: 6,
+    mines: 5,
+    accent: COLORS.matrixMint,
+  },
+  MEDIUM: {
+    id: 'MEDIUM',
+    label: 'MED (7×7)',
+    size: 7,
+    mines: 8,
+    accent: COLORS.cyan,
+  },
+  HARD: {
+    id: 'HARD',
+    label: 'HARD (8×8)',
+    size: 8,
+    mines: 14,
+    accent: COLORS.magenta,
+  },
+};
 
 const NUM_COLORS = {
   1: '#00F5FF',
@@ -46,9 +68,9 @@ const monoFont = Platform.select({
   default: 'monospace',
 });
 
-const buildBoard = (safeR = -1, safeC = -1) => {
-  const cells = Array.from({ length: GRID_SIZE }, (_, r) =>
-    Array.from({ length: GRID_SIZE }, (__, c) => ({
+const buildBoard = (size, mines, safeR = -1, safeC = -1) => {
+  const cells = Array.from({ length: size }, (_, r) =>
+    Array.from({ length: size }, (__, c) => ({
       r,
       c,
       isMine: false,
@@ -59,9 +81,9 @@ const buildBoard = (safeR = -1, safeC = -1) => {
   );
 
   let placed = 0;
-  while (placed < MINE_COUNT) {
-    const r = Math.floor(Math.random() * GRID_SIZE);
-    const c = Math.floor(Math.random() * GRID_SIZE);
+  while (placed < mines) {
+    const r = Math.floor(Math.random() * size);
+    const c = Math.floor(Math.random() * size);
     if (
       !cells[r][c].isMine &&
       !(Math.abs(r - safeR) <= 1 && Math.abs(c - safeC) <= 1)
@@ -71,8 +93,8 @@ const buildBoard = (safeR = -1, safeC = -1) => {
     }
   }
 
-  for (let r = 0; r < GRID_SIZE; r += 1) {
-    for (let c = 0; c < GRID_SIZE; c += 1) {
+  for (let r = 0; r < size; r += 1) {
+    for (let c = 0; c < size; c += 1) {
       if (cells[r][c].isMine) continue;
       let count = 0;
       for (let dr = -1; dr <= 1; dr += 1) {
@@ -81,9 +103,9 @@ const buildBoard = (safeR = -1, safeC = -1) => {
           const nc = c + dc;
           if (
             nr >= 0 &&
-            nr < GRID_SIZE &&
+            nr < size &&
             nc >= 0 &&
-            nc < GRID_SIZE &&
+            nc < size &&
             cells[nr][nc].isMine
           ) {
             count += 1;
@@ -100,10 +122,15 @@ const buildBoard = (safeR = -1, safeC = -1) => {
 export default function NeonMinesGame({ onBackToHub, onScoreUpdate }) {
   const { width } = useWindowDimensions();
   const boardSize = Math.min(364, width - 28);
-  const cellSize = Math.floor((boardSize - 32) / GRID_SIZE);
   const juiceRef = useRef(null);
 
-  const [board, setBoard] = useState(() => buildBoard());
+  const [modeKey, setModeKey] = useState('MEDIUM');
+  const activeMode = MINE_MODES[modeKey] || MINE_MODES.MEDIUM;
+  const gridSize = activeMode.size;
+  const mineCount = activeMode.mines;
+  const cellSize = Math.floor((boardSize - 20) / gridSize);
+
+  const [board, setBoard] = useState(() => buildBoard(MINE_MODES.MEDIUM.size, MINE_MODES.MEDIUM.mines));
   const [firstClick, setFirstClick] = useState(true);
   const [flagMode, setFlagMode] = useState(false);
   const [score, setScore] = useState(0);
@@ -132,13 +159,22 @@ export default function NeonMinesGame({ onBackToHub, onScoreUpdate }) {
     [bestScore, onScoreUpdate]
   );
 
-  const resetGame = useCallback(() => {
-    setBoard(buildBoard());
+  const resetGame = useCallback((overrideModeKey) => {
+    const m = overrideModeKey ? MINE_MODES[overrideModeKey] : activeMode;
+    setBoard(buildBoard(m.size, m.mines));
     setFirstClick(true);
     setGameState('PLAYING');
     setScore(0);
-    if (juiceRef.current) juiceRef.current.flash(COLORS.magenta);
-  }, []);
+    if (juiceRef.current) juiceRef.current.flash(m.accent);
+  }, [activeMode]);
+
+  const switchMode = useCallback((newKey) => {
+    if (newKey === modeKey) return;
+    triggerLightHaptic();
+    playTapSound();
+    setModeKey(newKey);
+    resetGame(newKey);
+  }, [modeKey, resetGame]);
 
   const handleCellPress = useCallback(
     (r, c) => {
@@ -158,13 +194,13 @@ export default function NeonMinesGame({ onBackToHub, onScoreUpdate }) {
       if (working[r][c].flagged || working[r][c].revealed) return;
 
       if (firstClick) {
-        working = buildBoard(r, c);
+        working = buildBoard(gridSize, mineCount, r, c);
         setFirstClick(false);
       }
 
       if (working[r][c].isMine) {
-        for (let rr = 0; rr < GRID_SIZE; rr += 1) {
-          for (let cc = 0; cc < GRID_SIZE; cc += 1) {
+        for (let rr = 0; rr < gridSize; rr += 1) {
+          for (let cc = 0; cc < gridSize; cc += 1) {
             if (working[rr][cc].isMine) working[rr][cc].revealed = true;
           }
         }
@@ -185,7 +221,9 @@ export default function NeonMinesGame({ onBackToHub, onScoreUpdate }) {
       const stack = [[r, c]];
       let newlyRevealed = 0;
       while (stack.length > 0) {
-        const [cr, cc] = stack.pop();
+        const item = stack.pop();
+        if (!item) continue;
+        const [cr, cc] = item;
         const cell = working[cr][cc];
         if (cell.revealed || cell.flagged) continue;
         cell.revealed = true;
@@ -198,9 +236,9 @@ export default function NeonMinesGame({ onBackToHub, onScoreUpdate }) {
               const nc = cc + dc;
               if (
                 nr >= 0 &&
-                nr < GRID_SIZE &&
+                nr < gridSize &&
                 nc >= 0 &&
-                nc < GRID_SIZE &&
+                nc < gridSize &&
                 !working[nr][nc].revealed
               ) {
                 stack.push([nr, nc]);
@@ -211,15 +249,15 @@ export default function NeonMinesGame({ onBackToHub, onScoreUpdate }) {
       }
 
       let unrevealedSafe = 0;
-      for (let rr = 0; rr < GRID_SIZE; rr += 1) {
-        for (let cc = 0; cc < GRID_SIZE; cc += 1) {
+      for (let rr = 0; rr < gridSize; rr += 1) {
+        for (let cc = 0; cc < gridSize; cc += 1) {
           if (!working[rr][cc].isMine && !working[rr][cc].revealed) {
             unrevealedSafe += 1;
           }
         }
       }
 
-      const gained = newlyRevealed * 15 + (unrevealedSafe === 0 ? 250 : 0);
+      const gained = newlyRevealed * 15 + (unrevealedSafe === 0 ? 300 : 0);
       const nextScore = score + gained;
       setBoard(working);
       setScore(nextScore);
@@ -228,60 +266,81 @@ export default function NeonMinesGame({ onBackToHub, onScoreUpdate }) {
       if (unrevealedSafe === 0) {
         setGameState('WON');
         triggerPerfectHaptic(3);
-        playPerfectSound(6);
+        playPerfectSound(8);
         if (juiceRef.current) {
           juiceRef.current.celebrate(
-            'SECTOR CLEARED!',
-            '+250 BONUS',
-            COLORS.matrixMint
-          );
-        }
-      } else if (newlyRevealed > 3) {
-        triggerSliceHaptic();
-        playPerfectSound(2);
-        if (juiceRef.current) {
-          juiceRef.current.shake(5, 4);
-          juiceRef.current.burst(undefined, undefined, COLORS.cyan, 16);
-          juiceRef.current.popup(
-            `CASCADE +${gained}`,
-            `${newlyRevealed} CELLS`,
-            COLORS.cyan
+            'SECTOR SECURED!',
+            `+300 MINE CLEAR // ${activeMode.id}`,
+            activeMode.accent
           );
         }
       } else {
         triggerLightHaptic();
-        playSliceSound();
+        playTapSound();
       }
     },
-    [board, flagMode, firstClick, gameState, score, updateBest]
+    [gameState, board, flagMode, firstClick, gridSize, mineCount, score, updateBest, activeMode]
   );
 
-  const flagsUsed = board.flat().filter((c) => c.flagged).length;
+  const flagsUsed = board.reduce(
+    (sum, row) => sum + row.filter((c) => c.flagged).length,
+    0
+  );
 
   return (
     <JuiceEngine ref={juiceRef}>
       <View style={localStyles.container}>
         <LinearGradient
-          colors={['#03030A', '#12061E', '#22092E']}
+          colors={['#03030A', '#130718', '#260B2A']}
           style={StyleSheet.absoluteFillObject}
         />
 
         <MiniGameHeader
-          title="NEON MINES"
-          floorLabel="FLOOR 04 // TACTICAL GRID"
+          title={`NEON MINES (${mineCount})`}
+          floorLabel={`FLOOR 04 // ${activeMode.id} GRID`}
           score={score}
           bestScore={bestScore}
-          accentColor={COLORS.magenta}
+          accentColor={activeMode.accent}
           onBack={onBackToHub}
-          onReset={resetGame}
+          onReset={() => resetGame()}
         />
 
         <View style={localStyles.body}>
+          {/* Difficulty Modes Selector */}
+          <View style={localStyles.modeSelectorBar}>
+            {Object.keys(MINE_MODES).map((k) => {
+              const m = MINE_MODES[k];
+              const isSelected = k === modeKey;
+              return (
+                <Pressable
+                  key={m.id}
+                  onPress={() => switchMode(k)}
+                  style={[
+                    localStyles.modePill,
+                    isSelected && {
+                      backgroundColor: `${m.accent}25`,
+                      borderColor: m.accent,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      localStyles.modePillText,
+                      { color: isSelected ? m.accent : COLORS.textMuted },
+                    ]}
+                  >
+                    {m.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
           <View style={[localStyles.controlRow, { width: boardSize }]}>
-            <View style={localStyles.mineCounter}>
+            <View style={[localStyles.mineCounter, { borderColor: activeMode.accent }]}>
               <Text style={localStyles.mineLabel}>PLASMA MINES // </Text>
-              <Text style={localStyles.mineValue}>
-                {Math.max(0, MINE_COUNT - flagsUsed)}
+              <Text style={[localStyles.mineValue, { color: activeMode.accent }]}>
+                {Math.max(0, mineCount - flagsUsed)}
               </Text>
             </View>
 
@@ -293,7 +352,7 @@ export default function NeonMinesGame({ onBackToHub, onScoreUpdate }) {
               }}
               style={[
                 localStyles.modeToggle,
-                flagMode && localStyles.modeToggleActive,
+                flagMode && { backgroundColor: COLORS.solarGold, borderColor: COLORS.solarGold },
               ]}
             >
               <Text
@@ -302,7 +361,7 @@ export default function NeonMinesGame({ onBackToHub, onScoreUpdate }) {
                   flagMode && { color: '#030308' },
                 ]}
               >
-                {flagMode ? 'FLAG MODE: ON' : 'SCAN MODE (TAP)'}
+                {flagMode ? 'FLAG MODE: ON 🚩' : 'SCAN MODE (TAP)'}
               </Text>
             </Pressable>
           </View>
@@ -310,7 +369,7 @@ export default function NeonMinesGame({ onBackToHub, onScoreUpdate }) {
           <View
             style={[
               localStyles.board,
-              { width: boardSize, height: boardSize },
+              { width: boardSize, height: boardSize, borderColor: `${activeMode.accent}55` },
             ]}
           >
             {board.map((row, rIdx) => (
@@ -331,6 +390,8 @@ export default function NeonMinesGame({ onBackToHub, onScoreUpdate }) {
                     : cell.flagged
                       ? COLORS.solarGold
                       : 'rgba(255, 0, 127, 0.35)';
+
+                  const numColor = NUM_COLORS[cell.neighborMines] || '#FFFFFF';
 
                   return (
                     <Pressable
@@ -362,14 +423,14 @@ export default function NeonMinesGame({ onBackToHub, onScoreUpdate }) {
                           <Text
                             style={[
                               localStyles.numText,
-                              { color: NUM_COLORS[cell.neighborMines] || '#FFF' },
+                              { color: numColor, fontSize: gridSize === 6 ? 18 : gridSize === 7 ? 16 : 14 },
                             ]}
                           >
                             {cell.neighborMines}
                           </Text>
                         )}
                       {!cell.revealed && cell.flagged && (
-                        <Text style={localStyles.flagIcon}>⚑</Text>
+                        <Text style={localStyles.flagIcon}>🚩</Text>
                       )}
                     </Pressable>
                   );
@@ -378,26 +439,22 @@ export default function NeonMinesGame({ onBackToHub, onScoreUpdate }) {
             ))}
           </View>
 
-          {gameState !== 'PLAYING' && (
-            <View style={localStyles.resultBanner}>
-              <Text
-                style={[
-                  localStyles.resultTitle,
-                  {
-                    color:
-                      gameState === 'WON' ? COLORS.matrixMint : COLORS.danger,
-                  },
-                ]}
-              >
-                {gameState === 'WON'
-                  ? 'SECTOR CLEARED! +250 BONUS'
-                  : 'MINE DETONATED!'}
-              </Text>
-              <Pressable onPress={resetGame} style={localStyles.retryBtn}>
-                <Text style={localStyles.retryText}>NEW MINEFIELD</Text>
-              </Pressable>
-            </View>
-          )}
+          <GameResultModal
+            visible={gameState !== 'PLAYING'}
+            type={gameState === 'WON' ? 'VICTORY' : 'GAME_OVER'}
+            title={gameState === 'WON' ? 'SECTOR SECURED!' : 'MINE DETONATED!'}
+            subtitle={
+              gameState === 'WON'
+                ? `ALL MINES CLEARED // ${activeMode.id} GRID`
+                : 'PLASMA MINE TRIPPED // SECTOR COLLAPSED'
+            }
+            score={score}
+            bestScore={bestScore}
+            accentColor={gameState === 'WON' ? activeMode.accent : COLORS.danger}
+            onRetry={() => resetGame()}
+            retryLabel={gameState === 'WON' ? `NEXT ${activeMode.id}` : 'REBOOT SCAN'}
+            onBackToHub={onBackToHub}
+          />
         </View>
       </View>
     </JuiceEngine>
@@ -412,24 +469,43 @@ const localStyles = StyleSheet.create({
     justifyContent: 'center',
     paddingBottom: 20,
   },
+  modeSelectorBar: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 10,
+  },
+  modePill: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.16)',
+    backgroundColor: 'rgba(8, 8, 24, 0.65)',
+  },
+  modePillText: {
+    fontFamily: monoFont,
+    fontSize: 10.5,
+    fontWeight: '900',
+    letterSpacing: 0.8,
+  },
   controlRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 14,
+    marginBottom: 12,
   },
   mineCounter: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(255, 0, 127, 0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 0, 127, 0.4)',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
+    borderWidth: 1.2,
+    borderColor: COLORS.magenta,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
   },
   mineLabel: {
-    fontSize: 10,
+    fontSize: 9.5,
     fontFamily: monoFont,
     fontWeight: '800',
     color: COLORS.textSecondary,
@@ -441,28 +517,24 @@ const localStyles = StyleSheet.create({
     color: COLORS.magenta,
   },
   modeToggle: {
-    backgroundColor: 'rgba(255, 209, 102, 0.15)',
+    backgroundColor: 'rgba(0, 245, 255, 0.12)',
     borderWidth: 1.2,
-    borderColor: COLORS.solarGold,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 12,
-  },
-  modeToggleActive: {
-    backgroundColor: COLORS.solarGold,
+    borderColor: COLORS.cyan,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
   },
   modeToggleText: {
-    fontSize: 10.5,
+    fontSize: 10,
     fontFamily: monoFont,
     fontWeight: '900',
-    color: COLORS.solarGold,
+    color: COLORS.cyan,
   },
   board: {
-    backgroundColor: 'rgba(8, 8, 22, 0.92)',
-    borderRadius: 18,
+    backgroundColor: 'rgba(5, 5, 18, 0.94)',
+    borderRadius: 16,
     borderWidth: 1.5,
-    borderColor: 'rgba(255, 0, 127, 0.4)',
-    padding: 8,
+    padding: 6,
     justifyContent: 'space-between',
   },
   row: {
@@ -475,41 +547,27 @@ const localStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  numText: {
-    fontSize: 17,
-    fontFamily: monoFont,
-    fontWeight: '900',
-  },
   mineIcon: {
-    fontSize: 18,
+    fontSize: 16,
     color: '#FFFFFF',
   },
-  flagIcon: {
-    fontSize: 16,
-    color: COLORS.solarGold,
-  },
-  resultBanner: {
-    marginTop: 18,
-    alignItems: 'center',
-    gap: 10,
-  },
-  resultTitle: {
-    fontSize: 16,
+  numText: {
     fontFamily: monoFont,
     fontWeight: '900',
-    letterSpacing: 1.4,
   },
-  retryBtn: {
-    backgroundColor: COLORS.cyan,
+  flagIcon: {
+    fontSize: 13,
+  },
+  restartBtn: {
+    marginTop: 16,
     paddingHorizontal: 22,
-    paddingVertical: 11,
+    paddingVertical: 10,
     borderRadius: 12,
   },
-  retryText: {
-    fontSize: 12,
+  restartBtnText: {
+    fontSize: 11.5,
     fontFamily: monoFont,
     fontWeight: '900',
     color: '#030308',
-    letterSpacing: 1.4,
   },
 });

@@ -2,24 +2,24 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
+  Pressable,
   useWindowDimensions,
   Platform,
+  StyleSheet,
 } from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withSequence,
   withTiming,
   withSpring,
-  runOnJS,
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { styles, COLORS, THEMES, GAME_CONFIG } from './styles';
 import CyberBackground from './src/components/CyberBackground';
-import HudBar from './src/components/HudBar';
+import MiniGameHeader from './src/components/MiniGameHeader';
 import MenuOverlays from './src/components/MenuOverlays';
 import {
   getBlockColor,
@@ -43,6 +43,24 @@ import {
   playGameOverSound,
   setSoundMuted,
 } from './src/utils/sound';
+
+const hexToRgba = (hex, alpha = 1) => {
+  if (!hex || typeof hex !== 'string') return `rgba(0, 245, 255, ${alpha})`;
+  const clean = hex.replace('#', '');
+  if (clean.length === 6) {
+    const r = parseInt(clean.substring(0, 2), 16);
+    const g = parseInt(clean.substring(2, 4), 16);
+    const b = parseInt(clean.substring(4, 6), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
+  return hex;
+};
+
+const monoFont = Platform.select({
+  ios: 'Menlo',
+  android: 'monospace',
+  default: 'monospace',
+});
 
 export default function GameScreen({ onBackToHub, onScoreUpdate } = {}) {
   const windowDims = useWindowDimensions();
@@ -311,6 +329,13 @@ export default function GameScreen({ onBackToHub, onScoreUpdate } = {}) {
   // Core block drop & precision slicing handler
   const handleDropBlock = useCallback(() => {
     const eng = engineRef.current;
+    if (eng.status === 'START') {
+      triggerLightHaptic();
+      playTapSound();
+      buildInitialTower(true, themeId);
+      setGameState('PLAYING');
+      return;
+    }
     if (eng.status !== 'PLAYING' || !eng.activeBlock) return;
 
     const currentActive = {
@@ -860,15 +885,10 @@ export default function GameScreen({ onBackToHub, onScoreUpdate } = {}) {
     playTapSound();
     buildInitialTower(false, themeId);
     setGameState('START');
-  }, [buildInitialTower, themeId]);
-
-  // Native Gesture Handler Tap for zero-latency block dropping
-  const tapGesture = Gesture.Tap()
-    .maxDuration(600)
-    .onBegin(() => {
-      'worklet';
-      runOnJS(handleDropBlock)();
-    });
+    if (onBackToHub) {
+      onBackToHub();
+    }
+  }, [buildInitialTower, themeId, onBackToHub]);
 
   // Animated styles for screen shake, camera pan, and active block motion
   const shakeAnimatedStyle = useAnimatedStyle(() => ({
@@ -934,64 +954,95 @@ export default function GameScreen({ onBackToHub, onScoreUpdate } = {}) {
         combo={combo}
       />
 
-      {/* Top HUD Bar */}
-      <HudBar
+      {/* Universal MiniGameHeader with Safe Area Insets & Guaranteed Back Button */}
+      <MiniGameHeader
+        title="STACK BLOCK NEO"
+        floorLabel="FLOOR 01"
         score={score}
         bestScore={bestScore}
-        combo={combo}
-        speedLevel={speedLevel}
-        speedMultiplier={speedMultiplier}
-        widthPercent={widthPercent}
-        gameState={gameState}
-        isMuted={isMuted}
-        themeId={themeId}
-        onToggleMute={handleToggleMute}
-        onPausePress={handlePauseGame}
-        onBackToHub={onBackToHub}
+        accentColor={activeTheme.accent}
+        onBack={onBackToHub}
+        onReset={handleRestartGame}
+        rightExtra={
+          <View style={localStyles.headerExtra}>
+            <View
+              style={[
+                localStyles.levelBadge,
+                { borderColor: hexToRgba(activeTheme.accent, 0.45) },
+              ]}
+            >
+              <Text
+                style={[
+                  localStyles.levelBadgeText,
+                  { color: activeTheme.accent },
+                ]}
+              >
+                {`LVL ${speedLevel}`}
+              </Text>
+            </View>
+            {combo >= 2 && (
+              <View
+                style={[
+                  localStyles.comboBadge,
+                  { borderColor: hexToRgba(COLORS.solarGold, 0.6) },
+                ]}
+              >
+                <Text style={localStyles.comboBadgeText}>
+                  {`x${combo + 1}`}
+                </Text>
+              </View>
+            )}
+          </View>
+        }
       />
 
       {/* Interactive Touch Playfield with Screen Shake */}
-      <GestureDetector gesture={tapGesture}>
-        <Animated.View style={[styles.gameViewport, shakeAnimatedStyle]}>
-          <View style={styles.touchLayer}>
-            {/* Camera-Panned World Space */}
-            <Animated.View style={[styles.worldContainer, worldCameraStyle]}>
-              {/* Cybernetic Foundation Pedestal below the first block */}
-              {foundationBase && (
+      <Animated.View style={[styles.gameViewport, shakeAnimatedStyle]}>
+        <Pressable
+          style={styles.touchLayer}
+          onPress={handleDropBlock}
+        >
+          {/* Camera-Panned World Space */}
+          <Animated.View
+            pointerEvents="none"
+            style={[styles.worldContainer, worldCameraStyle]}
+          >
+            {/* Cybernetic Foundation Pedestal below the first block */}
+            {foundationBase && (
+              <View
+                style={[
+                  styles.foundationPedestal,
+                  {
+                    left: foundationBase.x - 8,
+                    top: baseFloorY,
+                    width: foundationBase.width + 16,
+                    height: screenHeight - baseFloorY + 260,
+                    borderColor: hexToRgba(activeTheme.accent, 0.6),
+                  },
+                ]}
+              >
+                <LinearGradient
+                  colors={[
+                    hexToRgba(activeTheme.accent, 0.28),
+                    'rgba(14, 9, 30, 0.94)',
+                    '#030308',
+                  ]}
+                  style={styles.bgGradient}
+                />
                 <View
                   style={[
-                    styles.foundationPedestal,
-                    {
-                      left: foundationBase.x - 8,
-                      top: baseFloorY,
-                      width: foundationBase.width + 16,
-                      height: screenHeight - baseFloorY + 260,
-                      borderColor: `${activeTheme.accent}99`,
-                    },
+                    styles.foundationGridStripe,
+                    { backgroundColor: activeTheme.accent },
                   ]}
-                >
-                  <LinearGradient
-                    colors={[
-                      `${activeTheme.accent}44`,
-                      'rgba(14, 9, 30, 0.94)',
-                      '#030308',
-                    ]}
-                    style={styles.bgGradient}
-                  />
-                  <View
-                    style={[
-                      styles.foundationGridStripe,
-                      { backgroundColor: activeTheme.accent },
-                    ]}
-                  />
-                  <View
-                    style={[
-                      styles.foundationCoreLine,
-                      { backgroundColor: activeTheme.secondaryAccent },
-                    ]}
-                  />
-                </View>
-              )}
+                />
+                <View
+                  style={[
+                    styles.foundationCoreLine,
+                    { backgroundColor: activeTheme.secondaryAccent },
+                  ]}
+                />
+              </View>
+            )}
 
               {/* Placed 3D Extruded Stack Blocks */}
               {visibleStack.map((block) => (
@@ -1189,13 +1240,19 @@ export default function GameScreen({ onBackToHub, onScoreUpdate } = {}) {
                   <View
                     style={[
                       styles.activeBlockLaserGuide,
-                      { left: 0, backgroundColor: `${activeTheme.accent}66` },
+                      {
+                        left: 0,
+                        backgroundColor: hexToRgba(activeTheme.accent, 0.4),
+                      },
                     ]}
                   />
                   <View
                     style={[
                       styles.activeBlockLaserGuide,
-                      { right: 0, backgroundColor: `${activeTheme.accent}66` },
+                      {
+                        right: 0,
+                        backgroundColor: hexToRgba(activeTheme.accent, 0.4),
+                      },
                     ]}
                   />
                 </Animated.View>
@@ -1312,7 +1369,7 @@ export default function GameScreen({ onBackToHub, onScoreUpdate } = {}) {
                 <View
                   style={[
                     styles.tapPromptPill,
-                    { borderColor: `${activeTheme.accent}77` },
+                    { borderColor: hexToRgba(activeTheme.accent, 0.45) },
                   ]}
                 >
                   <Text
@@ -1326,9 +1383,71 @@ export default function GameScreen({ onBackToHub, onScoreUpdate } = {}) {
                 </View>
               </View>
             )}
-          </View>
+
+            {/* Visual Start Banner when on START */}
+            {gameState === 'START' && (
+              <View style={localStyles.startBannerWrapper} pointerEvents="box-none">
+                <View
+                  pointerEvents="none"
+                  style={[
+                    localStyles.startBannerCard,
+                    { borderColor: hexToRgba(activeTheme.accent, 0.5) },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      localStyles.startBannerTag,
+                      { color: activeTheme.accent },
+                    ]}
+                  >
+                    FLOOR 01 // OVERDRIVE COMBOS
+                  </Text>
+                  <Text style={localStyles.startBannerTitle}>
+                    TAP TO PLAY
+                  </Text>
+                  <Text style={localStyles.startBannerDesc}>
+                    Tap anywhere to launch tower, then stack moving slabs
+                  </Text>
+                </View>
+
+                {/* Theme Selector Pills */}
+                <View style={localStyles.themeSelectorRow} pointerEvents="auto">
+                  {Object.values(THEMES).map((t) => {
+                    const isSelected = t.id === themeId;
+                    return (
+                      <Pressable
+                        key={t.id}
+                        onPress={() => handleSelectTheme(t.id)}
+                        style={[
+                          localStyles.themePill,
+                          isSelected && {
+                            borderColor: t.accent,
+                            backgroundColor: hexToRgba(t.accent, 0.22),
+                          },
+                        ]}
+                      >
+                        <View
+                          style={[
+                            localStyles.themeDot,
+                            { backgroundColor: t.accent },
+                          ]}
+                        />
+                        <Text
+                          style={[
+                            localStyles.themePillText,
+                            isSelected && { color: '#FFFFFF' },
+                          ]}
+                        >
+                          {t.name.split(' ')[1] || t.name}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+            )}
+          </Pressable>
         </Animated.View>
-      </GestureDetector>
 
       {/* Start, Pause, and Game Over Overlays */}
       <MenuOverlays
@@ -1348,3 +1467,115 @@ export default function GameScreen({ onBackToHub, onScoreUpdate } = {}) {
     </View>
   );
 }
+
+const localStyles = StyleSheet.create({
+  headerExtra: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  levelBadge: {
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderWidth: 1,
+    backgroundColor: 'rgba(8, 12, 28, 0.85)',
+  },
+  levelBadgeText: {
+    fontFamily: monoFont,
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  comboBadge: {
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderWidth: 1,
+    backgroundColor: 'rgba(255, 209, 102, 0.16)',
+  },
+  comboBadgeText: {
+    color: COLORS.solarGold,
+    fontFamily: monoFont,
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  startBannerWrapper: {
+    position: 'absolute',
+    top: '22%',
+    left: 20,
+    right: 20,
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  startBannerCard: {
+    width: '100%',
+    maxWidth: 340,
+    backgroundColor: 'rgba(8, 10, 26, 0.94)',
+    borderRadius: 18,
+    borderWidth: 1.5,
+    paddingHorizontal: 20,
+    paddingVertical: 18,
+    alignItems: 'center',
+    shadowColor: '#00F5FF',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  startBannerTag: {
+    fontFamily: monoFont,
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 1.8,
+    marginBottom: 6,
+  },
+  startBannerTitle: {
+    fontFamily: monoFont,
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    letterSpacing: 2,
+    textAlign: 'center',
+    marginBottom: 6,
+  },
+  startBannerDesc: {
+    fontFamily: monoFont,
+    fontSize: 11,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    letterSpacing: 0.5,
+  },
+  themeSelectorRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 14,
+  },
+  themePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+    backgroundColor: 'rgba(10, 12, 30, 0.88)',
+    gap: 6,
+  },
+  themeDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  themePillText: {
+    fontFamily: monoFont,
+    fontSize: 10,
+    fontWeight: '800',
+    color: COLORS.textSecondary,
+    letterSpacing: 0.8,
+  },
+});

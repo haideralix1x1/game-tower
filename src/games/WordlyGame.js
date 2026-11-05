@@ -7,11 +7,13 @@ import {
   Platform,
   useWindowDimensions,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS } from '../../styles';
 import MiniGameHeader from '../components/MiniGameHeader';
 import JuiceEngine from '../components/JuiceEngine';
+import GameResultModal from '../components/GameResultModal';
 import {
   triggerLightHaptic,
   triggerSliceHaptic,
@@ -78,8 +80,32 @@ const evaluateGuess = (guess, target) => {
 };
 
 export default function WordlyGame({ onBackToHub, onScoreUpdate }) {
-  const { width } = useWindowDimensions();
-  const boxSize = Math.min(54, Math.floor((width - 64) / 5));
+  const insets = useSafeAreaInsets();
+  const { width, height } = useWindowDimensions();
+
+  // Safe bottom inset to ensure keyboard never overlaps system navigation bar/buttons
+  const safeBottom = Math.max(
+    insets.bottom || 0,
+    Platform.OS === 'android' ? 24 : 14
+  );
+
+  // Proportional sizing so the 6x5 grid and keyboard fit seamlessly on any device height
+  const availableGridHeight = Math.max(
+    180,
+    height - (insets.top || 30) - safeBottom - 245
+  );
+  const maxBoxFromHeight = Math.floor(availableGridHeight / 6.6);
+  const boxSize = Math.max(
+    32,
+    Math.min(52, Math.floor((width - 64) / 5), maxBoxFromHeight)
+  );
+  const letterFontSize = Math.max(16, Math.floor(boxSize * 0.46));
+
+  // Proportional keyboard key sizes
+  const keyWidth = Math.max(26, Math.floor((width - 56) / 10));
+  const wideKeyWidth = Math.floor(keyWidth * 1.48);
+  const keyHeight = Math.max(36, Math.min(44, Math.floor(height * 0.052)));
+
   const juiceRef = useRef(null);
 
   const [targetWord, setTargetWord] = useState(
@@ -316,7 +342,9 @@ export default function WordlyGame({ onBackToHub, onScoreUpdate }) {
                           },
                         ]}
                       >
-                        <Text style={localStyles.letterText}>{char}</Text>
+                        <Text style={[localStyles.letterText, { fontSize: letterFontSize }]}>
+                          {char}
+                        </Text>
                       </View>
                     );
                   })}
@@ -325,18 +353,20 @@ export default function WordlyGame({ onBackToHub, onScoreUpdate }) {
             })}
           </View>
 
-          {gameState !== 'PLAYING' && (
-            <Pressable
-              onPress={() => startNextRound(false)}
-              style={localStyles.nextWordBtn}
-            >
-              <Text style={localStyles.nextWordText}>
-                {gameState === 'WON' ? 'NEXT CIPHER (+STREAK)' : 'TRY NEW WORD'}
-              </Text>
-            </Pressable>
-          )}
+          <GameResultModal
+            visible={gameState !== 'PLAYING'}
+            type={gameState === 'WON' ? 'VICTORY' : 'GAME_OVER'}
+            title={gameState === 'WON' ? 'CIPHER CRACKED!' : 'DECRYPTION FAILED'}
+            subtitle={`TARGET WORD WAS: ${targetWord}${gameState === 'WON' ? ` // STREAK x${streak}` : ''}`}
+            score={score}
+            bestScore={bestScore}
+            accentColor={gameState === 'WON' ? COLORS.matrixMint : COLORS.danger}
+            onRetry={() => startNextRound(false)}
+            retryLabel={gameState === 'WON' ? 'NEXT CIPHER' : 'TRY NEW WORD'}
+            onBackToHub={onBackToHub}
+          />
 
-          <View style={localStyles.keyboardContainer}>
+          <View style={[localStyles.keyboardContainer, { paddingBottom: safeBottom + 6 }]}>
             {KEYBOARD_ROWS.map((row, rIdx) => (
               <View key={`krow_${rIdx}`} style={localStyles.kbRow}>
                 {row.map((key) => {
@@ -357,14 +387,18 @@ export default function WordlyGame({ onBackToHub, onScoreUpdate }) {
                       onPress={() => handleKeyPress(key)}
                       style={({ pressed }) => [
                         localStyles.kbKey,
-                        isWide && localStyles.kbKeyWide,
-                        { backgroundColor: keyBg },
+                        {
+                          width: isWide ? wideKeyWidth : keyWidth,
+                          height: keyHeight,
+                          backgroundColor: keyBg,
+                        },
                         pressed && { opacity: 0.7, transform: [{ scale: 0.94 }] },
                       ]}
                     >
                       <Text
                         style={[
                           localStyles.kbKeyText,
+                          isWide && { fontSize: Math.max(9.5, Math.floor(keyWidth * 0.36)) },
                           st === 'ABSENT' && { color: COLORS.textMuted },
                         ]}
                       >
@@ -460,19 +494,16 @@ const localStyles = StyleSheet.create({
   },
   keyboardContainer: {
     width: '100%',
-    paddingHorizontal: 6,
-    gap: 6,
-    paddingBottom: 10,
+    paddingHorizontal: 4,
+    gap: 5,
   },
   kbRow: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 5,
+    gap: 4,
   },
   kbKey: {
-    minWidth: 30,
-    height: 44,
-    paddingHorizontal: 7,
+    paddingHorizontal: 2,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.16)',
@@ -480,8 +511,7 @@ const localStyles = StyleSheet.create({
     justifyContent: 'center',
   },
   kbKeyWide: {
-    minWidth: 52,
-    paddingHorizontal: 10,
+    paddingHorizontal: 4,
   },
   kbKeyText: {
     fontSize: 12.5,

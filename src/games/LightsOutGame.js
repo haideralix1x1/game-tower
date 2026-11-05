@@ -12,6 +12,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS } from '../../styles';
 import MiniGameHeader from '../components/MiniGameHeader';
 import JuiceEngine from '../components/JuiceEngine';
+import GameResultModal from '../components/GameResultModal';
 import {
   triggerLightHaptic,
   triggerPerfectHaptic,
@@ -85,6 +86,7 @@ export default function LightsOutGame({ onBackToHub, onScoreUpdate }) {
   const [hintCell, setHintCell] = useState(null);
   const [score, setScore] = useState(0);
   const [bestScore, setBestScore] = useState(0);
+  const [levelCleared, setLevelCleared] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -116,8 +118,19 @@ export default function LightsOutGame({ onBackToHub, onScoreUpdate }) {
     if (juiceRef.current) juiceRef.current.flash(COLORS.cyan);
   }, []);
 
+  const advanceToNextLevel = useCallback(() => {
+    setLevelCleared(false);
+    const nextLvl = level + 1;
+    setLevel(nextLvl);
+    setPuzzle(createSolvablePuzzle(Math.min(12, 3 + nextLvl)));
+    setMoves(0);
+    setHintCell(null);
+    if (juiceRef.current) juiceRef.current.flash(COLORS.cyan);
+  }, [level]);
+
   const handleToggleCell = useCallback(
     (r, c) => {
+      if (levelCleared) return;
       triggerLightHaptic();
       playTapSound();
       if (juiceRef.current) {
@@ -135,7 +148,8 @@ export default function LightsOutGame({ onBackToHub, onScoreUpdate }) {
       }
 
       setHintCell(null);
-      setMoves((m) => m + 1);
+      const nextMoves = moves + 1;
+      setMoves(nextMoves);
 
       const solved = nextGrid.every((row) => row.every((val) => !val));
       if (solved) {
@@ -143,17 +157,14 @@ export default function LightsOutGame({ onBackToHub, onScoreUpdate }) {
         const nextScore = score + gained;
         setScore(nextScore);
         updateBest(nextScore);
+        setLevelCleared(true);
         triggerPerfectHaptic(3);
-        playPerfectSound(5);
+        playPerfectSound(6);
 
-        const nextLvl = level + 1;
-        setLevel(nextLvl);
-        setPuzzle(createSolvablePuzzle(Math.min(12, 3 + nextLvl)));
-        setMoves(0);
         if (juiceRef.current) {
           juiceRef.current.celebrate(
             `FIREWALL BREACHED!`,
-            `LVL ${nextLvl} // +${gained} PTS`,
+            `SECTOR ${level} // +${gained} PTS`,
             COLORS.cyan
           );
         }
@@ -164,7 +175,7 @@ export default function LightsOutGame({ onBackToHub, onScoreUpdate }) {
         });
       }
     },
-    [puzzle, level, score, updateBest]
+    [levelCleared, puzzle, moves, level, score, updateBest]
   );
 
   const handleRequestHint = useCallback(() => {
@@ -258,6 +269,19 @@ export default function LightsOutGame({ onBackToHub, onScoreUpdate }) {
           <Text style={localStyles.footerNote}>
             DEACTIVATE ALL GLOWING CYAN NODES TO BREACH THE FIREWALL
           </Text>
+
+          <GameResultModal
+            visible={levelCleared}
+            type="VICTORY"
+            title="FIREWALL BREACHED!"
+            subtitle={`SECTOR LEVEL ${level} CLEARED IN ${moves} MOVES`}
+            score={score}
+            bestScore={bestScore}
+            accentColor={COLORS.cyan}
+            onRetry={advanceToNextLevel}
+            retryLabel={`ENTER LEVEL ${level + 1}`}
+            onBackToHub={onBackToHub}
+          />
         </View>
       </View>
     </JuiceEngine>

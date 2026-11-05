@@ -12,6 +12,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS } from '../../styles';
 import MiniGameHeader from '../components/MiniGameHeader';
 import JuiceEngine from '../components/JuiceEngine';
+import GameResultModal from '../components/GameResultModal';
 import {
   triggerLightHaptic,
   triggerSliceHaptic,
@@ -246,13 +247,18 @@ export default function MemoryMatrixGame({ onBackToHub, onScoreUpdate }) {
             })}
           </View>
 
-          {matchedCount === 8 && (
-            <Pressable onPress={resetDeck} style={localStyles.nextRoundBtn}>
-              <Text style={localStyles.nextRoundText}>
-                MATRIX SYNCHRONIZED // NEXT DECK (+200)
-              </Text>
-            </Pressable>
-          )}
+          <GameResultModal
+            visible={matchedCount === 8}
+            type="VICTORY"
+            title="NEURAL MATRIX SYNCED!"
+            subtitle={`ALL 8 PAIRS MATCHED IN ${moves} MOVES`}
+            score={score}
+            bestScore={bestScore}
+            accentColor="#C77DFF"
+            onRetry={resetDeck}
+            retryLabel="NEXT DECK (+200)"
+            onBackToHub={onBackToHub}
+          />
         </View>
       </View>
     </JuiceEngine>

@@ -12,6 +12,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS } from '../../styles';
 import MiniGameHeader from '../components/MiniGameHeader';
 import JuiceEngine from '../components/JuiceEngine';
+import GameResultModal from '../components/GameResultModal';
 import {
   triggerLightHaptic,
   triggerPerfectHaptic,
@@ -220,13 +221,18 @@ export default function SlidingPuzzleGame({ onBackToHub, onScoreUpdate }) {
             })}
           </View>
 
-          {won && (
-            <Pressable onPress={handleReset} style={localStyles.winBanner}>
-              <Text style={localStyles.winText}>
-                SEQUENCE ORDERED! TAP FOR NEXT MATRIX
-              </Text>
-            </Pressable>
-          )}
+          <GameResultModal
+            visible={won}
+            type="VICTORY"
+            title="SEQUENCE ORDERED!"
+            subtitle={`15-PUZZLE SOLVED IN ${moves} MOVES`}
+            score={score}
+            bestScore={bestScore}
+            accentColor={COLORS.solarGold}
+            onRetry={handleReset}
+            retryLabel="NEXT 15-MATRIX"
+            onBackToHub={onBackToHub}
+          />
         </View>
       </View>
     </JuiceEngine>

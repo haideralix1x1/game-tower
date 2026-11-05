@@ -12,15 +12,18 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS } from '../../styles';
 import MiniGameHeader from '../components/MiniGameHeader';
 import JuiceEngine from '../components/JuiceEngine';
+import GameResultModal from '../components/GameResultModal';
 import {
   triggerLightHaptic,
   triggerSliceHaptic,
   triggerPerfectHaptic,
+  triggerGameOverHaptic,
 } from '../utils/haptics';
 import {
   playTapSound,
   playSliceSound,
   playPerfectSound,
+  playGameOverSound,
 } from '../utils/sound';
 
 const STORAGE_KEY = '@game_tower:best_blockblast_v1';
@@ -63,6 +66,7 @@ export default function BlockBlastGame({ onBackToHub, onScoreUpdate }) {
   const [selectedIdx, setSelectedIdx] = useState(0);
   const [score, setScore] = useState(0);
   const [bestScore, setBestScore] = useState(0);
+  const [isGameOver, setIsGameOver] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -93,11 +97,31 @@ export default function BlockBlastGame({ onBackToHub, onScoreUpdate }) {
     setHand(randomHand());
     setSelectedIdx(0);
     setScore(0);
+    setIsGameOver(false);
     if (juiceRef.current) juiceRef.current.flash(COLORS.cyan);
   }, []);
 
+  const canPieceFitAnywhere = (g, piece) => {
+    for (let r = 0; r < GRID_SIZE; r += 1) {
+      for (let c = 0; c < GRID_SIZE; c += 1) {
+        let fits = true;
+        for (const [dr, dc] of piece.cells) {
+          const nr = r + dr;
+          const nc = c + dc;
+          if (nr < 0 || nr >= GRID_SIZE || nc < 0 || nc >= GRID_SIZE || g[nr][nc] !== null) {
+            fits = false;
+            break;
+          }
+        }
+        if (fits) return true;
+      }
+    }
+    return false;
+  };
+
   const handleCellTap = useCallback(
     (r, c) => {
+      if (isGameOver) return;
       const piece = hand[selectedIdx];
       if (!piece || piece.used) return;
 
@@ -173,8 +197,21 @@ export default function BlockBlastGame({ onBackToHub, onScoreUpdate }) {
         triggerLightHaptic();
         playSliceSound();
       }
+
+      // Check if any remaining unused piece can fit anywhere
+      const remainingPieces = finalHand.filter((h) => !h.used);
+      const anyCanFit = remainingPieces.some((p) => canPieceFitAnywhere(nextGrid, p));
+      if (!anyCanFit) {
+        setIsGameOver(true);
+        triggerGameOverHaptic();
+        playGameOverSound();
+        if (juiceRef.current) {
+          juiceRef.current.shake(12, 8);
+          juiceRef.current.flash(COLORS.danger);
+        }
+      }
     },
-    [hand, selectedIdx, grid, score, updateBest]
+    [isGameOver, hand, selectedIdx, grid, score, updateBest]
   );
 
   return (
@@ -263,6 +300,19 @@ export default function BlockBlastGame({ onBackToHub, onScoreUpdate }) {
               );
             })}
           </View>
+
+          <GameResultModal
+            visible={isGameOver}
+            type="GAME_OVER"
+            title="NO MOVES REMAINING"
+            subtitle="GRID HAS NO VALID CELLS FOR REMAINING MODULES"
+            score={score}
+            bestScore={bestScore}
+            accentColor="#FFD166"
+            onRetry={resetGame}
+            retryLabel="PLAY AGAIN"
+            onBackToHub={onBackToHub}
+          />
         </View>
       </View>
     </JuiceEngine>

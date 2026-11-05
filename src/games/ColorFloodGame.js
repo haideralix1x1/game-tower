@@ -12,6 +12,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS } from '../../styles';
 import MiniGameHeader from '../components/MiniGameHeader';
 import JuiceEngine from '../components/JuiceEngine';
+import GameResultModal from '../components/GameResultModal';
 import {
   triggerLightHaptic,
   triggerPerfectHaptic,
@@ -244,15 +245,22 @@ export default function ColorFloodGame({ onBackToHub, onScoreUpdate }) {
             ))}
           </View>
 
-          {status !== 'PLAYING' && (
-            <Pressable onPress={resetBoard} style={localStyles.nextBtn}>
-              <Text style={localStyles.nextBtnText}>
-                {status === 'WON'
-                  ? 'GRID INFECTED! NEXT BOARD'
-                  : 'OUT OF MOVES // RETRY'}
-              </Text>
-            </Pressable>
-          )}
+          <GameResultModal
+            visible={status !== 'PLAYING'}
+            type={status === 'WON' ? 'VICTORY' : 'GAME_OVER'}
+            title={status === 'WON' ? 'CHROMA UNIFIED!' : 'OUT OF MOVES'}
+            subtitle={
+              status === 'WON'
+                ? `GRID FULLY INFECTED WITH ${movesLeft} MOVES LEFT`
+                : '18 MOVES EXHAUSTED // CONTAGION STOPPED'
+            }
+            score={score}
+            bestScore={bestScore}
+            accentColor={status === 'WON' ? '#FF5E00' : COLORS.danger}
+            onRetry={resetBoard}
+            retryLabel={status === 'WON' ? 'NEXT FLOOD MATRIX' : 'TRY AGAIN'}
+            onBackToHub={onBackToHub}
+          />
         </View>
       </View>
     </JuiceEngine>

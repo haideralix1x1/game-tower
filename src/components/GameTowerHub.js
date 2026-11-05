@@ -7,9 +7,11 @@ import {
   StyleSheet,
   Platform,
   useWindowDimensions,
+  BackHandler,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import Animated, { FadeIn, ZoomIn } from 'react-native-reanimated';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Svg, {
   Defs,
@@ -45,13 +47,25 @@ import ColorStroopGame from '../games/ColorStroopGame';
 import HanoiTowerGame from '../games/HanoiTowerGame';
 import NumberHuntGame from '../games/NumberHuntGame';
 import SpaceShooterGame from '../games/SpaceShooterGame';
+import CyberSudokuGame from '../games/CyberSudokuGame';
+import SaveTheDogGame from '../games/SaveTheDogGame';
+import RopeCutGame from '../games/RopeCutGame';
+import ColorTubeSortGame from '../games/ColorTubeSortGame';
+import ColorSwitchGame from '../games/ColorSwitchGame';
+import HardcoreRunnerGame from '../games/HardcoreRunnerGame';
+import CyberTetrisGame from '../games/CyberTetrisGame';
+import Match3SagaGame from '../games/Match3SagaGame';
+import TapAwayArrowsGame from '../games/TapAwayArrowsGame';
+import IcyTowerClimberGame from '../games/IcyTowerClimberGame';
+import KnifeHitGame from '../games/KnifeHitGame';
 
 import {
   triggerLightHaptic,
   triggerMediumHaptic,
   triggerSliceHaptic,
+  triggerSelectionHaptic,
 } from '../utils/haptics';
-import { playTapSound } from '../utils/sound';
+import { playTapSound, playSnapTickSound } from '../utils/sound';
 
 const monoFont = Platform.select({
   ios: 'Menlo',
@@ -60,6 +74,160 @@ const monoFont = Platform.select({
 });
 
 export const TOWER_GAMES = [
+  {
+    id: 'knife_hit',
+    floorNum: 31,
+    floor: 'FLOOR 31',
+    tier: 'ORBIT',
+    title: 'CYBER BLADE TARGET',
+    category: 'PRECISION',
+    badge: 'ROTATING CORE',
+    desc: 'Fling plasma blades into the rotating quantum core without striking existing blades.',
+    accent: '#00F5FF',
+    secondary: '#7928CA',
+    icon: '🗡️',
+    storageKey: '@game_tower:best_knife_v1',
+  },
+  {
+    id: 'icy_climber',
+    floorNum: 30,
+    floor: 'FLOOR 30',
+    tier: 'ORBIT',
+    title: 'CYBER ICY CLIMBER',
+    category: 'ARCADE',
+    badge: 'SLICK ICE LEDGES',
+    desc: 'Leap and slide between crumbling plasma and frictionless ice ledges to ascend the endless tower.',
+    accent: '#00F5FF',
+    secondary: '#FFFFFF',
+    icon: '🧊',
+    storageKey: '@game_tower:best_climber_v1',
+  },
+  {
+    id: 'tap_away',
+    floorNum: 29,
+    floor: 'FLOOR 29',
+    tier: 'ORBIT',
+    title: 'TAP AWAY ARROWS',
+    category: 'BRAIN',
+    badge: 'LOGIC UNRAVEL',
+    desc: 'Unravel directional arrow blocks by tapping only those with clear trajectories off the board.',
+    accent: '#39FF14',
+    secondary: '#00F5FF',
+    icon: '🧭',
+    storageKey: '@game_tower:best_arrows_v1',
+  },
+  {
+    id: 'match3_saga',
+    floorNum: 28,
+    floor: 'FLOOR 28',
+    tier: 'ORBIT',
+    title: 'CYBER MATCH 3 SAGA',
+    category: 'PUZZLE',
+    badge: 'BRICKS & STARS',
+    desc: 'Match glowing gems, shatter armored cyber bricks, and collect caged stars before the countdown ends.',
+    accent: '#FF007F',
+    secondary: '#FFD166',
+    icon: '💎',
+    storageKey: '@game_tower:best_match3_v1',
+  },
+  {
+    id: 'cyber_tetris',
+    floorNum: 27,
+    floor: 'FLOOR 27',
+    tier: 'ORBIT',
+    title: 'CYBER TETRIS NEO',
+    category: 'ARCADE',
+    badge: 'HARD DROP JUICY',
+    desc: 'Classic falling tetrominoes with hold slot, ghost projection, hard drop slams, and juicy multi-clears.',
+    accent: '#00F5FF',
+    secondary: '#9D4EDD',
+    icon: '🧱',
+    storageKey: '@game_tower:best_tetris_v1',
+  },
+  {
+    id: 'hardcore_runner',
+    floorNum: 26,
+    floor: 'FLOOR 26',
+    tier: 'ORBIT',
+    title: 'CYBER CUBE DASH',
+    category: 'HARDCORE',
+    badge: 'GRAVITY FLIP',
+    desc: 'High-speed hardcore rhythm runner with spike hurdles, gravity-flip portals, and attempt counters.',
+    accent: '#FFE600',
+    secondary: '#FF0055',
+    icon: '⚡',
+    storageKey: '@game_tower:best_dash_v1',
+  },
+  {
+    id: 'color_switch',
+    floorNum: 25,
+    floor: 'FLOOR 25',
+    tier: 'APEX',
+    title: 'COLOR SWITCH NEO',
+    category: 'REFLEX',
+    badge: 'COLOR GATES',
+    desc: 'Bounce your color orb through rotating multi-colored rings matching only your current wavelength.',
+    accent: '#FF007F',
+    secondary: '#00F5FF',
+    icon: '🔘',
+    storageKey: '@game_tower:best_switch_v1',
+  },
+  {
+    id: 'color_tube',
+    floorNum: 24,
+    floor: 'FLOOR 24',
+    tier: 'APEX',
+    title: 'COLOR TUBE SORT',
+    category: 'LOGIC',
+    badge: 'WATER SORT NEO',
+    desc: 'Transfer neon fluids between lab flasks until each tube holds a single pure wavelength.',
+    accent: '#00F5FF',
+    secondary: '#FFD166',
+    icon: '🧪',
+    storageKey: '@game_tower:best_tubes_v1',
+  },
+  {
+    id: 'rope_cut',
+    floorNum: 23,
+    floor: 'FLOOR 23',
+    tier: 'APEX',
+    title: 'CYBER ROPE DROP',
+    category: 'PHYSICS',
+    badge: 'SLICING DROP',
+    desc: 'Slice suspended ropes with precise timing to swing the quantum ball safely into the floor receptor bucket.',
+    accent: '#00F5D4',
+    secondary: '#FFD166',
+    icon: '🪢',
+    storageKey: '@game_tower:best_rope_v1',
+  },
+  {
+    id: 'save_the_dog',
+    floorNum: 22,
+    floor: 'FLOOR 22',
+    tier: 'APEX',
+    title: 'SAVE CYBER DOGE',
+    category: 'PHYSICS',
+    badge: 'DRAW SHIELD',
+    desc: 'Draw energy barrier lines to shelter the cyber dog from attacking drone wasp swarms.',
+    accent: '#FFD166',
+    secondary: '#FF6D00',
+    icon: '🐕',
+    storageKey: '@game_tower:best_doge_v1',
+  },
+  {
+    id: 'cyber_sudoku',
+    floorNum: 21,
+    floor: 'FLOOR 21',
+    tier: 'APEX',
+    title: 'CYBER SUDOKU',
+    category: 'BRAIN',
+    badge: 'QUANTUM 9x9',
+    desc: 'Solve the 9x9 quantum grid with pencil notes, conflict scan, and difficulty modes.',
+    accent: '#00F5FF',
+    secondary: '#9D4EDD',
+    icon: '🔢',
+    storageKey: '@game_tower:best_sudoku_v1',
+  },
   {
     id: 'space_shooter',
     floorNum: 20,
@@ -137,8 +305,8 @@ export const TOWER_GAMES = [
     tier: 'SKY',
     title: 'WHACK-A-BOT',
     category: 'ARCADE',
-    badge: 'SPEED REFLEX',
-    desc: 'Smash rogue drones across the 3x3 security grid while avoiding EMP plasma bombs.',
+    badge: '16 & 25 HOLES',
+    desc: 'Smash rogue drones across 16 (4x4) or 25 (5x5) cyber holes with multi-target reflex speed.',
     accent: '#FF2A85',
     secondary: '#FF9E00',
     icon: '🤖',
@@ -317,14 +485,14 @@ export const TOWER_GAMES = [
     floorNum: 2,
     floor: 'FLOOR 02',
     tier: 'BASE',
-    title: 'CYBER 2048',
+    title: 'DROP 2048 NEO',
     category: 'PUZZLE',
-    badge: 'TILE MERGE',
-    desc: 'Slide and fuse glowing power cores on a 4x4 grid to reach the 2048 core.',
+    badge: 'DROP & MERGE',
+    desc: 'Drop numbered boxes from top into 5 columns. Match adjacent boxes to merge into 16, 32, 64+ in multi-directional chain reactions!',
     accent: '#00F5D4',
     secondary: '#0A9396',
     icon: '⊞',
-    storageKey: '@game_tower:best_2048_v1',
+    storageKey: '@game_tower:best_2048_drop_v1',
   },
   {
     id: 'stack_block',
@@ -343,10 +511,11 @@ export const TOWER_GAMES = [
 ];
 
 const SECTORS = [
-  { id: 'ALL', label: 'ALL (20)' },
-  { id: 'APEX', label: '🛰️ APEX (20-16)' },
-  { id: 'SKY', label: '🏙️ SKY (15-11)' },
-  { id: 'CORE', label: '⚡ CORE (10-06)' },
+  { id: 'ALL', label: 'ALL (31)' },
+  { id: 'ORBIT', label: '🛰️ ORBIT (31-26)' },
+  { id: 'APEX', label: '⚡ APEX (25-21)' },
+  { id: 'SKY', label: '🏙️ SKY (20-16)' },
+  { id: 'CORE', label: '⚙️ CORE (15-06)' },
   { id: 'BASE', label: '🛡️ BASE (05-01)' },
 ];
 
@@ -398,12 +567,50 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
     }, 120);
   }, [width]);
 
-  const handleBackToHub = useCallback(() => {
-    triggerMediumHaptic();
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
+
+  // Request to exit (shows confirmation dialog)
+  const requestExitToHub = useCallback(() => {
+    setShowExitConfirm(true);
+    triggerLightHaptic();
     playTapSound();
+  }, []);
+
+  // Confirmed exit (actually exits to hub)
+  const performExitToHub = useCallback(() => {
+    setShowExitConfirm(false);
     setActiveGameId(null);
-    loadAllHighScores();
+    try {
+      triggerMediumHaptic();
+      loadAllHighScores();
+    } catch {}
   }, [loadAllHighScores]);
+
+  // Handle Android mobile hardware / gesture back button
+  useEffect(() => {
+    const onHardwareBack = () => {
+      if (activeGameId !== null) {
+        if (showExitConfirm) {
+          // If confirmation is already showing, hardware back closes the dialog
+          setShowExitConfirm(false);
+          triggerLightHaptic();
+        } else {
+          // Hardware back in game opens confirmation dialog instead of exiting to phone home!
+          setShowExitConfirm(true);
+          triggerLightHaptic();
+          playTapSound();
+        }
+        return true; // Intercept: do NOT let Android close app to home screen
+      }
+      return false; // On hub: let Android handle back normally
+    };
+
+    const backSub = BackHandler.addEventListener(
+      'hardwareBackPress',
+      onHardwareBack
+    );
+    return () => backSub.remove();
+  }, [activeGameId, showExitConfirm]);
 
   const handleScoreUpdate = useCallback((gameId, newScore) => {
     setHighScores((prev) => {
@@ -423,7 +630,7 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
   const floorsPlayed = Object.values(highScores).filter((v) => v > 0).length;
   const towerRank =
     totalTowerScore >= 10000
-      ? 'NEON GOD'
+      ? 'CYBER LEGEND'
       : totalTowerScore >= 5000
         ? 'APEX OVERLORD'
         : totalTowerScore >= 2000
@@ -446,171 +653,354 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
       return g.tier === selectedSector;
     });
 
-  // Render Active Selected Mini-Game
-  if (activeGameId === 'stack_block') {
+  // Calculate dynamic snapping offsets for each game deck
+  const computeInitialOffsets = useCallback(() => {
+    const spireOffset = !ascendingSort ? 150 : 0;
+    const offsets = [];
+    if (!ascendingSort) {
+      offsets.push(0);
+    }
+    const count = displayedGames.length;
+    for (let i = 0; i < count; i++) {
+      offsets.push(spireOffset + i * 90);
+    }
+    return offsets;
+  }, [ascendingSort, displayedGames.length]);
+
+  const [snapOffsets, setSnapOffsets] = useState(computeInitialOffsets);
+  const layoutPositions = useRef({});
+  const layoutTimer = useRef(null);
+  const lastActiveIndexRef = useRef(-1);
+
+  useEffect(() => {
+    layoutPositions.current = {};
+    setSnapOffsets(computeInitialOffsets());
+  }, [computeInitialOffsets, ascendingSort, selectedSector]);
+
+  const handleDeckLayout = useCallback((index, event) => {
+    const { y } = event.nativeEvent.layout;
+    layoutPositions.current[index] = y;
+
+    if (!layoutTimer.current) {
+      layoutTimer.current = setTimeout(() => {
+        layoutTimer.current = null;
+        const sorted = Object.keys(layoutPositions.current)
+          .map(Number)
+          .sort((a, b) => a - b)
+          .map((idx) => layoutPositions.current[idx]);
+        if (sorted.length > 0) {
+          setSnapOffsets(sorted);
+        }
+      }, 70);
+    }
+  }, []);
+
+  // Handle magnetic snap detection and cyber ratchet sound/haptics on scroll
+  const handleTowerScroll = useCallback(
+    (e) => {
+      const scrollY = e.nativeEvent.contentOffset.y;
+      if (!snapOffsets || snapOffsets.length === 0) return;
+
+      let closestIdx = 0;
+      let minDiff = Infinity;
+      for (let i = 0; i < snapOffsets.length; i++) {
+        const diff = Math.abs(scrollY - snapOffsets[i]);
+        if (diff < minDiff) {
+          minDiff = diff;
+          closestIdx = i;
+        }
+      }
+
+      if (closestIdx !== lastActiveIndexRef.current) {
+        lastActiveIndexRef.current = closestIdx;
+        playSnapTickSound();
+        triggerSelectionHaptic();
+      }
+    },
+    [snapOffsets]
+  );
+
+  const handleMomentumScrollEnd = useCallback(() => {
+    playSnapTickSound();
+    triggerSelectionHaptic();
+  }, []);
+
+  // Render Active Selected Mini-Game with Exit Confirmation Modal
+  const renderActiveGame = () => {
+    if (!activeGameId) return null;
+    switch (activeGameId) {
+      case 'stack_block':
+        return (
+          <GameScreen
+            onBackToHub={requestExitToHub}
+            onScoreUpdate={(s) => handleScoreUpdate('stack_block', s)}
+          />
+        );
+      case 'cyber_2048':
+        return (
+          <Game2048
+            onBackToHub={requestExitToHub}
+            onScoreUpdate={(s) => handleScoreUpdate('cyber_2048', s)}
+          />
+        );
+      case 'wordly_neo':
+        return (
+          <WordlyGame
+            onBackToHub={requestExitToHub}
+            onScoreUpdate={(s) => handleScoreUpdate('wordly_neo', s)}
+          />
+        );
+      case 'neon_mines':
+        return (
+          <NeonMinesGame
+            onBackToHub={requestExitToHub}
+            onScoreUpdate={(s) => handleScoreUpdate('neon_mines', s)}
+          />
+        );
+      case 'memory_matrix':
+        return (
+          <MemoryMatrixGame
+            onBackToHub={requestExitToHub}
+            onScoreUpdate={(s) => handleScoreUpdate('memory_matrix', s)}
+          />
+        );
+      case 'lights_out':
+        return (
+          <LightsOutGame
+            onBackToHub={requestExitToHub}
+            onScoreUpdate={(s) => handleScoreUpdate('lights_out', s)}
+          />
+        );
+      case 'cyber_slide':
+        return (
+          <SlidingPuzzleGame
+            onBackToHub={requestExitToHub}
+            onScoreUpdate={(s) => handleScoreUpdate('cyber_slide', s)}
+          />
+        );
+      case 'chroma_flood':
+        return (
+          <ColorFloodGame
+            onBackToHub={requestExitToHub}
+            onScoreUpdate={(s) => handleScoreUpdate('chroma_flood', s)}
+          />
+        );
+      case 'simon_pulse':
+        return (
+          <SimonPulseGame
+            onBackToHub={requestExitToHub}
+            onScoreUpdate={(s) => handleScoreUpdate('simon_pulse', s)}
+          />
+        );
+      case 'brick_breaker':
+        return (
+          <BrickBreakerGame
+            onBackToHub={requestExitToHub}
+            onScoreUpdate={(s) => handleScoreUpdate('brick_breaker', s)}
+          />
+        );
+      case 'cyber_snake':
+        return (
+          <CyberSnakeGame
+            onBackToHub={requestExitToHub}
+            onScoreUpdate={(s) => handleScoreUpdate('cyber_snake', s)}
+          />
+        );
+      case 'neon_flappy':
+        return (
+          <NeonFlappyGame
+            onBackToHub={requestExitToHub}
+            onScoreUpdate={(s) => handleScoreUpdate('neon_flappy', s)}
+          />
+        );
+      case 'tic_tac_toe':
+        return (
+          <TicTacToeGame
+            onBackToHub={requestExitToHub}
+            onScoreUpdate={(s) => handleScoreUpdate('tic_tac_toe', s)}
+          />
+        );
+      case 'block_blast':
+        return (
+          <BlockBlastGame
+            onBackToHub={requestExitToHub}
+            onScoreUpdate={(s) => handleScoreUpdate('block_blast', s)}
+          />
+        );
+      case 'whack_a_bot':
+        return (
+          <WhackABotGame
+            onBackToHub={requestExitToHub}
+            onScoreUpdate={(s) => handleScoreUpdate('whack_a_bot', s)}
+          />
+        );
+      case 'math_blitz':
+        return (
+          <MathBlitzGame
+            onBackToHub={requestExitToHub}
+            onScoreUpdate={(s) => handleScoreUpdate('math_blitz', s)}
+          />
+        );
+      case 'color_stroop':
+        return (
+          <ColorStroopGame
+            onBackToHub={requestExitToHub}
+            onScoreUpdate={(s) => handleScoreUpdate('color_stroop', s)}
+          />
+        );
+      case 'hanoi_tower':
+        return (
+          <HanoiTowerGame
+            onBackToHub={requestExitToHub}
+            onScoreUpdate={(s) => handleScoreUpdate('hanoi_tower', s)}
+          />
+        );
+      case 'number_hunt':
+        return (
+          <NumberHuntGame
+            onBackToHub={requestExitToHub}
+            onScoreUpdate={(s) => handleScoreUpdate('number_hunt', s)}
+          />
+        );
+      case 'space_shooter':
+        return (
+          <SpaceShooterGame
+            onBackToHub={requestExitToHub}
+            onScoreUpdate={(s) => handleScoreUpdate('space_shooter', s)}
+          />
+        );
+      case 'cyber_sudoku':
+        return (
+          <CyberSudokuGame
+            onBackToHub={requestExitToHub}
+            onScoreUpdate={(s) => handleScoreUpdate('cyber_sudoku', s)}
+          />
+        );
+      case 'save_the_dog':
+        return (
+          <SaveTheDogGame
+            onBackToHub={requestExitToHub}
+            onScoreUpdate={(s) => handleScoreUpdate('save_the_dog', s)}
+          />
+        );
+      case 'rope_cut':
+        return (
+          <RopeCutGame
+            onBackToHub={requestExitToHub}
+            onScoreUpdate={(s) => handleScoreUpdate('rope_cut', s)}
+          />
+        );
+      case 'color_tube':
+        return (
+          <ColorTubeSortGame
+            onBackToHub={requestExitToHub}
+            onScoreUpdate={(s) => handleScoreUpdate('color_tube', s)}
+          />
+        );
+      case 'color_switch':
+        return (
+          <ColorSwitchGame
+            onBackToHub={requestExitToHub}
+            onScoreUpdate={(s) => handleScoreUpdate('color_switch', s)}
+          />
+        );
+      case 'hardcore_runner':
+        return (
+          <HardcoreRunnerGame
+            onBackToHub={requestExitToHub}
+            onScoreUpdate={(s) => handleScoreUpdate('hardcore_runner', s)}
+          />
+        );
+      case 'cyber_tetris':
+        return (
+          <CyberTetrisGame
+            onBackToHub={requestExitToHub}
+            onScoreUpdate={(s) => handleScoreUpdate('cyber_tetris', s)}
+          />
+        );
+      case 'match3_saga':
+        return (
+          <Match3SagaGame
+            onBackToHub={requestExitToHub}
+            onScoreUpdate={(s) => handleScoreUpdate('match3_saga', s)}
+          />
+        );
+      case 'tap_away':
+        return (
+          <TapAwayArrowsGame
+            onBackToHub={requestExitToHub}
+            onScoreUpdate={(s) => handleScoreUpdate('tap_away', s)}
+          />
+        );
+      case 'icy_climber':
+        return (
+          <IcyTowerClimberGame
+            onBackToHub={requestExitToHub}
+            onScoreUpdate={(s) => handleScoreUpdate('icy_climber', s)}
+          />
+        );
+      case 'knife_hit':
+        return (
+          <KnifeHitGame
+            onBackToHub={requestExitToHub}
+            onScoreUpdate={(s) => handleScoreUpdate('knife_hit', s)}
+          />
+        );
+      default:
+        return null;
+    }
+  };
+
+  if (activeGameId) {
     return (
-      <GameScreen
-        onBackToHub={handleBackToHub}
-        onScoreUpdate={(s) => handleScoreUpdate('stack_block', s)}
-      />
-    );
-  }
-  if (activeGameId === 'cyber_2048') {
-    return (
-      <Game2048
-        onBackToHub={handleBackToHub}
-        onScoreUpdate={(s) => handleScoreUpdate('cyber_2048', s)}
-      />
-    );
-  }
-  if (activeGameId === 'wordly_neo') {
-    return (
-      <WordlyGame
-        onBackToHub={handleBackToHub}
-        onScoreUpdate={(s) => handleScoreUpdate('wordly_neo', s)}
-      />
-    );
-  }
-  if (activeGameId === 'neon_mines') {
-    return (
-      <NeonMinesGame
-        onBackToHub={handleBackToHub}
-        onScoreUpdate={(s) => handleScoreUpdate('neon_mines', s)}
-      />
-    );
-  }
-  if (activeGameId === 'memory_matrix') {
-    return (
-      <MemoryMatrixGame
-        onBackToHub={handleBackToHub}
-        onScoreUpdate={(s) => handleScoreUpdate('memory_matrix', s)}
-      />
-    );
-  }
-  if (activeGameId === 'lights_out') {
-    return (
-      <LightsOutGame
-        onBackToHub={handleBackToHub}
-        onScoreUpdate={(s) => handleScoreUpdate('lights_out', s)}
-      />
-    );
-  }
-  if (activeGameId === 'cyber_slide') {
-    return (
-      <SlidingPuzzleGame
-        onBackToHub={handleBackToHub}
-        onScoreUpdate={(s) => handleScoreUpdate('cyber_slide', s)}
-      />
-    );
-  }
-  if (activeGameId === 'chroma_flood') {
-    return (
-      <ColorFloodGame
-        onBackToHub={handleBackToHub}
-        onScoreUpdate={(s) => handleScoreUpdate('chroma_flood', s)}
-      />
-    );
-  }
-  if (activeGameId === 'simon_pulse') {
-    return (
-      <SimonPulseGame
-        onBackToHub={handleBackToHub}
-        onScoreUpdate={(s) => handleScoreUpdate('simon_pulse', s)}
-      />
-    );
-  }
-  if (activeGameId === 'brick_breaker') {
-    return (
-      <BrickBreakerGame
-        onBackToHub={handleBackToHub}
-        onScoreUpdate={(s) => handleScoreUpdate('brick_breaker', s)}
-      />
-    );
-  }
-  if (activeGameId === 'cyber_snake') {
-    return (
-      <CyberSnakeGame
-        onBackToHub={handleBackToHub}
-        onScoreUpdate={(s) => handleScoreUpdate('cyber_snake', s)}
-      />
-    );
-  }
-  if (activeGameId === 'neon_flappy') {
-    return (
-      <NeonFlappyGame
-        onBackToHub={handleBackToHub}
-        onScoreUpdate={(s) => handleScoreUpdate('neon_flappy', s)}
-      />
-    );
-  }
-  if (activeGameId === 'tic_tac_toe') {
-    return (
-      <TicTacToeGame
-        onBackToHub={handleBackToHub}
-        onScoreUpdate={(s) => handleScoreUpdate('tic_tac_toe', s)}
-      />
-    );
-  }
-  if (activeGameId === 'block_blast') {
-    return (
-      <BlockBlastGame
-        onBackToHub={handleBackToHub}
-        onScoreUpdate={(s) => handleScoreUpdate('block_blast', s)}
-      />
-    );
-  }
-  if (activeGameId === 'whack_a_bot') {
-    return (
-      <WhackABotGame
-        onBackToHub={handleBackToHub}
-        onScoreUpdate={(s) => handleScoreUpdate('whack_a_bot', s)}
-      />
-    );
-  }
-  if (activeGameId === 'math_blitz') {
-    return (
-      <MathBlitzGame
-        onBackToHub={handleBackToHub}
-        onScoreUpdate={(s) => handleScoreUpdate('math_blitz', s)}
-      />
-    );
-  }
-  if (activeGameId === 'color_stroop') {
-    return (
-      <ColorStroopGame
-        onBackToHub={handleBackToHub}
-        onScoreUpdate={(s) => handleScoreUpdate('color_stroop', s)}
-      />
-    );
-  }
-  if (activeGameId === 'hanoi_tower') {
-    return (
-      <HanoiTowerGame
-        onBackToHub={handleBackToHub}
-        onScoreUpdate={(s) => handleScoreUpdate('hanoi_tower', s)}
-      />
-    );
-  }
-  if (activeGameId === 'number_hunt') {
-    return (
-      <NumberHuntGame
-        onBackToHub={handleBackToHub}
-        onScoreUpdate={(s) => handleScoreUpdate('number_hunt', s)}
-      />
-    );
-  }
-  if (activeGameId === 'space_shooter') {
-    return (
-      <SpaceShooterGame
-        onBackToHub={handleBackToHub}
-        onScoreUpdate={(s) => handleScoreUpdate('space_shooter', s)}
-      />
+      <View style={{ flex: 1, backgroundColor: '#03030A' }}>
+        {renderActiveGame()}
+
+        {showExitConfirm && (
+          <Animated.View
+            entering={FadeIn.duration(180)}
+            style={localStyles.exitOverlay}
+          >
+            <Animated.View
+              entering={ZoomIn.duration(200)}
+              style={localStyles.exitCard}
+            >
+              <Text style={localStyles.exitWarnIcon}>⚠️</Text>
+              <Text style={localStyles.exitTitle}>EXIT TO MAIN MENU?</Text>
+              <Text style={localStyles.exitSubtitle}>
+                Are you sure you want to leave this run? Any unsaved progress on this floor will be lost.
+              </Text>
+
+              <View style={localStyles.exitBtnRow}>
+                <Pressable
+                  onPress={() => {
+                    setShowExitConfirm(false);
+                    triggerLightHaptic();
+                  }}
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                  style={localStyles.exitResumeBtn}
+                >
+                  <Text style={localStyles.exitResumeText}>RESUME</Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={performExitToHub}
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                  style={localStyles.exitConfirmBtn}
+                >
+                  <Text style={localStyles.exitConfirmText}>EXIT TO MENU</Text>
+                </Pressable>
+              </View>
+            </Animated.View>
+          </Animated.View>
+        )}
+      </View>
     );
   }
 
-  // Taper width ratio based on floor number (Floor 20 is ~78% width, Floor 1 is ~98% width)
+  // Taper width ratio based on floor number (Floor 21 is ~78% width, Floor 1 is ~98% width)
   const getDeckWidth = (floorNum) => {
-    const ratio = 0.76 + (20 - floorNum) * 0.0115;
+    const ratio = 0.76 + (TOWER_GAMES.length - floorNum) * 0.011;
     return Math.min(width - 12, width * ratio);
   };
 
@@ -628,7 +1018,7 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
 
   return (
     <View style={hubStyles.root}>
-      {/* Dynamic Animated Cyberpunk City Background */}
+      {/* Dynamic Cosmic Galaxy Background with Floating Project Tiles */}
       <TowerAnimatedBackground />
 
       {/* Top Sticky Sci-Fi HUD Header */}
@@ -639,7 +1029,7 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
                 <View style={hubStyles.arcadeOnlinePill}>
                   <View style={hubStyles.greenDot} />
                   <Text style={hubStyles.arcadeOnlineText}>
-                    20-FLOOR CYBER MEGASTRUCTURE
+                    31-FLOOR CYBER MEGASTRUCTURE
                   </Text>
                 </View>
                 <Text style={hubStyles.hubTitle}>GAME TOWER</Text>
@@ -694,7 +1084,7 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
                 <Text
                   style={[hubStyles.telemetryVal, { color: COLORS.solarGold }]}
                 >
-                  {`${floorsPlayed} / 20`}
+                  {`${floorsPlayed} / 21`}
                 </Text>
               </View>
               <View style={hubStyles.telemetryDivider} />
@@ -746,7 +1136,7 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
             </ScrollView>
           </View>
 
-          {/* Main 3D Skyscraper Tower Scroll Area */}
+          {/* Main 3D Skyscraper Tower Scroll Area with Magnetic Game Deck Snapping */}
           <ScrollView
             ref={scrollRef}
             style={hubStyles.towerScroll}
@@ -755,6 +1145,12 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
               { paddingBottom: safeBottom + 32 },
             ]}
             showsVerticalScrollIndicator={false}
+            snapToOffsets={snapOffsets.length > 0 ? snapOffsets : undefined}
+            snapToAlignment="start"
+            decelerationRate="fast"
+            onScroll={handleTowerScroll}
+            onMomentumScrollEnd={handleMomentumScrollEnd}
+            scrollEventThrottle={16}
           >
           {/* APEX ROOFTOP SPIRE (Visible when sorted Apex at top or ALL) */}
           {!ascendingSort && (
@@ -860,6 +1256,7 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
             return (
               <View
                 key={game.id}
+                onLayout={(e) => handleDeckLayout(index, e)}
                 style={[
                   hubStyles.deckRowContainer,
                   { width: '100%', alignItems: 'center' },
@@ -1121,7 +1518,7 @@ const hubStyles = StyleSheet.create({
     paddingBottom: 8,
     borderBottomWidth: 1.5,
     borderBottomColor: 'rgba(0, 245, 255, 0.35)',
-    backgroundColor: '#060414',
+    backgroundColor: 'rgba(6, 4, 20, 0.90)',
     zIndex: 20,
     elevation: 20,
   },
@@ -1504,5 +1901,86 @@ const hubStyles = StyleSheet.create({
     fontFamily: monoFont,
     color: COLORS.textSecondary,
     letterSpacing: 1.4,
+  },
+  exitOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(3, 3, 10, 0.88)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+    zIndex: 99999,
+    elevation: 25000,
+  },
+  exitCard: {
+    width: '100%',
+    maxWidth: 340,
+    backgroundColor: 'rgba(12, 14, 30, 0.98)',
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: '#FF5E00',
+    padding: 22,
+    alignItems: 'center',
+    shadowColor: '#FF5E00',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
+    elevation: 30000,
+  },
+  exitWarnIcon: {
+    fontSize: 32,
+    marginBottom: 8,
+  },
+  exitTitle: {
+    fontSize: 18,
+    fontFamily: monoFont,
+    fontWeight: '900',
+    color: '#FF5E00',
+    letterSpacing: 1.2,
+    textAlign: 'center',
+  },
+  exitSubtitle: {
+    fontSize: 12,
+    fontFamily: monoFont,
+    fontWeight: '600',
+    color: '#E2E8F0',
+    textAlign: 'center',
+    marginVertical: 14,
+    lineHeight: 18,
+  },
+  exitBtnRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 6,
+    width: '100%',
+  },
+  exitResumeBtn: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 245, 255, 0.15)',
+    borderWidth: 1.2,
+    borderColor: COLORS.cyan,
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  exitResumeText: {
+    fontSize: 12,
+    fontFamily: monoFont,
+    fontWeight: '900',
+    color: COLORS.cyan,
+    letterSpacing: 1,
+  },
+  exitConfirmBtn: {
+    flex: 1,
+    backgroundColor: '#FF0055',
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  exitConfirmText: {
+    fontSize: 12,
+    fontFamily: monoFont,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    letterSpacing: 1,
   },
 });

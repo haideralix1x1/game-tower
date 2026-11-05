@@ -12,8 +12,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS } from '../../styles';
 import MiniGameHeader from '../components/MiniGameHeader';
 import JuiceEngine from '../components/JuiceEngine';
+import GameResultModal from '../components/GameResultModal';
 import {
   triggerLightHaptic,
+  triggerSliceHaptic,
   triggerPerfectHaptic,
   triggerGameOverHaptic,
 } from '../utils/haptics';
@@ -24,6 +26,12 @@ import {
 } from '../utils/sound';
 
 const STORAGE_KEY = '@game_tower:best_ttt_v1';
+
+export const TTT_MODES = {
+  EASY: { id: 'EASY', label: 'EASY (DRONE)', accent: COLORS.matrixMint },
+  MEDIUM: { id: 'MEDIUM', label: 'MED (TACTICAL)', accent: COLORS.cyan },
+  HARD: { id: 'HARD', label: 'HARD (APEX AI)', accent: COLORS.magenta },
+};
 
 const WIN_LINES = [
   [0, 1, 2],
@@ -52,8 +60,66 @@ const checkWinner = (cells) => {
   return null;
 };
 
-const pickAiMove = (cells) => {
-  // 1. Win if possible
+// Minimax algorithm for unbeatable Hard AI
+const minimax = (board, depth, isMaximizing) => {
+  const win = checkWinner(board);
+  if (win?.winner === 'O') return 10 - depth;
+  if (win?.winner === 'X') return depth - 10;
+  if (win?.winner === 'DRAW') return 0;
+
+  if (isMaximizing) {
+    let best = -Infinity;
+    for (let i = 0; i < 9; i += 1) {
+      if (!board[i]) {
+        board[i] = 'O';
+        best = Math.max(best, minimax(board, depth + 1, false));
+        board[i] = null;
+      }
+    }
+    return best;
+  } else {
+    let best = Infinity;
+    for (let i = 0; i < 9; i += 1) {
+      if (!board[i]) {
+        board[i] = 'X';
+        best = Math.min(best, minimax(board, depth + 1, true));
+        board[i] = null;
+      }
+    }
+    return best;
+  }
+};
+
+const pickAiMove = (cells, difficulty = 'MEDIUM') => {
+  const empty = cells
+    .map((v, idx) => (v === null ? idx : -1))
+    .filter((idx) => idx !== -1);
+  if (empty.length === 0) return -1;
+
+  // EASY: 70% random moves
+  if (difficulty === 'EASY') {
+    if (Math.random() < 0.70) {
+      return empty[Math.floor(Math.random() * empty.length)];
+    }
+  }
+
+  // HARD: Minimax (Unbeatable Apex AI)
+  if (difficulty === 'HARD') {
+    let bestVal = -Infinity;
+    let bestMove = empty[0];
+    for (const idx of empty) {
+      const copy = [...cells];
+      copy[idx] = 'O';
+      const moveVal = minimax(copy, 0, false);
+      if (moveVal > bestVal) {
+        bestVal = moveVal;
+        bestMove = idx;
+      }
+    }
+    return bestMove;
+  }
+
+  // MEDIUM: Heuristic smart moves (win, block, center, random)
   for (let i = 0; i < 9; i += 1) {
     if (!cells[i]) {
       const copy = [...cells];
@@ -61,7 +127,6 @@ const pickAiMove = (cells) => {
       if (checkWinner(copy)?.winner === 'O') return i;
     }
   }
-  // 2. Block player X win
   for (let i = 0; i < 9; i += 1) {
     if (!cells[i]) {
       const copy = [...cells];
@@ -69,12 +134,7 @@ const pickAiMove = (cells) => {
       if (checkWinner(copy)?.winner === 'X') return i;
     }
   }
-  // 3. Take center
   if (!cells[4]) return 4;
-  // 4. Random available
-  const empty = cells
-    .map((v, idx) => (v === null ? idx : -1))
-    .filter((idx) => idx !== -1);
   return empty[Math.floor(Math.random() * empty.length)];
 };
 
@@ -83,6 +143,9 @@ export default function TicTacToeGame({ onBackToHub, onScoreUpdate }) {
   const boardSize = Math.min(340, width - 32);
   const cellSize = Math.floor((boardSize - 32) / 3);
   const juiceRef = useRef(null);
+
+  const [difficulty, setDifficulty] = useState('MEDIUM');
+  const activeMode = TTT_MODES[difficulty] || TTT_MODES.MEDIUM;
 
   const [cells, setCells] = useState(Array(9).fill(null));
   const [vsAi, setVsAi] = useState(true);
@@ -117,8 +180,8 @@ export default function TicTacToeGame({ onBackToHub, onScoreUpdate }) {
     setCells(Array(9).fill(null));
     setTurn('X');
     setResult(null);
-    if (juiceRef.current) juiceRef.current.flash(COLORS.cyan);
-  }, []);
+    if (juiceRef.current) juiceRef.current.flash(activeMode.accent);
+  }, [activeMode]);
 
   const handleCellTap = useCallback(
     (idx) => {
@@ -134,37 +197,59 @@ export default function TicTacToeGame({ onBackToHub, onScoreUpdate }) {
       if (outcome) {
         setCells(next);
         setResult(outcome);
+
         if (outcome.winner === 'X') {
-          const nextScore = score + 100;
+          const winBonus = difficulty === 'HARD' ? 250 : difficulty === 'MEDIUM' ? 100 : 50;
+          const nextScore = score + winBonus;
           setScore(nextScore);
           updateBest(nextScore);
           triggerPerfectHaptic(3);
-          playPerfectSound(6);
+          playPerfectSound(8);
           if (juiceRef.current) {
-            juiceRef.current.celebrate('PLAYER X WINS!', '+100 PTS', COLORS.cyan);
+            juiceRef.current.celebrate(
+              'X TRIUMPHS!',
+              `+${winBonus} PTS // ${activeMode.label}`,
+              COLORS.cyan
+            );
           }
         } else if (outcome.winner === 'DRAW') {
-          const nextScore = score + 25;
+          const drawBonus = difficulty === 'HARD' ? 100 : 25;
+          const nextScore = score + drawBonus;
           setScore(nextScore);
           updateBest(nextScore);
+          playTapSound();
           if (juiceRef.current) {
-            juiceRef.current.popup('GRID DRAW', '+25 PTS', COLORS.solarGold);
+            juiceRef.current.popup('STALEMATE', `+${drawBonus} PTS (DRAW)`, COLORS.solarGold);
           }
         } else {
           triggerGameOverHaptic();
           playGameOverSound();
           if (juiceRef.current) {
-            juiceRef.current.celebrate('O WINS!', 'ROUND OVER', COLORS.magenta);
+            juiceRef.current.shake(10, 6);
+            juiceRef.current.popup('AI CLAIMS GRID', 'DEFEAT', COLORS.danger);
           }
         }
         return;
       }
 
-      if (vsAi) {
-        const aiIdx = pickAiMove(next);
-        if (aiIdx !== undefined) {
-          next[aiIdx] = 'O';
-          const aiOutcome = checkWinner(next);
+      const nextTurn = turn === 'X' ? 'O' : 'X';
+      setCells(next);
+      setTurn(nextTurn);
+
+      // AI response move
+      if (vsAi && nextTurn === 'O') {
+        setTimeout(() => {
+          const aiMove = pickAiMove(next, difficulty);
+          if (aiMove === -1) return;
+
+          const aiBoard = [...next];
+          aiBoard[aiMove] = 'O';
+          const aiOutcome = checkWinner(aiBoard);
+
+          triggerLightHaptic();
+          playTapSound();
+          setCells(aiBoard);
+
           if (aiOutcome) {
             setResult(aiOutcome);
             if (aiOutcome.winner === 'O') {
@@ -172,43 +257,83 @@ export default function TicTacToeGame({ onBackToHub, onScoreUpdate }) {
               playGameOverSound();
               if (juiceRef.current) {
                 juiceRef.current.shake(10, 6);
-                juiceRef.current.flash(COLORS.danger);
+                juiceRef.current.popup('AI DEFEAT', 'CYBER CORE WINS', COLORS.danger);
               }
             } else if (aiOutcome.winner === 'DRAW') {
-              const nextScore = score + 25;
+              const drawBonus = difficulty === 'HARD' ? 100 : 25;
+              const nextScore = score + drawBonus;
               setScore(nextScore);
               updateBest(nextScore);
+              if (juiceRef.current) {
+                juiceRef.current.popup('STALEMATE', `+${drawBonus} PTS`, COLORS.solarGold);
+              }
             }
+          } else {
+            setTurn('X');
           }
-        }
-        setCells(next);
-      } else {
-        setCells(next);
-        setTurn(turn === 'X' ? 'O' : 'X');
+        }, 220);
       }
     },
-    [result, cells, turn, vsAi, score, updateBest]
+    [result, cells, turn, vsAi, score, difficulty, activeMode, updateBest]
   );
 
   return (
     <JuiceEngine ref={juiceRef}>
       <View style={localStyles.container}>
         <LinearGradient
-          colors={['#03030A', '#0D0824', '#1B0C38']}
+          colors={['#03030A', '#0D0820', '#1C0B35']}
           style={StyleSheet.absoluteFillObject}
         />
 
         <MiniGameHeader
-          title="CYBER TIC-TAC-TOE"
+          title={`TIC-TAC-TOE // ${activeMode.id}`}
           floorLabel="FLOOR 13 // TACTICAL XO"
           score={score}
           bestScore={bestScore}
-          accentColor={COLORS.cyan}
+          accentColor={activeMode.accent}
           onBack={onBackToHub}
           onReset={resetRound}
         />
 
         <View style={localStyles.body}>
+          {/* Mode Selector (EASY / MEDIUM / HARD) */}
+          {vsAi && (
+            <View style={localStyles.modeSelectorBar}>
+              {Object.keys(TTT_MODES).map((k) => {
+                const m = TTT_MODES[k];
+                const isSelected = k === difficulty;
+                return (
+                  <Pressable
+                    key={m.id}
+                    onPress={() => {
+                      if (difficulty === k) return;
+                      triggerLightHaptic();
+                      playTapSound();
+                      setDifficulty(k);
+                      resetRound();
+                    }}
+                    style={[
+                      localStyles.modePill,
+                      isSelected && {
+                        backgroundColor: `${m.accent}25`,
+                        borderColor: m.accent,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        localStyles.modePillText,
+                        { color: isSelected ? m.accent : COLORS.textMuted },
+                      ]}
+                    >
+                      {m.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          )}
+
           <View style={[localStyles.topRow, { width: boardSize }]}>
             <Text style={localStyles.turnLabel}>
               {result
@@ -226,7 +351,7 @@ export default function TicTacToeGame({ onBackToHub, onScoreUpdate }) {
               style={localStyles.modeBtn}
             >
               <Text style={localStyles.modeBtnText}>
-                {vsAi ? 'MODE: VS CYBER AI' : 'MODE: 2 PLAYERS'}
+                {vsAi ? 'VS AI' : '2 PLAYERS'}
               </Text>
             </Pressable>
           </View>
@@ -263,9 +388,14 @@ export default function TicTacToeGame({ onBackToHub, onScoreUpdate }) {
                 >
                   <Text
                     style={[
-                      localStyles.symbol,
+                      localStyles.cellText,
                       {
-                        color: val === 'X' ? COLORS.cyan : COLORS.magenta,
+                        color:
+                          val === 'X'
+                            ? COLORS.cyan
+                            : val === 'O'
+                              ? COLORS.magenta
+                              : 'transparent',
                       },
                     ]}
                   >
@@ -276,11 +406,44 @@ export default function TicTacToeGame({ onBackToHub, onScoreUpdate }) {
             })}
           </View>
 
-          {result && (
-            <Pressable onPress={resetRound} style={localStyles.nextBtn}>
-              <Text style={localStyles.nextBtnText}>NEXT MATCH</Text>
-            </Pressable>
-          )}
+          <GameResultModal
+            visible={result !== null}
+            type={
+              result?.winner === 'X'
+                ? 'VICTORY'
+                : result?.winner === 'DRAW'
+                  ? 'DRAW'
+                  : 'GAME_OVER'
+            }
+            title={
+              result?.winner === 'X'
+                ? vsAi
+                  ? 'AI CORE DEFEATED!'
+                  : 'PLAYER X WINS!'
+                : result?.winner === 'DRAW'
+                  ? 'STALEMATE TIE'
+                  : vsAi
+                    ? 'AI CORE PREVAILED'
+                    : 'PLAYER O WINS!'
+            }
+            subtitle={
+              vsAi
+                ? `DIFFICULTY: ${activeMode.label}`
+                : 'LOCAL 2-PLAYER MATCH COMPLETED'
+            }
+            score={score}
+            bestScore={bestScore}
+            accentColor={
+              result?.winner === 'X'
+                ? COLORS.cyan
+                : result?.winner === 'DRAW'
+                  ? COLORS.solarGold
+                  : COLORS.magenta
+            }
+            onRetry={resetRound}
+            retryLabel="NEW MATCH"
+            onBackToHub={onBackToHub}
+          />
         </View>
       </View>
     </JuiceEngine>
@@ -295,25 +458,44 @@ const localStyles = StyleSheet.create({
     justifyContent: 'center',
     paddingBottom: 20,
   },
+  modeSelectorBar: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+  modePill: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.16)',
+    backgroundColor: 'rgba(8, 8, 24, 0.65)',
+  },
+  modePillText: {
+    fontFamily: monoFont,
+    fontSize: 10.5,
+    fontWeight: '900',
+    letterSpacing: 0.8,
+  },
   topRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 14,
   },
   turnLabel: {
-    fontSize: 12,
+    fontSize: 13,
     fontFamily: monoFont,
     fontWeight: '900',
     color: COLORS.cyan,
   },
   modeBtn: {
-    backgroundColor: 'rgba(255, 0, 127, 0.18)',
-    borderWidth: 1,
-    borderColor: COLORS.magenta,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
     borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 5,
   },
   modeBtnText: {
     fontSize: 10,
@@ -326,32 +508,32 @@ const localStyles = StyleSheet.create({
     flexWrap: 'wrap',
     justifyContent: 'space-between',
     alignContent: 'space-between',
-    backgroundColor: 'rgba(8, 8, 22, 0.92)',
-    borderRadius: 22,
+    backgroundColor: 'rgba(6, 6, 20, 0.94)',
+    borderRadius: 20,
     borderWidth: 1.5,
-    borderColor: 'rgba(0, 245, 255, 0.38)',
-    padding: 8,
+    borderColor: 'rgba(0, 245, 255, 0.35)',
+    padding: 10,
   },
   cell: {
-    borderRadius: 14,
+    borderRadius: 12,
     borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  symbol: {
-    fontSize: 44,
+  cellText: {
+    fontSize: 42,
     fontFamily: monoFont,
     fontWeight: '900',
   },
   nextBtn: {
-    marginTop: 20,
+    marginTop: 18,
     backgroundColor: COLORS.cyan,
-    paddingHorizontal: 26,
+    paddingHorizontal: 22,
     paddingVertical: 12,
     borderRadius: 14,
   },
   nextBtnText: {
-    fontSize: 12.5,
+    fontSize: 12,
     fontFamily: monoFont,
     fontWeight: '900',
     color: '#030308',

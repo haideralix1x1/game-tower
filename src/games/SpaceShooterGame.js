@@ -6,18 +6,32 @@ import {
   StyleSheet,
   Platform,
   useWindowDimensions,
+  PanResponder,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Svg, {
+  Path,
+  Rect,
+  Circle,
+  Polygon,
+  Defs,
+  LinearGradient as SvgLinearGradient,
+  Stop,
+} from 'react-native-svg';
 import { COLORS } from '../../styles';
 import MiniGameHeader from '../components/MiniGameHeader';
 import JuiceEngine from '../components/JuiceEngine';
+import GameResultModal from '../components/GameResultModal';
 import {
+  triggerLightHaptic,
   triggerSliceHaptic,
+  triggerPerfectHaptic,
   triggerGameOverHaptic,
 } from '../utils/haptics';
 import {
   playTapSound,
+  playSliceSound,
   playPerfectSound,
   playGameOverSound,
 } from '../utils/sound';
@@ -30,22 +44,60 @@ const monoFont = Platform.select({
   default: 'monospace',
 });
 
+// Power-up Types Definition
+const POWERUP_TYPES = {
+  SPREAD: {
+    id: 'SPREAD',
+    label: '3X SPREAD',
+    badge: '🔱 3X SPREAD',
+    color: '#00F5FF',
+    duration: 11,
+  },
+  MEGA: {
+    id: 'MEGA',
+    label: 'MEGA CANNON',
+    badge: '💥 MEGA PLASMA',
+    color: '#FF007F',
+    duration: 10,
+  },
+  RAPID: {
+    id: 'RAPID',
+    label: 'TURBO RAPID',
+    badge: '⚡ TURBO FIRE',
+    color: '#FFD166',
+    duration: 10,
+  },
+  SHIELD: {
+    id: 'SHIELD',
+    label: 'CYBER SHIELD',
+    badge: '🛡️ ENERGY SHIELD',
+    color: '#00F5D4',
+    duration: 14,
+  },
+};
+
 export default function SpaceShooterGame({ onBackToHub, onScoreUpdate }) {
   const { width, height } = useWindowDimensions();
   const arenaWidth = Math.min(390, width - 24);
-  const arenaHeight = Math.min(490, Math.max(350, height - 210));
-  const shipW = 46;
-  const shipH = 26;
-  const shipY = arenaHeight - 44;
+  const arenaHeight = Math.min(520, Math.max(380, height - 215));
+  const shipW = 48;
+  const shipH = 34;
+  const shipY = arenaHeight - 56;
 
   const juiceRef = useRef(null);
   const [score, setScore] = useState(0);
   const [bestScore, setBestScore] = useState(0);
   const [status, setStatus] = useState('PLAYING');
+  const [activePowerup, setActivePowerup] = useState(null);
+
   const [frame, setFrame] = useState({
     shipX: (arenaWidth - shipW) / 2,
     bullets: [],
     enemies: [],
+    enemyBullets: [],
+    powerups: [],
+    hasShield: false,
+    powerupTimeLeft: 0,
   });
 
   const engRef = useRef({
@@ -53,11 +105,36 @@ export default function SpaceShooterGame({ onBackToHub, onScoreUpdate }) {
     shipX: (arenaWidth - shipW) / 2,
     bullets: [],
     enemies: [],
+    enemyBullets: [],
+    powerups: [],
+    activePowerup: null,
+    hasShield: false,
     fireTimer: 0,
     spawnTimer: 0,
     score: 0,
     best: 0,
   });
+
+  const dragStartRef = useRef({ startShipX: (arenaWidth - shipW) / 2 });
+
+  // 1:1 Smooth Delta PanResponder - Completely fixes the left/right snapping bug
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: (evt, gestureState) => {
+        dragStartRef.current.startShipX = engRef.current.shipX;
+      },
+      onPanResponderMove: (evt, gestureState) => {
+        if (!engRef.current.running) return;
+        const targetX = dragStartRef.current.startShipX + gestureState.dx;
+        engRef.current.shipX = Math.max(
+          4,
+          Math.min(arenaWidth - shipW - 4, targetX)
+        );
+      },
+    })
+  ).current;
 
   useEffect(() => {
     (async () => {
@@ -93,119 +170,418 @@ export default function SpaceShooterGame({ onBackToHub, onScoreUpdate }) {
       shipX: (arenaWidth - shipW) / 2,
       bullets: [],
       enemies: [],
+      enemyBullets: [],
+      powerups: [],
+      activePowerup: null,
+      hasShield: false,
       fireTimer: 0,
       spawnTimer: 0,
       score: 0,
     };
     setScore(0);
+    setActivePowerup(null);
     setStatus('PLAYING');
     setFrame({
       shipX: (arenaWidth - shipW) / 2,
       bullets: [],
       enemies: [],
+      enemyBullets: [],
+      powerups: [],
+      hasShield: false,
+      powerupTimeLeft: 0,
     });
-  }, [arenaWidth]);
+  }, [arenaWidth, shipW]);
 
+  // Main 60FPS High-Action Space Shooter Game Loop
   useEffect(() => {
     let rafId = null;
     let lastTs = 0;
 
     const tick = (ts) => {
       if (!lastTs) lastTs = ts;
-      const dt = Math.min(0.032, (ts - lastTs) / 1000);
+      const dt = Math.min(0.033, (ts - lastTs) / 1000);
       lastTs = ts;
 
       const eng = engRef.current;
       if (eng.running) {
+        // --- 1. Manage Active Power-up Timer ---
+        if (eng.activePowerup) {
+          eng.activePowerup.timeLeft -= dt;
+          if (eng.activePowerup.timeLeft <= 0) {
+            if (eng.activePowerup.type === 'SHIELD') {
+              eng.hasShield = false;
+            }
+            eng.activePowerup = null;
+            setActivePowerup(null);
+          }
+        }
+
+        // --- 2. Auto-Fire Lasers based on abilities ---
+        const isRapid = eng.activePowerup?.type === 'RAPID';
+        const isSpread = eng.activePowerup?.type === 'SPREAD';
+        const isMega = eng.activePowerup?.type === 'MEGA';
+
+        const fireInterval = isRapid ? 0.095 : 0.25;
         eng.fireTimer += dt;
-        if (eng.fireTimer >= 0.28) {
+
+        if (eng.fireTimer >= fireInterval) {
           eng.fireTimer = 0;
-          eng.bullets.push(
-            { id: `bl_${ts}`, x: eng.shipX + 6, y: shipY - 6 },
-            { id: `br_${ts}`, x: eng.shipX + shipW - 10, y: shipY - 6 }
-          );
+          const sx = eng.shipX;
+          const sy = shipY - 6;
+
+          if (isSpread) {
+            // Triple Spread Laser
+            eng.bullets.push(
+              { id: `b_l_${ts}`, x: sx + 6, y: sy, vx: -120, vy: -480, w: 5, h: 14, color: '#00F5FF' },
+              { id: `b_c_${ts}`, x: sx + shipW / 2 - 2, y: sy - 4, vx: 0, vy: -520, w: 5, h: 16, color: '#FFFFFF' },
+              { id: `b_r_${ts}`, x: sx + shipW - 10, y: sy, vx: 120, vy: -480, w: 5, h: 14, color: '#00F5FF' }
+            );
+          } else if (isMega) {
+            // Giant Piercing Plasma Blast
+            eng.bullets.push({
+              id: `b_m_${ts}`,
+              x: sx + shipW / 2 - 8,
+              y: sy - 10,
+              vx: 0,
+              vy: -460,
+              w: 16,
+              h: 24,
+              color: '#FF007F',
+              isMega: true,
+              pierceLeft: 3,
+            });
+          } else {
+            // Standard Dual Neon Lasers
+            eng.bullets.push(
+              { id: `bl_${ts}`, x: sx + 8, y: sy, vx: 0, vy: -500, w: 4, h: 13, color: '#00F5FF' },
+              { id: `br_${ts}`, x: sx + shipW - 12, y: sy, vx: 0, vy: -500, w: 4, h: 13, color: '#00F5FF' }
+            );
+          }
           playTapSound();
         }
 
+        // --- 3. Dynamic Enemy Spawning: Multi-Enemy Squadrons & Dive Bombers ---
         eng.spawnTimer += dt;
-        if (eng.spawnTimer >= 0.82) {
+        const spawnDelay = Math.max(0.55, 0.95 - eng.score * 0.0004);
+
+        if (eng.spawnTimer >= spawnDelay) {
           eng.spawnTimer = 0;
-          const ex = 16 + Math.random() * (arenaWidth - 64);
-          const colors = [COLORS.magenta, COLORS.solarGold, COLORS.cyan, '#C77DFF'];
-          eng.enemies.push({
-            id: `en_${ts}_${Math.random()}`,
-            x: ex,
-            y: -26,
-            w: 32,
-            h: 24,
-            speed: 95 + Math.min(140, eng.score * 0.15),
-            color: colors[Math.floor(Math.random() * colors.length)],
-            alive: true,
-          });
+          const roll = Math.random();
+
+          // Spawn Squadrons: Multi-enemy waves (double or trio)
+          if (roll < 0.35 && eng.score > 100) {
+            // Double Squadron
+            const x1 = 12 + Math.random() * (arenaWidth * 0.4 - 36);
+            const x2 = arenaWidth * 0.5 + Math.random() * (arenaWidth * 0.4 - 36);
+            eng.enemies.push(
+              {
+                id: `en_d1_${ts}`,
+                x: x1,
+                y: -28,
+                w: 28,
+                h: 22,
+                speed: 110 + Math.min(130, eng.score * 0.12),
+                color: COLORS.cyan,
+                type: 'SCOUT',
+                hp: 1,
+                shootTimer: 999,
+                alive: true,
+              },
+              {
+                id: `en_d2_${ts}`,
+                x: x2,
+                y: -28,
+                w: 28,
+                h: 22,
+                speed: 110 + Math.min(130, eng.score * 0.12),
+                color: COLORS.magenta,
+                type: 'SCOUT',
+                hp: 1,
+                shootTimer: 999,
+                alive: true,
+              }
+            );
+          } else if (roll < 0.60 && eng.score > 250) {
+            // Speed Diver: High-Velocity Dive-Bomber!
+            const ex = 16 + Math.random() * (arenaWidth - 60);
+            eng.enemies.push({
+              id: `en_div_${ts}`,
+              x: ex,
+              y: -30,
+              w: 26,
+              h: 26,
+              speed: 215 + Math.min(130, eng.score * 0.14), // Fast Dive!
+              color: COLORS.solarGold,
+              type: 'DIVER',
+              hp: 1,
+              shootTimer: 999,
+              alive: true,
+            });
+          } else if (roll < 0.82 && eng.score > 150) {
+            // Heavy Gunship Cruiser (Shoots enemy bullets!)
+            const ex = 20 + Math.random() * (arenaWidth - 70);
+            eng.enemies.push({
+              id: `en_cr_${ts}`,
+              x: ex,
+              y: -35,
+              w: 42,
+              h: 28,
+              speed: 70 + Math.min(60, eng.score * 0.06),
+              color: '#FF0055',
+              type: 'CRUISER',
+              hp: 2,
+              shootTimer: 0.9,
+              alive: true,
+            });
+          } else {
+            // Standard Scout Drone
+            const ex = 14 + Math.random() * (arenaWidth - 54);
+            const colors = [COLORS.cyan, COLORS.magenta, '#00F5D4', '#C77DFF'];
+            eng.enemies.push({
+              id: `en_sc_${ts}`,
+              x: ex,
+              y: -26,
+              w: 30,
+              h: 22,
+              speed: 100 + Math.min(120, eng.score * 0.1),
+              color: colors[Math.floor(Math.random() * colors.length)],
+              type: 'SCOUT',
+              hp: 1,
+              shootTimer: 999,
+              alive: true,
+            });
+          }
         }
 
-        // Update bullets
+        // --- 4. Update Player Bullets & Collision with Enemies ---
         const nextBullets = [];
         for (let i = 0; i < eng.bullets.length; i += 1) {
           const b = eng.bullets[i];
-          const ny = b.y - 420 * dt;
-          let hit = false;
+          const nx = b.x + (b.vx || 0) * dt;
+          const ny = b.y + (b.vy || -500) * dt;
+          let removeBullet = false;
 
           for (let j = 0; j < eng.enemies.length; j += 1) {
             const en = eng.enemies[j];
             if (!en.alive) continue;
+
             if (
-              b.x >= en.x - 4 &&
-              b.x <= en.x + en.w + 4 &&
+              nx + b.w >= en.x &&
+              nx <= en.x + en.w &&
               ny <= en.y + en.h &&
-              ny >= en.y
+              ny + b.h >= en.y
             ) {
+              en.hp -= 1;
+              if (en.hp <= 0) {
+                en.alive = false;
+                const pointGain = en.type === 'CRUISER' ? 50 : en.type === 'DIVER' ? 35 : 25;
+                eng.score += pointGain;
+                setScore(eng.score);
+                persistBest(eng.score);
+                triggerSliceHaptic();
+                playPerfectSound((eng.score / 25) % 8 + 1);
+
+                if (juiceRef.current) {
+                  juiceRef.current.shake(5, 3);
+                  juiceRef.current.burst(en.x + en.w / 2, en.y + en.h / 2, en.color, 12);
+                }
+
+                // Power-up Drop Chance: 28% from any enemy, 100% from Cruisers
+                const shouldDrop = en.type === 'CRUISER' || Math.random() < 0.28;
+                if (shouldDrop) {
+                  const pKeys = Object.keys(POWERUP_TYPES);
+                  const pType = POWERUP_TYPES[pKeys[Math.floor(Math.random() * pKeys.length)]];
+                  eng.powerups.push({
+                    id: `pu_${ts}_${Math.random()}`,
+                    x: en.x + en.w / 2 - 16,
+                    y: en.y,
+                    w: 32,
+                    h: 22,
+                    speed: 85,
+                    data: pType,
+                  });
+                }
+              } else {
+                // Cruiser hit flash
+                triggerLightHaptic();
+                playTapSound();
+              }
+
+              if (b.isMega) {
+                b.pierceLeft -= 1;
+                if (b.pierceLeft <= 0) removeBullet = true;
+              } else {
+                removeBullet = true;
+                break;
+              }
+            }
+          }
+
+          if (!removeBullet && ny > -20 && nx > -10 && nx < arenaWidth + 10) {
+            nextBullets.push({ ...b, x: nx, y: ny });
+          }
+        }
+        eng.bullets = nextBullets;
+
+        // --- 5. Update Enemies & Enemy Shooting ---
+        const nextEnemies = [];
+        for (let i = 0; i < eng.enemies.length; i += 1) {
+          const en = eng.enemies[i];
+          if (!en.alive) continue;
+
+          // Enemy Shooting AI (Cruisers shoot red laser spikes)
+          if (en.type === 'CRUISER') {
+            en.shootTimer -= dt;
+            if (en.shootTimer <= 0) {
+              en.shootTimer = 1.6;
+              eng.enemyBullets.push({
+                id: `eb_${ts}_${Math.random()}`,
+                x: en.x + en.w / 2 - 2,
+                y: en.y + en.h + 2,
+                vy: 240 + Math.min(80, eng.score * 0.08),
+                w: 5,
+                h: 12,
+                color: '#FF0055',
+              });
+            }
+          }
+
+          const ny = en.y + en.speed * dt;
+
+          // Check collision with player ship
+          const shipHit =
+            ny + en.h >= shipY + 4 &&
+            en.y <= shipY + shipH &&
+            en.x + en.w >= eng.shipX + 4 &&
+            en.x <= eng.shipX + shipW - 4;
+
+          if (shipHit) {
+            if (eng.hasShield) {
+              // Shield absorbs the collision!
+              eng.hasShield = false;
+              eng.activePowerup = null;
+              setActivePowerup(null);
               en.alive = false;
-              hit = true;
-              eng.score += 25;
-              setScore(eng.score);
-              persistBest(eng.score);
+              playSliceSound();
               triggerSliceHaptic();
-              playPerfectSound((eng.score / 25) % 8 + 1);
               if (juiceRef.current) {
-                juiceRef.current.shake(4, 3);
-                juiceRef.current.burst(en.x + 16, en.y + 80, en.color, 10);
+                juiceRef.current.shake(10, 6);
+                juiceRef.current.flash(COLORS.cyan);
+                juiceRef.current.popup('SHIELD BROKEN', 'IMPACT DEFLECTED', COLORS.cyan, eng.shipX, shipY);
+              }
+            } else {
+              // Game Over on ship collision
+              eng.running = false;
+              setStatus('GAME_OVER');
+              triggerGameOverHaptic();
+              playGameOverSound();
+              if (juiceRef.current) {
+                juiceRef.current.shake(14, 10);
+                juiceRef.current.flash(COLORS.danger);
               }
               break;
             }
           }
 
-          if (!hit && ny > -10) {
-            nextBullets.push({ ...b, y: ny });
+          // If enemy bypasses ship at bottom
+          if (ny + en.h >= arenaHeight + 10) {
+            // Passed screen safely
+            continue;
           }
-        }
-        eng.bullets = nextBullets;
 
-        // Update enemies
-        const nextEnemies = [];
-        for (let i = 0; i < eng.enemies.length; i += 1) {
-          const en = eng.enemies[i];
-          if (!en.alive) continue;
-          const ny = en.y + en.speed * dt;
-          if (ny + en.h >= shipY + 6) {
-            eng.running = false;
-            setStatus('GAME_OVER');
-            triggerGameOverHaptic();
-            playGameOverSound();
-            if (juiceRef.current) {
-              juiceRef.current.shake(12, 9);
-              juiceRef.current.flash(COLORS.danger);
-            }
-            break;
-          }
           nextEnemies.push({ ...en, y: ny });
         }
         eng.enemies = nextEnemies;
+
+        // --- 6. Update Enemy Bullets & Collision with Player ---
+        const nextEnemyBullets = [];
+        for (let i = 0; i < eng.enemyBullets.length; i += 1) {
+          const eb = eng.enemyBullets[i];
+          const ny = eb.y + eb.vy * dt;
+
+          // Check collision with player ship
+          const bulletHit =
+            ny + eb.h >= shipY + 4 &&
+            eb.y <= shipY + shipH &&
+            eb.x + eb.w >= eng.shipX + 6 &&
+            eb.x <= eng.shipX + shipW - 6;
+
+          if (bulletHit) {
+            if (eng.hasShield) {
+              // Shield absorbs bullet
+              eng.hasShield = false;
+              eng.activePowerup = null;
+              setActivePowerup(null);
+              playSliceSound();
+              triggerSliceHaptic();
+              if (juiceRef.current) {
+                juiceRef.current.shake(8, 5);
+                juiceRef.current.popup('SHIELD ABSORB', 'LASER DEFLECTED', COLORS.cyan, eng.shipX, shipY);
+              }
+            } else {
+              // Direct hit -> Game Over!
+              eng.running = false;
+              setStatus('GAME_OVER');
+              triggerGameOverHaptic();
+              playGameOverSound();
+              if (juiceRef.current) {
+                juiceRef.current.shake(14, 10);
+                juiceRef.current.flash(COLORS.danger);
+              }
+              break;
+            }
+          } else if (ny < arenaHeight + 10) {
+            nextEnemyBullets.push({ ...eb, y: ny });
+          }
+        }
+        eng.enemyBullets = nextEnemyBullets;
+
+        // --- 7. Update Power-ups & Collection by Player ---
+        const nextPowerups = [];
+        for (let i = 0; i < eng.powerups.length; i += 1) {
+          const pu = eng.powerups[i];
+          const ny = pu.y + pu.speed * dt;
+
+          // Check collection by starfighter
+          const collected =
+            ny + pu.h >= shipY - 4 &&
+            pu.y <= shipY + shipH &&
+            pu.x + pu.w >= eng.shipX - 6 &&
+            pu.x <= eng.shipX + shipW + 6;
+
+          if (collected) {
+            const pType = pu.data;
+            eng.activePowerup = {
+              type: pType.id,
+              timeLeft: pType.duration,
+              maxTime: pType.duration,
+              badge: pType.badge,
+              color: pType.color,
+            };
+            if (pType.id === 'SHIELD') {
+              eng.hasShield = true;
+            }
+            setActivePowerup(eng.activePowerup);
+            playPerfectSound(6);
+            triggerPerfectHaptic(4);
+            if (juiceRef.current) {
+              juiceRef.current.flash(pType.color);
+              juiceRef.current.popup(pType.badge, 'ONLINE', pType.color, eng.shipX + shipW / 2, shipY - 20);
+            }
+          } else if (ny < arenaHeight + 10) {
+            nextPowerups.push({ ...pu, y: ny });
+          }
+        }
+        eng.powerups = nextPowerups;
 
         setFrame({
           shipX: eng.shipX,
           bullets: [...eng.bullets],
           enemies: [...eng.enemies],
+          enemyBullets: [...eng.enemyBullets],
+          powerups: [...eng.powerups],
+          hasShield: eng.hasShield,
+          powerupTimeLeft: eng.activePowerup ? eng.activePowerup.timeLeft : 0,
         });
       }
 
@@ -216,17 +592,7 @@ export default function SpaceShooterGame({ onBackToHub, onScoreUpdate }) {
     return () => {
       if (rafId) cancelAnimationFrame(rafId);
     };
-  }, [arenaWidth, shipY, persistBest]);
-
-  const moveShipTo = useCallback(
-    (touchX) => {
-      engRef.current.shipX = Math.max(
-        8,
-        Math.min(arenaWidth - shipW - 8, touchX - shipW / 2)
-      );
-    },
-    [arenaWidth]
-  );
+  }, [arenaWidth, arenaHeight, shipY, shipW, shipH, persistBest]);
 
   return (
     <JuiceEngine ref={juiceRef}>
@@ -247,43 +613,145 @@ export default function SpaceShooterGame({ onBackToHub, onScoreUpdate }) {
         />
 
         <View style={localStyles.body}>
+          {/* Active Power-up HUD Gauge Banner */}
+          {activePowerup && (
+            <View style={[localStyles.powerupHudBanner, { borderColor: `${activePowerup.color}88` }]}>
+              <View style={localStyles.powerupHudTop}>
+                <Text style={[localStyles.powerupHudText, { color: activePowerup.color }]}>
+                  {activePowerup.badge}
+                </Text>
+                <Text style={[localStyles.powerupTimerText, { color: activePowerup.color }]}>
+                  {Math.ceil(frame.powerupTimeLeft)}s
+                </Text>
+              </View>
+              <View style={localStyles.powerupGaugeTrack}>
+                <View
+                  style={[
+                    localStyles.powerupGaugeFill,
+                    {
+                      backgroundColor: activePowerup.color,
+                      width: `${Math.max(0, Math.min(100, (frame.powerupTimeLeft / activePowerup.maxTime) * 100))}%`,
+                    },
+                  ]}
+                />
+              </View>
+            </View>
+          )}
+
+          {/* Interactive Battle Arena with PanResponder */}
           <View
-            onTouchStart={(e) => moveShipTo(e.nativeEvent.locationX)}
-            onTouchMove={(e) => moveShipTo(e.nativeEvent.locationX)}
+            {...panResponder.panHandlers}
             style={[
               localStyles.arena,
               { width: arenaWidth, height: arenaHeight },
             ]}
           >
-            {/* Dual Plasma Bullets */}
+            {/* Background Grid Stars */}
+            <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
+              <View style={[localStyles.bgStar, { top: 40, left: 50 }]} />
+              <View style={[localStyles.bgStar, { top: 120, right: 60 }]} />
+              <View style={[localStyles.bgStar, { top: 240, left: 80 }]} />
+              <View style={[localStyles.bgStar, { top: 320, right: 90 }]} />
+            </View>
+
+            {/* Player Lasers */}
             {frame.bullets.map((b) => (
               <View
                 key={b.id}
-                style={[localStyles.bullet, { left: b.x, top: b.y }]}
+                pointerEvents="none"
+                style={[
+                  localStyles.bullet,
+                  {
+                    left: b.x,
+                    top: b.y,
+                    width: b.w || 4,
+                    height: b.h || 13,
+                    backgroundColor: b.color || COLORS.cyan,
+                    shadowColor: b.color || COLORS.cyan,
+                  },
+                  b.isMega && localStyles.megaBullet,
+                ]}
               />
             ))}
 
-            {/* Alien Neon Drones */}
-            {frame.enemies.map((en) => (
+            {/* Enemy Lasers */}
+            {frame.enemyBullets.map((eb) => (
               <View
-                key={en.id}
+                key={eb.id}
+                pointerEvents="none"
                 style={[
-                  localStyles.enemy,
+                  localStyles.enemyBullet,
                   {
-                    left: en.x,
-                    top: en.y,
-                    width: en.w,
-                    height: en.h,
-                    backgroundColor: en.color,
+                    left: eb.x,
+                    top: eb.y,
+                    width: eb.w || 5,
+                    height: eb.h || 12,
+                    backgroundColor: eb.color || '#FF0055',
+                    shadowColor: eb.color || '#FF0055',
                   },
                 ]}
               />
             ))}
 
+            {/* Dropping Power-up Pickups */}
+            {frame.powerups.map((pu) => (
+              <View
+                key={pu.id}
+                pointerEvents="none"
+                style={[
+                  localStyles.powerupPill,
+                  {
+                    left: pu.x,
+                    top: pu.y,
+                    borderColor: pu.data.color,
+                    shadowColor: pu.data.color,
+                  },
+                ]}
+              >
+                <Text style={localStyles.powerupIconText}>{pu.data.label}</Text>
+              </View>
+            ))}
+
+            {/* Alien Neon Enemies (Drones, Divers, Cruisers) */}
+            {frame.enemies.map((en) => (
+              <View
+                key={en.id}
+                pointerEvents="none"
+                style={[
+                  localStyles.enemyBox,
+                  {
+                    left: en.x,
+                    top: en.y,
+                    width: en.w,
+                    height: en.h,
+                    borderColor: en.color,
+                  },
+                ]}
+              >
+                {en.type === 'CRUISER' ? (
+                  <Svg width={en.w} height={en.h} viewBox="0 0 42 28">
+                    <Polygon points="21,0 42,12 36,28 6,28 0,12" fill="#240722" stroke="#FF0055" strokeWidth="2" />
+                    <Circle cx="21" cy="14" r="4" fill="#FF0055" />
+                    <Rect x="8" y="24" width="4" height="4" fill="#FF5E00" />
+                    <Rect x="30" y="24" width="4" height="4" fill="#FF5E00" />
+                  </Svg>
+                ) : en.type === 'DIVER' ? (
+                  <Svg width={en.w} height={en.h} viewBox="0 0 26 26">
+                    <Polygon points="13,26 0,0 13,8 26,0" fill="#FFD166" stroke="#FFFFFF" strokeWidth="1.5" />
+                  </Svg>
+                ) : (
+                  <Svg width={en.w} height={en.h} viewBox="0 0 30 22">
+                    <Polygon points="15,22 0,4 6,0 15,10 24,0 30,4" fill={en.color} stroke="#FFFFFF" strokeWidth="1.2" />
+                  </Svg>
+                )}
+              </View>
+            ))}
+
             {/* Player Starfighter */}
             <View
+              pointerEvents="none"
               style={[
-                localStyles.ship,
+                localStyles.shipWrapper,
                 {
                   left: frame.shipX,
                   top: shipY,
@@ -291,20 +759,47 @@ export default function SpaceShooterGame({ onBackToHub, onScoreUpdate }) {
                   height: shipH,
                 },
               ]}
-            />
+            >
+              {/* Energy Shield Bubble */}
+              {frame.hasShield && (
+                <View style={localStyles.shieldBubble} />
+              )}
 
-            {status === 'GAME_OVER' && (
-              <View style={localStyles.overlay}>
-                <Text style={localStyles.overTitle}>SECTOR BREACHED</Text>
-                <Pressable onPress={resetGame} style={localStyles.retryBtn}>
-                  <Text style={localStyles.retryText}>SCRAMBLE FIGHTER</Text>
-                </Pressable>
-              </View>
-            )}
+              {/* High-Tech Vector Jet */}
+              <Svg width={shipW} height={shipH} viewBox="0 0 48 34">
+                <Defs>
+                  <SvgLinearGradient id="shipGrad" x1="0" y1="0" x2="0" y2="1">
+                    <Stop offset="0%" stopColor="#FFFFFF" />
+                    <Stop offset="50%" stopColor="#00F5FF" />
+                    <Stop offset="100%" stopColor="#0055D4" />
+                  </SvgLinearGradient>
+                </Defs>
+                {/* Main Hull */}
+                <Polygon points="24,0 36,22 48,28 32,32 24,28 16,32 0,28 12,22" fill="url(#shipGrad)" stroke="#FFFFFF" strokeWidth="1.5" />
+                {/* Cockpit Canopy */}
+                <Polygon points="24,6 28,16 20,16" fill="#00F5D4" />
+                {/* Twin Thruster Flames */}
+                <Rect x="18" y="29" width="3" height="5" fill="#FF9E00" />
+                <Rect x="27" y="29" width="3" height="5" fill="#FF9E00" />
+              </Svg>
+            </View>
+
+            <GameResultModal
+              visible={status === 'GAME_OVER'}
+              type="GAME_OVER"
+              title="SECTOR BREACHED!"
+              subtitle="STARFIGHTER HULL INTEGRITY LOST"
+              score={score}
+              bestScore={bestScore}
+              accentColor="#00F5FF"
+              onRetry={resetGame}
+              retryLabel="SCRAMBLE FIGHTER"
+              onBackToHub={onBackToHub}
+            />
           </View>
 
           <Text style={localStyles.hint}>
-            SLIDE FINGER ACROSS ARENA TO STEER STARFIGHTER
+            DRAG ANYWHERE TO PILOT JET // DODGE LASERS // COLLECT 3X & MEGA POWERUPS
           </Text>
         </View>
       </View>
@@ -320,67 +815,164 @@ const localStyles = StyleSheet.create({
     justifyContent: 'center',
     paddingBottom: 14,
   },
+  powerupHudBanner: {
+    width: '90%',
+    backgroundColor: 'rgba(8, 6, 24, 0.88)',
+    borderRadius: 12,
+    borderWidth: 1.2,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    marginBottom: 8,
+  },
+  powerupHudTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  powerupHudText: {
+    fontFamily: monoFont,
+    fontSize: 10.5,
+    fontWeight: '900',
+    letterSpacing: 0.8,
+  },
+  powerupTimerText: {
+    fontFamily: monoFont,
+    fontSize: 10.5,
+    fontWeight: '900',
+  },
+  powerupGaugeTrack: {
+    width: '100%',
+    height: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    borderRadius: 2,
+    marginTop: 4,
+    overflow: 'hidden',
+  },
+  powerupGaugeFill: {
+    height: '100%',
+    borderRadius: 2,
+  },
   arena: {
-    backgroundColor: 'rgba(5, 6, 18, 0.94)',
+    backgroundColor: 'rgba(4, 5, 16, 0.96)',
     borderRadius: 20,
     borderWidth: 1.5,
-    borderColor: 'rgba(0, 245, 255, 0.42)',
+    borderColor: 'rgba(0, 245, 255, 0.45)',
     position: 'relative',
     overflow: 'hidden',
   },
+  bgStar: {
+    position: 'absolute',
+    width: 2.5,
+    height: 2.5,
+    borderRadius: 1.25,
+    backgroundColor: 'rgba(255, 255, 255, 0.45)',
+  },
   bullet: {
     position: 'absolute',
-    width: 4,
-    height: 12,
-    borderRadius: 2,
-    backgroundColor: COLORS.cyan,
+    borderRadius: 2.5,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.9,
+    shadowRadius: 5,
+    elevation: 2,
   },
-  enemy: {
-    position: 'absolute',
-    borderRadius: 6,
-    borderWidth: 1.5,
-    borderColor: '#FFFFFF',
+  megaBullet: {
+    borderRadius: 8,
+    shadowRadius: 10,
+    shadowOpacity: 1,
+    elevation: 4,
   },
-  ship: {
+  enemyBullet: {
     position: 'absolute',
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 12,
-    borderBottomLeftRadius: 4,
-    borderBottomRightRadius: 4,
-    backgroundColor: COLORS.cyan,
+    borderRadius: 2.5,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 1,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  enemyBox: {
+    position: 'absolute',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  powerupPill: {
+    position: 'absolute',
+    backgroundColor: 'rgba(8, 8, 26, 0.92)',
+    borderRadius: 8,
+    borderWidth: 1.4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.85,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  powerupIconText: {
+    fontFamily: monoFont,
+    fontSize: 8,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+  },
+  shipWrapper: {
+    position: 'absolute',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  shieldBubble: {
+    position: 'absolute',
+    width: 58,
+    height: 48,
+    borderRadius: 24,
     borderWidth: 2,
-    borderColor: '#FFFFFF',
+    borderColor: '#00F5D4',
+    backgroundColor: 'rgba(0, 245, 212, 0.16)',
+    shadowColor: '#00F5D4',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 1,
+    shadowRadius: 8,
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(4, 4, 14, 0.86)',
+    backgroundColor: 'rgba(3, 3, 12, 0.88)',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 14,
+    gap: 12,
   },
   overTitle: {
-    fontSize: 26,
+    fontSize: 24,
     fontFamily: monoFont,
     fontWeight: '900',
     color: COLORS.magenta,
+  },
+  overScore: {
+    fontSize: 13,
+    fontFamily: monoFont,
+    fontWeight: '800',
+    color: COLORS.solarGold,
+    letterSpacing: 1,
   },
   retryBtn: {
     backgroundColor: COLORS.cyan,
     paddingHorizontal: 22,
     paddingVertical: 12,
     borderRadius: 14,
+    shadowColor: COLORS.cyan,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.7,
+    shadowRadius: 8,
   },
   retryText: {
-    fontSize: 12.5,
+    fontSize: 12,
     fontFamily: monoFont,
     fontWeight: '900',
     color: '#030308',
   },
   hint: {
-    fontSize: 9.5,
+    fontSize: 9,
     fontFamily: monoFont,
     fontWeight: '800',
     color: COLORS.textSecondary,
-    marginTop: 10,
+    marginTop: 8,
+    textAlign: 'center',
   },
 });

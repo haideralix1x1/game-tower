@@ -1,10 +1,22 @@
 import React from 'react';
-import { View, Text, Pressable } from 'react-native';
+import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeIn, FadeOut, ZoomIn } from 'react-native-reanimated';
 import { styles, COLORS, THEMES } from '../../styles';
+import { triggerLightHaptic } from '../utils/haptics';
+import { playTapSound } from '../utils/sound';
 
-const THEME_LIST = Object.values(THEMES);
+const hexToRgba = (hex, alpha = 1) => {
+  if (!hex || typeof hex !== 'string') return `rgba(0, 245, 255, ${alpha})`;
+  const clean = hex.replace('#', '');
+  if (clean.length === 6) {
+    const r = parseInt(clean.substring(0, 2), 16);
+    const g = parseInt(clean.substring(2, 4), 16);
+    const b = parseInt(clean.substring(4, 6), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
+  return hex;
+};
 
 function NeonPrimaryButton({
   label,
@@ -14,7 +26,11 @@ function NeonPrimaryButton({
 }) {
   return (
     <Pressable
-      onPress={onPress}
+      onPress={() => {
+        triggerLightHaptic();
+        playTapSound();
+        if (onPress) onPress();
+      }}
       accessibilityRole="button"
       accessibilityLabel={label}
       style={({ pressed }) => [
@@ -49,378 +65,251 @@ export default function MenuOverlays({
   onReturnHome,
   onBackToHub,
 }) {
-  if (gameState === 'PLAYING') {
+  // If PLAYING or START, do not show blocking full-screen modal
+  // START is handled cleanly with in-game tap-to-start prompt
+  if (gameState === 'PLAYING' || gameState === 'START') {
     return null;
   }
 
   const activeTheme = THEMES[themeId] || THEMES.CYBER_NEON;
 
+  const handleBack = () => {
+    triggerLightHaptic();
+    playTapSound();
+    if (onBackToHub) {
+      onBackToHub();
+    } else if (onReturnHome) {
+      onReturnHome();
+    }
+  };
+
+  const handleRestart = () => {
+    triggerLightHaptic();
+    playTapSound();
+    if (onRestartGame) onRestartGame();
+  };
+
+  const handleResume = () => {
+    triggerLightHaptic();
+    playTapSound();
+    if (onResumeGame) onResumeGame();
+  };
+
   return (
     <Animated.View
-      entering={FadeIn.duration(220)}
-      exiting={FadeOut.duration(160)}
+      entering={FadeIn.duration(200)}
+      exiting={FadeOut.duration(150)}
       style={styles.overlayBackdrop}
     >
-      {gameState === 'START' && (
-        <Animated.View
-          entering={ZoomIn.duration(260)}
-          style={[
-            styles.overlayCard,
-            {
-              borderColor: `${activeTheme.accent}66`,
-              shadowColor: activeTheme.accent,
-            },
-          ]}
-        >
-          <View
+      <ScrollView
+        contentContainerStyle={overlayStyles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        style={overlayStyles.scrollWrapper}
+      >
+        {gameState === 'PAUSED' && (
+          <Animated.View
+            entering={ZoomIn.duration(220)}
             style={[
-              styles.cyberTagPill,
+              styles.overlayCard,
               {
-                borderColor: `${activeTheme.accent}88`,
-                backgroundColor: `${activeTheme.accent}22`,
+                borderColor: hexToRgba(activeTheme.accent, 0.45),
+                shadowColor: activeTheme.accent,
               },
             ]}
           >
-            <Text style={[styles.cyberTagText, { color: activeTheme.accent }]}>
-              FLOOR 01 // HYPER-ARCADE
+            <View style={styles.cyberTagPill}>
+              <Text style={styles.cyberTagText}>SYSTEM PAUSED</Text>
+            </View>
+
+            <Text style={styles.titleNeoMain}>PAUSED</Text>
+            <Text style={[styles.subtitleText, { marginTop: 6 }]}>
+              Tower construction temporarily suspended.
             </Text>
-          </View>
 
-          <Text
-            style={[
-              styles.titleNeoMain,
-              { textShadowColor: activeTheme.accent },
-            ]}
-          >
-            STACK BLOCK
-          </Text>
-          <Text
-            style={[
-              styles.titleNeoAccent,
-              {
-                color: activeTheme.secondaryAccent,
-                textShadowColor: activeTheme.secondaryAccent,
-              },
-            ]}
-          >
-            N E O
-          </Text>
-
-          <Text style={styles.subtitleText}>
-            Drop 3D neon slabs with razor-sharp precision. Chain Perfect hits to
-            trigger Overdrive & expand your tower.
-          </Text>
-
-          {bestScore > 0 && (
-            <View style={styles.bestScoreBanner}>
-              <Text style={styles.bestScoreBannerLabel}>RECORD SCORE //</Text>
-              <Text style={styles.bestScoreBannerValue}>
-                {String(bestScore).padStart(4, '0')}
-              </Text>
+            <View style={styles.telemetryGrid}>
+              <View style={styles.telemetryCell}>
+                <Text
+                  style={[styles.telemetryValue, { color: activeTheme.accent }]}
+                >
+                  {score}
+                </Text>
+                <Text style={styles.telemetryLabel}>SCORE</Text>
+              </View>
+              <View style={styles.telemetryCell}>
+                <Text
+                  style={[
+                    styles.telemetryValue,
+                    { color: activeTheme.secondaryAccent },
+                  ]}
+                >
+                  {`${stats.blocksPlaced}F`}
+                </Text>
+                <Text style={styles.telemetryLabel}>HEIGHT</Text>
+              </View>
             </View>
-          )}
 
-          {/* Visual Theme Selector */}
-          <View style={styles.themeSelectorSection}>
-            <Text style={styles.themeSelectorLabel}>SELECT VISUAL THEME</Text>
-            <View style={styles.themeSelectorRow}>
-              {THEME_LIST.map((t) => {
-                const selected = t.id === themeId;
-                return (
-                  <Pressable
-                    key={t.id}
-                    onPress={() => onSelectTheme && onSelectTheme(t.id)}
-                    style={[
-                      styles.themeChip,
-                      selected && {
-                        borderColor: t.accent,
-                        backgroundColor: `${t.accent}22`,
-                      },
-                    ]}
-                  >
-                    <View style={styles.themeChipSwatches}>
-                      <View
-                        style={[
-                          styles.themeSwatchDot,
-                          { backgroundColor: t.accent },
-                        ]}
-                      />
-                      <View
-                        style={[
-                          styles.themeSwatchDot,
-                          { backgroundColor: t.secondaryAccent },
-                        ]}
-                      />
-                    </View>
-                    <Text
-                      numberOfLines={1}
-                      style={[
-                        styles.themeChipText,
-                        selected && { color: '#FFFFFF' },
-                      ]}
-                    >
-                      {t.name.split(' ')[1] || t.name}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </View>
+            <NeonPrimaryButton
+              label="RESUME"
+              onPress={handleResume}
+              colors={[activeTheme.accent, activeTheme.secondaryAccent]}
+              borderColor={activeTheme.accent}
+            />
 
-          <View style={styles.featureList}>
-            <View
-              style={[
-                styles.featureRow,
-                { borderLeftColor: activeTheme.accent },
-              ]}
-            >
-              <Text
-                style={[styles.featureBadge, { color: activeTheme.accent }]}
-              >
-                TAP
-              </Text>
-              <Text style={styles.featureDesc}>
-                Tap anywhere on screen to lock & drop the active slab
-              </Text>
-            </View>
-            <View
-              style={[
-                styles.featureRow,
-                { borderLeftColor: activeTheme.secondaryAccent },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.featureBadge,
-                  { color: activeTheme.secondaryAccent },
-                ]}
-              >
-                SLICE
-              </Text>
-              <Text style={styles.featureDesc}>
-                Laser shears overhanging edges into tumbling 3D debris
-              </Text>
-            </View>
-            <View
-              style={[
-                styles.featureRow,
-                { borderLeftColor: COLORS.solarGold },
-              ]}
-            >
-              <Text style={[styles.featureBadge, { color: COLORS.solarGold }]}>
-                PERFECT
-              </Text>
-              <Text style={styles.featureDesc}>
-                Align within 5% for Overdrive multipliers & width boost
-              </Text>
-            </View>
-          </View>
-
-          <NeonPrimaryButton
-            label="LAUNCH TOWER"
-            onPress={onStartGame}
-            colors={[activeTheme.accent, activeTheme.secondaryAccent]}
-            borderColor={activeTheme.accent}
-          />
-
-          {onBackToHub && (
             <Pressable
-              onPress={onBackToHub}
+              onPress={handleRestart}
               accessibilityRole="button"
               style={({ pressed }) => [
                 styles.secondaryButton,
                 pressed && { opacity: 0.75 },
               ]}
             >
-              <Text style={styles.secondaryButtonText}>
-                BACK TO GAME TOWER
+              <Text style={styles.secondaryButtonText}>RESTART RUN</Text>
+            </Pressable>
+
+            <Pressable
+              onPress={handleBack}
+              accessibilityRole="button"
+              style={({ pressed }) => [
+                styles.secondaryButton,
+                overlayStyles.hubBackBtn,
+                pressed && { opacity: 0.75 },
+              ]}
+            >
+              <Text style={[styles.secondaryButtonText, { color: COLORS.cyan }]}>
+                ← BACK TO GAME TOWER
               </Text>
             </Pressable>
-          )}
-        </Animated.View>
-      )}
+          </Animated.View>
+        )}
 
-      {gameState === 'PAUSED' && (
-        <Animated.View
-          entering={ZoomIn.duration(220)}
-          style={[
-            styles.overlayCard,
-            {
-              borderColor: `${activeTheme.accent}66`,
-              shadowColor: activeTheme.accent,
-            },
-          ]}
-        >
-          <View style={styles.cyberTagPill}>
-            <Text style={styles.cyberTagText}>SYSTEM PAUSED</Text>
-          </View>
-
-          <Text style={styles.titleNeoMain}>PAUSED</Text>
-          <Text style={[styles.subtitleText, { marginTop: 6 }]}>
-            Tower construction temporarily suspended.
-          </Text>
-
-          <View style={styles.telemetryGrid}>
-            <View style={styles.telemetryCell}>
-              <Text
-                style={[styles.telemetryValue, { color: activeTheme.accent }]}
-              >
-                {score}
-              </Text>
-              <Text style={styles.telemetryLabel}>SCORE</Text>
-            </View>
-            <View style={styles.telemetryCell}>
-              <Text
-                style={[
-                  styles.telemetryValue,
-                  { color: activeTheme.secondaryAccent },
-                ]}
-              >
-                {`${stats.blocksPlaced}F`}
-              </Text>
-              <Text style={styles.telemetryLabel}>HEIGHT</Text>
-            </View>
-          </View>
-
-          <NeonPrimaryButton
-            label="RESUME"
-            onPress={onResumeGame}
-            colors={[activeTheme.accent, activeTheme.secondaryAccent]}
-            borderColor={activeTheme.accent}
-          />
-
-          <Pressable
-            onPress={onRestartGame}
-            accessibilityRole="button"
-            style={({ pressed }) => [
-              styles.secondaryButton,
-              pressed && { opacity: 0.75 },
-            ]}
-          >
-            <Text style={styles.secondaryButtonText}>RESTART RUN</Text>
-          </Pressable>
-
-          <Pressable
-            onPress={onBackToHub || onReturnHome}
-            accessibilityRole="button"
-            style={({ pressed }) => [
-              styles.secondaryButton,
-              pressed && { opacity: 0.75 },
-            ]}
-          >
-            <Text style={styles.secondaryButtonText}>
-              {onBackToHub ? 'BACK TO GAME TOWER' : 'MAIN MENU'}
-            </Text>
-          </Pressable>
-        </Animated.View>
-      )}
-
-      {gameState === 'GAME_OVER' && (
-        <Animated.View
-          entering={ZoomIn.duration(260)}
-          style={[
-            styles.overlayCard,
-            {
-              borderColor: `${activeTheme.accent}66`,
-              shadowColor: activeTheme.accent,
-            },
-          ]}
-        >
-          <View
+        {gameState === 'GAME_OVER' && (
+          <Animated.View
+            entering={ZoomIn.duration(260)}
             style={[
-              styles.cyberTagPill,
+              styles.overlayCard,
               {
-                borderColor: COLORS.magenta,
-                backgroundColor: 'rgba(255, 0, 127, 0.16)',
+                borderColor: hexToRgba(activeTheme.accent, 0.45),
+                shadowColor: activeTheme.accent,
               },
             ]}
           >
-            <Text style={[styles.cyberTagText, { color: COLORS.magenta }]}>
-              STRUCTURAL COLLAPSE
-            </Text>
-          </View>
-
-          <Text style={styles.titleNeoMain}>GAME OVER</Text>
-
-          <View
-            style={[
-              styles.scoreShowcaseBox,
-              { borderColor: `${activeTheme.accent}55` },
-            ]}
-          >
-            <Text style={styles.scoreShowcaseLabel}>FINAL SCORE</Text>
-            <Text
+            <View
               style={[
-                styles.scoreShowcaseValue,
-                { color: activeTheme.accent },
+                styles.cyberTagPill,
+                {
+                  borderColor: COLORS.magenta,
+                  backgroundColor: 'rgba(255, 0, 127, 0.16)',
+                },
               ]}
             >
-              {String(score).padStart(4, '0')}
-            </Text>
-            {isNewRecord ? (
-              <View style={styles.newRecordBadge}>
-                <Text style={styles.newRecordText}>NEW HIGH SCORE!</Text>
-              </View>
-            ) : (
-              <Text style={[styles.telemetryLabel, { marginTop: 2 }]}>
-                {`BEST: ${String(bestScore).padStart(4, '0')}`}
+              <Text style={[styles.cyberTagText, { color: COLORS.magenta }]}>
+                STRUCTURAL COLLAPSE
               </Text>
-            )}
-          </View>
-
-          <View style={styles.telemetryGrid}>
-            <View style={styles.telemetryCell}>
-              <Text style={styles.telemetryValue}>{stats.blocksPlaced}</Text>
-              <Text style={styles.telemetryLabel}>BLOCKS STACKED</Text>
             </View>
-            <View style={styles.telemetryCell}>
+
+            <Text style={styles.titleNeoMain}>GAME OVER</Text>
+
+            <View
+              style={[
+                styles.scoreShowcaseBox,
+                { borderColor: hexToRgba(activeTheme.accent, 0.35) },
+              ]}
+            >
+              <Text style={styles.scoreShowcaseLabel}>FINAL SCORE</Text>
               <Text
                 style={[
-                  styles.telemetryValue,
-                  { color: activeTheme.secondaryAccent },
+                  styles.scoreShowcaseValue,
+                  { color: activeTheme.accent },
                 ]}
               >
-                {`x${stats.maxCombo + 1}`}
+                {String(score).padStart(4, '0')}
               </Text>
-              <Text style={styles.telemetryLabel}>MAX MULTIPLIER</Text>
+              {isNewRecord ? (
+                <View style={styles.newRecordBadge}>
+                  <Text style={styles.newRecordText}>NEW HIGH SCORE!</Text>
+                </View>
+              ) : (
+                <Text style={[styles.telemetryLabel, { marginTop: 2 }]}>
+                  {`BEST: ${String(bestScore).padStart(4, '0')}`}
+                </Text>
+              )}
             </View>
-            <View style={styles.telemetryCell}>
-              <Text style={[styles.telemetryValue, { color: COLORS.solarGold }]}>
-                {stats.perfectCount}
-              </Text>
-              <Text style={styles.telemetryLabel}>PERFECT DROPS</Text>
-            </View>
-            <View style={styles.telemetryCell}>
-              <Text
-                style={[styles.telemetryValue, { color: activeTheme.accent }]}
-              >
-                {`LVL ${stats.speedLevel}`}
-              </Text>
-              <Text style={styles.telemetryLabel}>PEAK SPEED</Text>
-            </View>
-          </View>
 
-          <NeonPrimaryButton
-            label="PLAY AGAIN"
-            onPress={onRestartGame}
-            colors={[activeTheme.accent, activeTheme.secondaryAccent]}
-            borderColor={activeTheme.accent}
-          />
+            <View style={styles.telemetryGrid}>
+              <View style={styles.telemetryCell}>
+                <Text style={styles.telemetryValue}>{stats.blocksPlaced}</Text>
+                <Text style={styles.telemetryLabel}>BLOCKS STACKED</Text>
+              </View>
+              <View style={styles.telemetryCell}>
+                <Text
+                  style={[
+                    styles.telemetryValue,
+                    { color: activeTheme.secondaryAccent },
+                  ]}
+                >
+                  {`x${stats.maxCombo + 1}`}
+                </Text>
+                <Text style={styles.telemetryLabel}>MAX MULTIPLIER</Text>
+              </View>
+              <View style={styles.telemetryCell}>
+                <Text
+                  style={[styles.telemetryValue, { color: COLORS.solarGold }]}
+                >
+                  {stats.perfectCount}
+                </Text>
+                <Text style={styles.telemetryLabel}>PERFECT DROPS</Text>
+              </View>
+              <View style={styles.telemetryCell}>
+                <Text
+                  style={[styles.telemetryValue, { color: activeTheme.accent }]}
+                >
+                  {`LVL ${stats.speedLevel}`}
+                </Text>
+                <Text style={styles.telemetryLabel}>PEAK SPEED</Text>
+              </View>
+            </View>
 
-          <Pressable
-            onPress={onBackToHub || onReturnHome}
-            accessibilityRole="button"
-            style={({ pressed }) => [
-              styles.secondaryButton,
-              pressed && { opacity: 0.75 },
-            ]}
-          >
-            <Text style={styles.secondaryButtonText}>
-              {onBackToHub ? 'BACK TO GAME TOWER' : 'MAIN MENU'}
-            </Text>
-          </Pressable>
-        </Animated.View>
-      )}
+            <NeonPrimaryButton
+              label="PLAY AGAIN"
+              onPress={handleRestart}
+              colors={[activeTheme.accent, activeTheme.secondaryAccent]}
+              borderColor={activeTheme.accent}
+            />
+
+            <Pressable
+              onPress={handleBack}
+              accessibilityRole="button"
+              style={({ pressed }) => [
+                styles.secondaryButton,
+                overlayStyles.hubBackBtn,
+                pressed && { opacity: 0.75 },
+              ]}
+            >
+              <Text style={[styles.secondaryButtonText, { color: COLORS.cyan }]}>
+                ← BACK TO GAME TOWER
+              </Text>
+            </Pressable>
+          </Animated.View>
+        )}
+      </ScrollView>
     </Animated.View>
   );
 }
+
+const overlayStyles = StyleSheet.create({
+  scrollWrapper: {
+    width: '100%',
+  },
+  scrollContent: {
+    flexGrow: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 32,
+    paddingHorizontal: 8,
+  },
+  hubBackBtn: {
+    borderColor: 'rgba(0, 245, 255, 0.45)',
+    backgroundColor: 'rgba(0, 245, 255, 0.08)',
+    marginTop: 12,
+  },
+});

@@ -12,6 +12,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS } from '../../styles';
 import MiniGameHeader from '../components/MiniGameHeader';
 import JuiceEngine from '../components/JuiceEngine';
+import GameResultModal from '../components/GameResultModal';
 import {
   triggerLightHaptic,
   triggerPerfectHaptic,
@@ -239,13 +240,24 @@ export default function SimonPulseGame({ onBackToHub, onScoreUpdate }) {
             })}
           </View>
 
-          {(phase === 'IDLE' || phase === 'GAME_OVER') && (
+          {phase === 'IDLE' && (
             <Pressable onPress={startNewRun} style={localStyles.startBtn}>
-              <Text style={localStyles.startBtnText}>
-                {phase === 'IDLE' ? 'START SEQUENCE' : 'PLAY AGAIN'}
-              </Text>
+              <Text style={localStyles.startBtnText}>START SEQUENCE</Text>
             </Pressable>
           )}
+
+          <GameResultModal
+            visible={phase === 'GAME_OVER'}
+            type="GAME_OVER"
+            title="SEQUENCE DESYNC!"
+            subtitle={`PULSE PATTERN BROKEN // REACHED LEVEL ${stepCount}`}
+            score={score}
+            bestScore={bestScore}
+            accentColor="#FF007F"
+            onRetry={startNewRun}
+            retryLabel="RESTART PULSE"
+            onBackToHub={onBackToHub}
+          />
         </View>
       </View>
     </JuiceEngine>
