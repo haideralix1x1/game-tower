@@ -6,6 +6,7 @@ import {
   Pressable,
   useWindowDimensions,
   Platform,
+  PanResponder,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS } from '../../styles';
@@ -51,7 +52,9 @@ function rotateMatrix(matrix) {
   return result;
 }
 
-export default function CyberTetrisGame({ onBackToHub, onScoreUpdate }) {
+export default function CyberTetrisGame({ onBackToHub, onScoreUpdate, isPaused = false }) {
+  const isPausedRef = useRef(isPaused);
+  isPausedRef.current = isPaused;
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const maxAvailableHeight = height - (insets.top + insets.bottom + 220);
@@ -102,6 +105,14 @@ export default function CyberTetrisGame({ onBackToHub, onScoreUpdate }) {
     return false;
   }, []);
 
+  const handleGameOver = useCallback(() => {
+    setIsGameOver(true);
+    if (dropTimerRef.current) clearInterval(dropTimerRef.current);
+    playGameOverSound();
+    triggerGameOverHaptic();
+    setModalVisible(true);
+  }, []);
+
   // Spawn new piece
   const spawnPiece = useCallback(
     (typeToSpawn = null) => {
@@ -134,7 +145,7 @@ export default function CyberTetrisGame({ onBackToHub, onScoreUpdate }) {
       posRef.current = { r: startRow, c: startCol };
       setCanHold(true);
     },
-    [checkCollision, nextPieceType]
+    [checkCollision, nextPieceType, handleGameOver]
   );
 
   // Initialize Game
@@ -172,12 +183,16 @@ export default function CyberTetrisGame({ onBackToHub, onScoreUpdate }) {
     const { r: curR, c: curC } = posRef.current;
     if (!piece) return;
 
+    let lockedAtTop = false;
     const newGrid = gridRef.current.map((row) => [...row]);
     for (let r = 0; r < piece.shape.length; r++) {
       for (let c = 0; c < piece.shape[r].length; c++) {
         if (piece.shape[r][c]) {
           const targetR = curR + r;
           const targetC = curC + c;
+          if (targetR <= 0) {
+            lockedAtTop = true;
+          }
           if (targetR >= 0 && targetR < ROWS && targetC >= 0 && targetC < COLS) {
             newGrid[targetR][targetC] = piece.color;
           }
@@ -233,11 +248,23 @@ export default function CyberTetrisGame({ onBackToHub, onScoreUpdate }) {
 
     setGrid(survivingRows);
     gridRef.current = survivingRows;
+
+    // Game Over if blocks reached the top and were not cleared, or row 0 is occupied
+    if (lockedAtTop && lines === 0) {
+      handleGameOver();
+      return;
+    }
+    if (survivingRows[0].some((cell) => cell !== null)) {
+      handleGameOver();
+      return;
+    }
+
     spawnPiece();
-  }, [level, spawnPiece, width, height, onScoreUpdate]);
+  }, [level, spawnPiece, width, height, onScoreUpdate, handleGameOver]);
 
   // Drop step tick
   const dropStep = useCallback(() => {
+    if (isPausedRef.current) return;
     if (!pieceRef.current || isGameOver) return;
     const curPos = posRef.current;
     if (!checkCollision(pieceRef.current.shape, curPos.r + 1, curPos.c)) {
@@ -251,7 +278,7 @@ export default function CyberTetrisGame({ onBackToHub, onScoreUpdate }) {
   // Auto gravity timer
   useEffect(() => {
     if (isGameOver) return;
-    const interval = Math.max(160, 650 - (level - 1) * 45);
+    const interval = Math.max(450, 950 - (level - 1) * 35);
     dropTimerRef.current = setInterval(dropStep, interval);
 
     return () => {
@@ -261,7 +288,7 @@ export default function CyberTetrisGame({ onBackToHub, onScoreUpdate }) {
 
   // Player controls
   const moveLeft = () => {
-    if (!currentPiece) return;
+    if (isPausedRef.current || !currentPiece) return;
     if (!checkCollision(currentPiece.shape, pos.r, pos.c - 1)) {
       setPos((p) => ({ ...p, c: p.c - 1 }));
       playTapSound();
@@ -269,7 +296,7 @@ export default function CyberTetrisGame({ onBackToHub, onScoreUpdate }) {
   };
 
   const moveRight = () => {
-    if (!currentPiece) return;
+    if (isPausedRef.current || !currentPiece) return;
     if (!checkCollision(currentPiece.shape, pos.r, pos.c + 1)) {
       setPos((p) => ({ ...p, c: p.c + 1 }));
       playTapSound();
@@ -277,7 +304,7 @@ export default function CyberTetrisGame({ onBackToHub, onScoreUpdate }) {
   };
 
   const rotatePiece = () => {
-    if (!currentPiece) return;
+    if (isPausedRef.current || !currentPiece) return;
     const rotated = rotateMatrix(currentPiece.shape);
     // Wall kick attempts
     if (!checkCollision(rotated, pos.r, pos.c)) {
@@ -299,7 +326,7 @@ export default function CyberTetrisGame({ onBackToHub, onScoreUpdate }) {
   };
 
   const hardDrop = () => {
-    if (!currentPiece) return;
+    if (isPausedRef.current || !currentPiece) return;
     let targetR = pos.r;
     while (!checkCollision(currentPiece.shape, targetR + 1, pos.c)) {
       targetR++;
@@ -325,26 +352,37 @@ export default function CyberTetrisGame({ onBackToHub, onScoreUpdate }) {
     playTapSound();
   };
 
-  // Ghost piece landing calculation
-  let ghostR = pos.r;
-  if (currentPiece) {
-    while (!checkCollision(currentPiece.shape, ghostR + 1, pos.c)) {
-      ghostR++;
-    }
-  }
+  // Next rotation shape preview for side panel
+  const nextRotationShape = currentPiece ? rotateMatrix(currentPiece.shape) : null;
 
-  const handleGameOver = () => {
-    setIsGameOver(true);
-    if (dropTimerRef.current) clearInterval(dropTimerRef.current);
-    playGameOverSound();
-    triggerGameOverHaptic();
-    setModalVisible(true);
-  };
+  const matrixPanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gesture) =>
+        Math.hypot(gesture.dx, gesture.dy) > 10,
+      onPanResponderRelease: (_, gesture) => {
+        if (isPausedRef.current || isGameOver) return;
+        const { dx, dy, vy } = gesture;
+        if (dy > 45 || vy > 0.8) {
+          hardDrop();
+        } else if (dy > 20) {
+          softDrop();
+        } else if (dx < -20) {
+          moveLeft();
+        } else if (dx > 20) {
+          moveRight();
+        } else if (Math.hypot(dx, dy) < 10) {
+          rotatePiece();
+        }
+      },
+    })
+  ).current;
 
+  
   return (
     <View style={styles.container}>
       <MiniGameHeader
-        floorNum={27}
+        floorNum={26}
         gameTitle="CYBER TETRIS NEO"
         category="ARCADE BLOCKS"
         accentColor="#00F5FF"
@@ -386,8 +424,8 @@ export default function CyberTetrisGame({ onBackToHub, onScoreUpdate }) {
 
         {/* Center: Tetris Matrix Grid */}
         <View
+          {...matrixPanResponder.panHandlers}
           style={[
-            styles.gridBorder,
             { width: COLS * cellSize + 4, height: ROWS * cellSize + 4 },
           ]}
         >
@@ -396,7 +434,6 @@ export default function CyberTetrisGame({ onBackToHub, onScoreUpdate }) {
               {Array.from({ length: COLS }).map((_, c) => {
                 // Determine block color
                 let color = grid[r][c];
-                let isGhost = false;
 
                 // Active falling piece
                 if (
@@ -408,18 +445,6 @@ export default function CyberTetrisGame({ onBackToHub, onScoreUpdate }) {
                   currentPiece.shape[r - pos.r][c - pos.c]
                 ) {
                   color = currentPiece.color;
-                } else if (
-                  // Ghost shadow
-                  currentPiece &&
-                  r >= ghostR &&
-                  r < ghostR + currentPiece.shape.length &&
-                  c >= pos.c &&
-                  c < pos.c + currentPiece.shape[0].length &&
-                  currentPiece.shape[r - ghostR][c - pos.c] &&
-                  !grid[r][c]
-                ) {
-                  color = 'rgba(255, 255, 255, 0.22)';
-                  isGhost = true;
                 }
 
                 return (
@@ -431,8 +456,8 @@ export default function CyberTetrisGame({ onBackToHub, onScoreUpdate }) {
                       color
                         ? {
                             backgroundColor: color,
-                            borderColor: isGhost ? 'rgba(255,255,255,0.4)' : '#FFFFFF',
-                            borderWidth: isGhost ? 1 : 0.8,
+                            borderColor: '#FFFFFF',
+                            borderWidth: 0.8,
                           }
                         : null,
                     ]}
@@ -443,7 +468,7 @@ export default function CyberTetrisGame({ onBackToHub, onScoreUpdate }) {
           ))}
         </View>
 
-        {/* Right Side: Next Piece Preview */}
+        {/* Right Side: Next Piece Preview & Rotation Preview */}
         <View style={styles.sideCol}>
           <Text style={styles.sideLabel}>NEXT</Text>
           <View style={styles.sideBox}>
@@ -457,6 +482,28 @@ export default function CyberTetrisGame({ onBackToHub, onScoreUpdate }) {
                         style={[
                           styles.miniCell,
                           val ? { backgroundColor: TETROMINOES[nextPieceType].color } : null,
+                        ]}
+                      />
+                    ))}
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
+
+          {/* Next Rotation Preview in the side space */}
+          <Text style={[styles.sideLabel, { marginTop: 14 }]}>ROTATE ↷</Text>
+          <View style={styles.sideBox}>
+            {nextRotationShape && currentPiece && (
+              <View style={styles.miniPieceGrid}>
+                {nextRotationShape.map((row, r) => (
+                  <View key={`rr_${r}`} style={styles.miniRow}>
+                    {row.map((val, c) => (
+                      <View
+                        key={`rc_${c}`}
+                        style={[
+                          styles.miniCell,
+                          val ? { backgroundColor: currentPiece.color } : null,
                         ]}
                       />
                     ))}

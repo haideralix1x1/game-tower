@@ -8,6 +8,7 @@ import {
   Platform,
   useWindowDimensions,
   BackHandler,
+  Modal,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -27,7 +28,6 @@ import TowerAnimatedBackground from './TowerAnimatedBackground';
 import JuiceEngine from './JuiceEngine';
 
 // Floor 01 - 20 Game Screen Imports
-import GameScreen from '../../GameScreen';
 import Game2048 from '../games/Game2048';
 import WordlyGame from '../games/WordlyGame';
 import NeonMinesGame from '../games/NeonMinesGame';
@@ -66,6 +66,10 @@ import {
   triggerSelectionHaptic,
 } from '../utils/haptics';
 import { playTapSound, playSnapTickSound } from '../utils/sound';
+import { useAudioPlayer } from 'expo-audio';
+
+const menuMusicAsset = require('../../assets/menu-music.ogg');
+const STORAGE_MUSIC_MUTED_KEY = '@game_tower:music_muted';
 
 const monoFont = Platform.select({
   ios: 'Menlo',
@@ -76,8 +80,8 @@ const monoFont = Platform.select({
 export const TOWER_GAMES = [
   {
     id: 'knife_hit',
-    floorNum: 31,
-    floor: 'FLOOR 31',
+    floorNum: 30,
+    floor: 'FLOOR 30',
     tier: 'ORBIT',
     title: 'CYBER BLADE TARGET',
     category: 'PRECISION',
@@ -90,22 +94,22 @@ export const TOWER_GAMES = [
   },
   {
     id: 'icy_climber',
-    floorNum: 30,
-    floor: 'FLOOR 30',
+    floorNum: 29,
+    floor: 'FLOOR 29',
     tier: 'ORBIT',
-    title: 'CYBER ICY CLIMBER',
+    title: 'CYBER SPIRE ASCENT',
     category: 'ARCADE',
-    badge: 'SLICK ICE LEDGES',
-    desc: 'Leap and slide between crumbling plasma and frictionless ice ledges to ascend the endless tower.',
+    badge: 'FIRE & TURRETS',
+    desc: 'Ascend the infinite cyber spire. Dodge incinerating fire platforms, outrun homing sentry bombs, and evade defense turrets.',
     accent: '#00F5FF',
-    secondary: '#FFFFFF',
-    icon: '🧊',
+    secondary: '#FF0055',
+    icon: '⚡',
     storageKey: '@game_tower:best_climber_v1',
   },
   {
     id: 'tap_away',
-    floorNum: 29,
-    floor: 'FLOOR 29',
+    floorNum: 28,
+    floor: 'FLOOR 28',
     tier: 'ORBIT',
     title: 'TAP AWAY ARROWS',
     category: 'BRAIN',
@@ -118,8 +122,8 @@ export const TOWER_GAMES = [
   },
   {
     id: 'match3_saga',
-    floorNum: 28,
-    floor: 'FLOOR 28',
+    floorNum: 27,
+    floor: 'FLOOR 27',
     tier: 'ORBIT',
     title: 'CYBER MATCH 3 SAGA',
     category: 'PUZZLE',
@@ -132,8 +136,8 @@ export const TOWER_GAMES = [
   },
   {
     id: 'cyber_tetris',
-    floorNum: 27,
-    floor: 'FLOOR 27',
+    floorNum: 26,
+    floor: 'FLOOR 26',
     tier: 'ORBIT',
     title: 'CYBER TETRIS NEO',
     category: 'ARCADE',
@@ -146,8 +150,8 @@ export const TOWER_GAMES = [
   },
   {
     id: 'hardcore_runner',
-    floorNum: 26,
-    floor: 'FLOOR 26',
+    floorNum: 25,
+    floor: 'FLOOR 25',
     tier: 'ORBIT',
     title: 'CYBER CUBE DASH',
     category: 'HARDCORE',
@@ -160,8 +164,8 @@ export const TOWER_GAMES = [
   },
   {
     id: 'color_switch',
-    floorNum: 25,
-    floor: 'FLOOR 25',
+    floorNum: 24,
+    floor: 'FLOOR 24',
     tier: 'APEX',
     title: 'COLOR SWITCH NEO',
     category: 'REFLEX',
@@ -174,8 +178,8 @@ export const TOWER_GAMES = [
   },
   {
     id: 'color_tube',
-    floorNum: 24,
-    floor: 'FLOOR 24',
+    floorNum: 23,
+    floor: 'FLOOR 23',
     tier: 'APEX',
     title: 'COLOR TUBE SORT',
     category: 'LOGIC',
@@ -188,8 +192,8 @@ export const TOWER_GAMES = [
   },
   {
     id: 'rope_cut',
-    floorNum: 23,
-    floor: 'FLOOR 23',
+    floorNum: 22,
+    floor: 'FLOOR 22',
     tier: 'APEX',
     title: 'CYBER ROPE DROP',
     category: 'PHYSICS',
@@ -202,8 +206,8 @@ export const TOWER_GAMES = [
   },
   {
     id: 'save_the_dog',
-    floorNum: 22,
-    floor: 'FLOOR 22',
+    floorNum: 21,
+    floor: 'FLOOR 21',
     tier: 'APEX',
     title: 'SAVE CYBER DOGE',
     category: 'PHYSICS',
@@ -216,8 +220,8 @@ export const TOWER_GAMES = [
   },
   {
     id: 'cyber_sudoku',
-    floorNum: 21,
-    floor: 'FLOOR 21',
+    floorNum: 20,
+    floor: 'FLOOR 20',
     tier: 'APEX',
     title: 'CYBER SUDOKU',
     category: 'BRAIN',
@@ -230,9 +234,9 @@ export const TOWER_GAMES = [
   },
   {
     id: 'space_shooter',
-    floorNum: 20,
-    floor: 'FLOOR 20',
-    tier: 'APEX',
+    floorNum: 19,
+    floor: 'FLOOR 19',
+    tier: 'SKY',
     title: 'SPACE SHOOTER NEO',
     category: 'ARCADE',
     badge: '60FPS AUTO-LASER',
@@ -244,9 +248,9 @@ export const TOWER_GAMES = [
   },
   {
     id: 'number_hunt',
-    floorNum: 19,
-    floor: 'FLOOR 19',
-    tier: 'APEX',
+    floorNum: 18,
+    floor: 'FLOOR 18',
+    tier: 'SKY',
     title: 'NUMBER HUNT 25',
     category: 'BRAIN',
     badge: 'SCHULTE SPEED',
@@ -258,9 +262,9 @@ export const TOWER_GAMES = [
   },
   {
     id: 'hanoi_tower',
-    floorNum: 18,
-    floor: 'FLOOR 18',
-    tier: 'APEX',
+    floorNum: 17,
+    floor: 'FLOOR 17',
+    tier: 'SKY',
     title: 'TOWER OF HANOI',
     category: 'PUZZLE',
     badge: 'QUANTUM RINGS',
@@ -272,9 +276,9 @@ export const TOWER_GAMES = [
   },
   {
     id: 'color_stroop',
-    floorNum: 17,
-    floor: 'FLOOR 17',
-    tier: 'APEX',
+    floorNum: 16,
+    floor: 'FLOOR 16',
+    tier: 'SKY',
     title: 'COLOR STROOP',
     category: 'BRAIN',
     badge: 'REFLEX CLASH',
@@ -286,9 +290,9 @@ export const TOWER_GAMES = [
   },
   {
     id: 'math_blitz',
-    floorNum: 16,
-    floor: 'FLOOR 16',
-    tier: 'APEX',
+    floorNum: 15,
+    floor: 'FLOOR 15',
+    tier: 'SKY',
     title: 'MATH BLITZ',
     category: 'BRAIN',
     badge: 'SPEED ARITHMETIC',
@@ -300,9 +304,9 @@ export const TOWER_GAMES = [
   },
   {
     id: 'whack_a_bot',
-    floorNum: 15,
-    floor: 'FLOOR 15',
-    tier: 'SKY',
+    floorNum: 14,
+    floor: 'FLOOR 14',
+    tier: 'CORE',
     title: 'WHACK-A-BOT',
     category: 'ARCADE',
     badge: '16 & 25 HOLES',
@@ -314,9 +318,9 @@ export const TOWER_GAMES = [
   },
   {
     id: 'block_blast',
-    floorNum: 14,
-    floor: 'FLOOR 14',
-    tier: 'SKY',
+    floorNum: 13,
+    floor: 'FLOOR 13',
+    tier: 'CORE',
     title: 'BLOCK BLAST 8x8',
     category: 'PUZZLE',
     badge: 'GRID BLASTER',
@@ -328,9 +332,9 @@ export const TOWER_GAMES = [
   },
   {
     id: 'tic_tac_toe',
-    floorNum: 13,
-    floor: 'FLOOR 13',
-    tier: 'SKY',
+    floorNum: 12,
+    floor: 'FLOOR 12',
+    tier: 'CORE',
     title: 'CYBER TIC-TAC-TOE',
     category: 'STRATEGY',
     badge: 'AI BATTLE & 2P',
@@ -342,9 +346,9 @@ export const TOWER_GAMES = [
   },
   {
     id: 'neon_flappy',
-    floorNum: 12,
-    floor: 'FLOOR 12',
-    tier: 'SKY',
+    floorNum: 11,
+    floor: 'FLOOR 11',
+    tier: 'CORE',
     title: 'NEON FLAPPY',
     category: 'ARCADE',
     badge: 'PULSE JET',
@@ -356,9 +360,9 @@ export const TOWER_GAMES = [
   },
   {
     id: 'cyber_snake',
-    floorNum: 11,
-    floor: 'FLOOR 11',
-    tier: 'SKY',
+    floorNum: 10,
+    floor: 'FLOOR 10',
+    tier: 'CORE',
     title: 'CYBER SNAKE',
     category: 'ARCADE',
     badge: 'RETRO 15x15',
@@ -370,8 +374,8 @@ export const TOWER_GAMES = [
   },
   {
     id: 'brick_breaker',
-    floorNum: 10,
-    floor: 'FLOOR 10',
+    floorNum: 9,
+    floor: 'FLOOR 09',
     tier: 'CORE',
     title: 'BRICK BREAKER NEO',
     category: 'ARCADE',
@@ -384,8 +388,8 @@ export const TOWER_GAMES = [
   },
   {
     id: 'simon_pulse',
-    floorNum: 9,
-    floor: 'FLOOR 09',
+    floorNum: 8,
+    floor: 'FLOOR 08',
     tier: 'CORE',
     title: 'SIMON PULSE',
     category: 'BRAIN',
@@ -398,8 +402,8 @@ export const TOWER_GAMES = [
   },
   {
     id: 'chroma_flood',
-    floorNum: 8,
-    floor: 'FLOOR 08',
+    floorNum: 7,
+    floor: 'FLOOR 07',
     tier: 'CORE',
     title: 'CHROMA FLOOD',
     category: 'STRATEGY',
@@ -412,8 +416,8 @@ export const TOWER_GAMES = [
   },
   {
     id: 'cyber_slide',
-    floorNum: 7,
-    floor: 'FLOOR 07',
+    floorNum: 6,
+    floor: 'FLOOR 06',
     tier: 'CORE',
     title: 'CYBER SLIDE 15',
     category: 'PUZZLE',
@@ -426,8 +430,8 @@ export const TOWER_GAMES = [
   },
   {
     id: 'lights_out',
-    floorNum: 6,
-    floor: 'FLOOR 06',
+    floorNum: 5,
+    floor: 'FLOOR 05',
     tier: 'CORE',
     title: 'GRID HACKER',
     category: 'PUZZLE',
@@ -440,8 +444,8 @@ export const TOWER_GAMES = [
   },
   {
     id: 'memory_matrix',
-    floorNum: 5,
-    floor: 'FLOOR 05',
+    floorNum: 4,
+    floor: 'FLOOR 04',
     tier: 'BASE',
     title: 'MEMORY MATRIX',
     category: 'BRAIN',
@@ -454,8 +458,8 @@ export const TOWER_GAMES = [
   },
   {
     id: 'neon_mines',
-    floorNum: 4,
-    floor: 'FLOOR 04',
+    floorNum: 3,
+    floor: 'FLOOR 03',
     tier: 'BASE',
     title: 'NEON MINES',
     category: 'STRATEGY',
@@ -468,8 +472,8 @@ export const TOWER_GAMES = [
   },
   {
     id: 'wordly_neo',
-    floorNum: 3,
-    floor: 'FLOOR 03',
+    floorNum: 2,
+    floor: 'FLOOR 02',
     tier: 'BASE',
     title: 'WORDLY NEO',
     category: 'WORD',
@@ -482,8 +486,8 @@ export const TOWER_GAMES = [
   },
   {
     id: 'cyber_2048',
-    floorNum: 2,
-    floor: 'FLOOR 02',
+    floorNum: 1,
+    floor: 'FLOOR 01',
     tier: 'BASE',
     title: 'DROP 2048 NEO',
     category: 'PUZZLE',
@@ -494,29 +498,15 @@ export const TOWER_GAMES = [
     icon: '⊞',
     storageKey: '@game_tower:best_2048_drop_v1',
   },
-  {
-    id: 'stack_block',
-    floorNum: 1,
-    floor: 'FLOOR 01',
-    tier: 'BASE',
-    title: 'STACK BLOCK NEO',
-    category: 'ARCADE',
-    badge: '3D PRECISION',
-    desc: 'Drop oscillating 3D neon slabs with laser-slicing physics & Overdrive combos.',
-    accent: '#00F5FF',
-    secondary: '#0088FF',
-    icon: '❖',
-    storageKey: GAME_CONFIG.STORAGE_BEST_SCORE_KEY,
-  },
 ];
 
 const SECTORS = [
-  { id: 'ALL', label: 'ALL (31)' },
-  { id: 'ORBIT', label: '🛰️ ORBIT (31-26)' },
-  { id: 'APEX', label: '⚡ APEX (25-21)' },
-  { id: 'SKY', label: '🏙️ SKY (20-16)' },
-  { id: 'CORE', label: '⚙️ CORE (15-06)' },
-  { id: 'BASE', label: '🛡️ BASE (05-01)' },
+  { id: 'ALL', label: 'ALL (30)' },
+  { id: 'ORBIT', label: '🛰️ ORBIT (30-25)' },
+  { id: 'APEX', label: '⚡ APEX (24-20)' },
+  { id: 'SKY', label: '🏙️ SKY (19-15)' },
+  { id: 'CORE', label: '⚙️ CORE (14-05)' },
+  { id: 'BASE', label: '🛡️ BASE (04-01)' },
 ];
 
 /**
@@ -528,10 +518,50 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
   const juiceRef = useRef(null);
   const scrollRef = useRef(null);
 
+  const musicPlayer = useAudioPlayer(menuMusicAsset);
+  const [isMusicMuted, setIsMusicMuted] = useState(false);
+
   const [activeGameId, setActiveGameId] = useState(initialGameId);
+  const lastPlayedGameId = useRef(null);
   const [selectedSector, setSelectedSector] = useState('ALL');
   const [highScores, setHighScores] = useState({});
   const [ascendingSort, setAscendingSort] = useState(false); // false = Apex (20) top, true = Base (01) top
+
+  // Load saved music mute preference
+  useEffect(() => {
+    (async () => {
+      try {
+        const saved = await AsyncStorage.getItem(STORAGE_MUSIC_MUTED_KEY);
+        if (saved !== null) {
+          setIsMusicMuted(saved === 'true');
+        }
+      } catch {}
+    })();
+  }, []);
+
+  // Manage background menu music playback (loop in hub, pause inside mini-games)
+  useEffect(() => {
+    if (!musicPlayer) return;
+    try {
+      musicPlayer.loop = true;
+      musicPlayer.volume = 0.55;
+      if (!isMusicMuted && activeGameId === null) {
+        musicPlayer.play();
+      } else {
+        musicPlayer.pause();
+      }
+    } catch {}
+  }, [musicPlayer, isMusicMuted, activeGameId]);
+
+  const toggleMusicMute = useCallback(async () => {
+    triggerLightHaptic();
+    playTapSound();
+    const next = !isMusicMuted;
+    setIsMusicMuted(next);
+    try {
+      await AsyncStorage.setItem(STORAGE_MUSIC_MUTED_KEY, String(next));
+    } catch {}
+  }, [isMusicMuted]);
 
   const loadAllHighScores = useCallback(async () => {
     try {
@@ -562,6 +592,7 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
       juiceRef.current.burst(width / 2, 280, accent, 18);
     }
 
+    lastPlayedGameId.current = gameId;
     setTimeout(() => {
       setActiveGameId(gameId);
     }, 120);
@@ -585,6 +616,26 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
       loadAllHighScores();
     } catch {}
   }, [loadAllHighScores]);
+
+  // Smoothly scroll back to the last played game card upon returning to the Hub!
+  useEffect(() => {
+    if (activeGameId === null && lastPlayedGameId.current) {
+      const targetId = lastPlayedGameId.current;
+      const timer = setTimeout(() => {
+        const idx = displayedGames.findIndex((g) => g.id === targetId);
+        if (idx !== -1) {
+          const targetY = layoutPositions.current[idx];
+          if (targetY !== undefined && scrollRef.current) {
+            scrollRef.current.scrollTo({
+              y: Math.max(0, targetY - 60),
+              animated: true,
+            });
+          }
+        }
+      }, 200);
+      return () => clearTimeout(timer);
+    }
+  }, [activeGameId, displayedGames]);
 
   // Handle Android mobile hardware / gesture back button
   useEffect(() => {
@@ -728,17 +779,12 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
   // Render Active Selected Mini-Game with Exit Confirmation Modal
   const renderActiveGame = () => {
     if (!activeGameId) return null;
+    const isPaused = showExitConfirm;
     switch (activeGameId) {
-      case 'stack_block':
-        return (
-          <GameScreen
-            onBackToHub={requestExitToHub}
-            onScoreUpdate={(s) => handleScoreUpdate('stack_block', s)}
-          />
-        );
       case 'cyber_2048':
         return (
           <Game2048
+            isPaused={isPaused}
             onBackToHub={requestExitToHub}
             onScoreUpdate={(s) => handleScoreUpdate('cyber_2048', s)}
           />
@@ -746,6 +792,7 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
       case 'wordly_neo':
         return (
           <WordlyGame
+            isPaused={isPaused}
             onBackToHub={requestExitToHub}
             onScoreUpdate={(s) => handleScoreUpdate('wordly_neo', s)}
           />
@@ -753,6 +800,7 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
       case 'neon_mines':
         return (
           <NeonMinesGame
+            isPaused={isPaused}
             onBackToHub={requestExitToHub}
             onScoreUpdate={(s) => handleScoreUpdate('neon_mines', s)}
           />
@@ -760,6 +808,7 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
       case 'memory_matrix':
         return (
           <MemoryMatrixGame
+            isPaused={isPaused}
             onBackToHub={requestExitToHub}
             onScoreUpdate={(s) => handleScoreUpdate('memory_matrix', s)}
           />
@@ -767,6 +816,7 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
       case 'lights_out':
         return (
           <LightsOutGame
+            isPaused={isPaused}
             onBackToHub={requestExitToHub}
             onScoreUpdate={(s) => handleScoreUpdate('lights_out', s)}
           />
@@ -774,6 +824,7 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
       case 'cyber_slide':
         return (
           <SlidingPuzzleGame
+            isPaused={isPaused}
             onBackToHub={requestExitToHub}
             onScoreUpdate={(s) => handleScoreUpdate('cyber_slide', s)}
           />
@@ -781,6 +832,7 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
       case 'chroma_flood':
         return (
           <ColorFloodGame
+            isPaused={isPaused}
             onBackToHub={requestExitToHub}
             onScoreUpdate={(s) => handleScoreUpdate('chroma_flood', s)}
           />
@@ -788,6 +840,7 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
       case 'simon_pulse':
         return (
           <SimonPulseGame
+            isPaused={isPaused}
             onBackToHub={requestExitToHub}
             onScoreUpdate={(s) => handleScoreUpdate('simon_pulse', s)}
           />
@@ -795,6 +848,7 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
       case 'brick_breaker':
         return (
           <BrickBreakerGame
+            isPaused={isPaused}
             onBackToHub={requestExitToHub}
             onScoreUpdate={(s) => handleScoreUpdate('brick_breaker', s)}
           />
@@ -802,6 +856,7 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
       case 'cyber_snake':
         return (
           <CyberSnakeGame
+            isPaused={isPaused}
             onBackToHub={requestExitToHub}
             onScoreUpdate={(s) => handleScoreUpdate('cyber_snake', s)}
           />
@@ -809,6 +864,7 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
       case 'neon_flappy':
         return (
           <NeonFlappyGame
+            isPaused={isPaused}
             onBackToHub={requestExitToHub}
             onScoreUpdate={(s) => handleScoreUpdate('neon_flappy', s)}
           />
@@ -816,6 +872,7 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
       case 'tic_tac_toe':
         return (
           <TicTacToeGame
+            isPaused={isPaused}
             onBackToHub={requestExitToHub}
             onScoreUpdate={(s) => handleScoreUpdate('tic_tac_toe', s)}
           />
@@ -823,6 +880,7 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
       case 'block_blast':
         return (
           <BlockBlastGame
+            isPaused={isPaused}
             onBackToHub={requestExitToHub}
             onScoreUpdate={(s) => handleScoreUpdate('block_blast', s)}
           />
@@ -830,6 +888,7 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
       case 'whack_a_bot':
         return (
           <WhackABotGame
+            isPaused={isPaused}
             onBackToHub={requestExitToHub}
             onScoreUpdate={(s) => handleScoreUpdate('whack_a_bot', s)}
           />
@@ -837,6 +896,7 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
       case 'math_blitz':
         return (
           <MathBlitzGame
+            isPaused={isPaused}
             onBackToHub={requestExitToHub}
             onScoreUpdate={(s) => handleScoreUpdate('math_blitz', s)}
           />
@@ -844,6 +904,7 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
       case 'color_stroop':
         return (
           <ColorStroopGame
+            isPaused={isPaused}
             onBackToHub={requestExitToHub}
             onScoreUpdate={(s) => handleScoreUpdate('color_stroop', s)}
           />
@@ -851,6 +912,7 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
       case 'hanoi_tower':
         return (
           <HanoiTowerGame
+            isPaused={isPaused}
             onBackToHub={requestExitToHub}
             onScoreUpdate={(s) => handleScoreUpdate('hanoi_tower', s)}
           />
@@ -858,6 +920,7 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
       case 'number_hunt':
         return (
           <NumberHuntGame
+            isPaused={isPaused}
             onBackToHub={requestExitToHub}
             onScoreUpdate={(s) => handleScoreUpdate('number_hunt', s)}
           />
@@ -865,6 +928,7 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
       case 'space_shooter':
         return (
           <SpaceShooterGame
+            isPaused={isPaused}
             onBackToHub={requestExitToHub}
             onScoreUpdate={(s) => handleScoreUpdate('space_shooter', s)}
           />
@@ -872,6 +936,7 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
       case 'cyber_sudoku':
         return (
           <CyberSudokuGame
+            isPaused={isPaused}
             onBackToHub={requestExitToHub}
             onScoreUpdate={(s) => handleScoreUpdate('cyber_sudoku', s)}
           />
@@ -879,6 +944,7 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
       case 'save_the_dog':
         return (
           <SaveTheDogGame
+            isPaused={isPaused}
             onBackToHub={requestExitToHub}
             onScoreUpdate={(s) => handleScoreUpdate('save_the_dog', s)}
           />
@@ -886,6 +952,7 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
       case 'rope_cut':
         return (
           <RopeCutGame
+            isPaused={isPaused}
             onBackToHub={requestExitToHub}
             onScoreUpdate={(s) => handleScoreUpdate('rope_cut', s)}
           />
@@ -893,6 +960,7 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
       case 'color_tube':
         return (
           <ColorTubeSortGame
+            isPaused={isPaused}
             onBackToHub={requestExitToHub}
             onScoreUpdate={(s) => handleScoreUpdate('color_tube', s)}
           />
@@ -900,6 +968,7 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
       case 'color_switch':
         return (
           <ColorSwitchGame
+            isPaused={isPaused}
             onBackToHub={requestExitToHub}
             onScoreUpdate={(s) => handleScoreUpdate('color_switch', s)}
           />
@@ -907,6 +976,7 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
       case 'hardcore_runner':
         return (
           <HardcoreRunnerGame
+            isPaused={isPaused}
             onBackToHub={requestExitToHub}
             onScoreUpdate={(s) => handleScoreUpdate('hardcore_runner', s)}
           />
@@ -914,6 +984,7 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
       case 'cyber_tetris':
         return (
           <CyberTetrisGame
+            isPaused={isPaused}
             onBackToHub={requestExitToHub}
             onScoreUpdate={(s) => handleScoreUpdate('cyber_tetris', s)}
           />
@@ -921,6 +992,7 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
       case 'match3_saga':
         return (
           <Match3SagaGame
+            isPaused={isPaused}
             onBackToHub={requestExitToHub}
             onScoreUpdate={(s) => handleScoreUpdate('match3_saga', s)}
           />
@@ -928,6 +1000,7 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
       case 'tap_away':
         return (
           <TapAwayArrowsGame
+            isPaused={isPaused}
             onBackToHub={requestExitToHub}
             onScoreUpdate={(s) => handleScoreUpdate('tap_away', s)}
           />
@@ -935,6 +1008,7 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
       case 'icy_climber':
         return (
           <IcyTowerClimberGame
+            isPaused={isPaused}
             onBackToHub={requestExitToHub}
             onScoreUpdate={(s) => handleScoreUpdate('icy_climber', s)}
           />
@@ -942,6 +1016,7 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
       case 'knife_hit':
         return (
           <KnifeHitGame
+            isPaused={isPaused}
             onBackToHub={requestExitToHub}
             onScoreUpdate={(s) => handleScoreUpdate('knife_hit', s)}
           />
@@ -957,42 +1032,53 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
         {renderActiveGame()}
 
         {showExitConfirm && (
+          <Modal
+            transparent
+            visible={showExitConfirm}
+            animationType="none"
+            statusBarTranslucent
+            onRequestClose={() => {
+              setShowExitConfirm(false);
+              triggerLightHaptic();
+            }}
+          >
           <Animated.View
             entering={FadeIn.duration(180)}
-            style={localStyles.exitOverlay}
+            style={hubStyles.exitOverlay}
           >
             <Animated.View
               entering={ZoomIn.duration(200)}
-              style={localStyles.exitCard}
+              style={hubStyles.exitCard}
             >
-              <Text style={localStyles.exitWarnIcon}>⚠️</Text>
-              <Text style={localStyles.exitTitle}>EXIT TO MAIN MENU?</Text>
-              <Text style={localStyles.exitSubtitle}>
-                Are you sure you want to leave this run? Any unsaved progress on this floor will be lost.
+              <Text style={hubStyles.exitWarnIcon}>⏸️</Text>
+              <Text style={hubStyles.exitTitle}>GAME PAUSED</Text>
+              <Text style={hubStyles.exitSubtitle}>
+                The game is paused. Tap RESUME to continue or EXIT to return to the tower hub.
               </Text>
 
-              <View style={localStyles.exitBtnRow}>
+              <View style={hubStyles.exitBtnRow}>
                 <Pressable
                   onPress={() => {
                     setShowExitConfirm(false);
                     triggerLightHaptic();
                   }}
                   hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-                  style={localStyles.exitResumeBtn}
+                  style={hubStyles.exitResumeBtn}
                 >
-                  <Text style={localStyles.exitResumeText}>RESUME</Text>
+                  <Text style={hubStyles.exitResumeText}>RESUME</Text>
                 </Pressable>
 
                 <Pressable
                   onPress={performExitToHub}
                   hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-                  style={localStyles.exitConfirmBtn}
+                  style={hubStyles.exitConfirmBtn}
                 >
-                  <Text style={localStyles.exitConfirmText}>EXIT TO MENU</Text>
+                  <Text style={hubStyles.exitConfirmText}>EXIT TO MENU</Text>
                 </Pressable>
               </View>
             </Animated.View>
           </Animated.View>
+          </Modal>
         )}
       </View>
     );
@@ -1024,51 +1110,70 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
       {/* Top Sticky Sci-Fi HUD Header */}
       <View style={[hubStyles.hudHeader, { paddingTop: safeTop }]}>
           {/* Top Title & Quick Actions */}
-          <View style={hubStyles.hudTopRow}>
-              <View>
-                <View style={hubStyles.arcadeOnlinePill}>
-                  <View style={hubStyles.greenDot} />
-                  <Text style={hubStyles.arcadeOnlineText}>
-                    31-FLOOR CYBER MEGASTRUCTURE
-                  </Text>
-                </View>
-                <Text style={hubStyles.hubTitle}>GAME TOWER</Text>
-              </View>
-
-              <View style={hubStyles.topBtnGroup}>
-                {/* Direction Toggle */}
-                <Pressable
-                  onPress={() => {
-                    triggerLightHaptic();
-                    playTapSound();
-                    setAscendingSort((prev) => !prev);
-                  }}
-                  style={hubStyles.directionBtn}
-                >
-                  <Text style={hubStyles.directionBtnText}>
-                    {ascendingSort ? '⬆ BASE' : '⬇ APEX'}
-                  </Text>
-                </Pressable>
-
-                {/* Random Game Launch */}
-                <Pressable
-                  onPress={handleRandomLaunch}
-                  style={({ pressed }) => [
-                    hubStyles.randomBtn,
-                    pressed && { transform: [{ scale: 0.94 }], opacity: 0.88 },
-                  ]}
-                >
-                  <LinearGradient
-                    colors={[COLORS.magenta, COLORS.purple]}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={hubStyles.randomBtnGrad}
-                  >
-                    <Text style={hubStyles.randomBtnText}>⚡ RANDOM</Text>
-                  </LinearGradient>
-                </Pressable>
-              </View>
+          <View style={hubStyles.hudMetaRow}>
+            <View style={hubStyles.arcadeOnlinePill}>
+              <View style={hubStyles.greenDot} />
+              <Text style={hubStyles.arcadeOnlineText}>
+                30-FLOOR CYBER MEGASTRUCTURE
+              </Text>
             </View>
+
+            <View style={hubStyles.hudUtilGroup}>
+              {/* Background Music Mute Toggle */}
+              <Pressable
+                onPress={toggleMusicMute}
+                style={hubStyles.musicBtn}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Text style={hubStyles.musicBtnText}>
+                  {isMusicMuted ? '🔇' : '🎵'}
+                </Text>
+              </Pressable>
+
+              {/* Direction Toggle */}
+              <Pressable
+                onPress={() => {
+                  triggerLightHaptic();
+                  playTapSound();
+                  setAscendingSort((prev) => !prev);
+                }}
+                style={hubStyles.directionBtn}
+              >
+                <Text style={hubStyles.directionBtnText}>
+                  {ascendingSort ? '⬆ BASE' : '⬇ APEX'}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+
+          {/* Row 2: Title and Random Button (Fits 100% within screen bounds) */}
+          <View style={hubStyles.hudTitleRow}>
+            <Text
+              style={hubStyles.hubTitle}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+            >
+              NEO GAME TOWER
+            </Text>
+
+            {/* Random Game Launch */}
+            <Pressable
+              onPress={handleRandomLaunch}
+              style={({ pressed }) => [
+                hubStyles.randomBtn,
+                pressed && { transform: [{ scale: 0.94 }], opacity: 0.88 },
+              ]}
+            >
+              <LinearGradient
+                colors={[COLORS.magenta, COLORS.purple]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={hubStyles.randomBtnGrad}
+              >
+                <Text style={hubStyles.randomBtnText}>⚡ RANDOM</Text>
+              </LinearGradient>
+            </Pressable>
+          </View>
 
             {/* Arcade Telemetry HUD */}
             <View style={hubStyles.telemetryBar}>
@@ -1084,7 +1189,7 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
                 <Text
                   style={[hubStyles.telemetryVal, { color: COLORS.solarGold }]}
                 >
-                  {`${floorsPlayed} / 21`}
+                  {`${floorsPlayed} / ${TOWER_GAMES.length}`}
                 </Text>
               </View>
               <View style={hubStyles.telemetryDivider} />
@@ -1439,7 +1544,7 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
                   {/* Right Edge Hazard Striping for Citadel Base */}
                   {isBaseTier && (
                     <View style={hubStyles.hazardBaseStripes}>
-                      <Text style={hubStyles.hazardStripeText}>///</Text>
+                      <Text style={hubStyles.hazardStripeText}>{'///'}</Text>
                     </View>
                   )}
                 </Pressable>
@@ -1522,11 +1627,23 @@ const hubStyles = StyleSheet.create({
     zIndex: 20,
     elevation: 20,
   },
-  hudTopRow: {
+  hudMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  hudUtilGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  hudTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 8,
+    gap: 8,
   },
   arcadeOnlinePill: {
     flexDirection: 'row',
@@ -1537,7 +1654,6 @@ const hubStyles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 8,
     paddingVertical: 2.5,
-    marginBottom: 4,
     gap: 6,
     alignSelf: 'flex-start',
   },
@@ -1555,50 +1671,60 @@ const hubStyles = StyleSheet.create({
     letterSpacing: 1.2,
   },
   hubTitle: {
-    fontSize: 26,
+    flex: 1,
+    fontSize: 21,
     fontFamily: monoFont,
     fontWeight: '900',
     color: '#FFFFFF',
-    letterSpacing: 2.2,
+    letterSpacing: 1.6,
     textShadowColor: COLORS.cyanGlow,
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 14,
   },
-  topBtnGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  directionBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+  musicBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 6,
     backgroundColor: 'rgba(255, 255, 255, 0.08)',
     borderWidth: 1,
     borderColor: 'rgba(0, 245, 255, 0.35)',
-    borderRadius: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  musicBtnText: {
+    fontSize: 12,
+  },
+  directionBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 245, 255, 0.35)',
+    borderRadius: 10,
   },
   directionBtnText: {
-    fontSize: 10,
+    fontSize: 9.5,
     fontFamily: monoFont,
     fontWeight: '900',
     color: COLORS.cyan,
   },
   randomBtn: {
-    borderRadius: 12,
+    borderRadius: 10,
     overflow: 'hidden',
     borderWidth: 1.2,
     borderColor: COLORS.magenta,
+    flexShrink: 0,
   },
   randomBtnGrad: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
   },
   randomBtnText: {
-    fontSize: 10.5,
+    fontSize: 10,
     fontFamily: monoFont,
     fontWeight: '900',
     color: '#FFFFFF',
-    letterSpacing: 1.2,
+    letterSpacing: 1,
   },
   telemetryBar: {
     flexDirection: 'row',
@@ -1903,13 +2029,13 @@ const hubStyles = StyleSheet.create({
     letterSpacing: 1.4,
   },
   exitOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    flex: 1,
+    width: '100%',
+    height: '100%',
     backgroundColor: 'rgba(3, 3, 10, 0.88)',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 24,
-    zIndex: 99999,
-    elevation: 25000,
   },
   exitCard: {
     width: '100%',
@@ -1920,6 +2046,8 @@ const hubStyles = StyleSheet.create({
     borderColor: '#FF5E00',
     padding: 22,
     alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
     shadowColor: '#FF5E00',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.35,

@@ -43,7 +43,9 @@ const monoFont = Platform.select({
   default: 'monospace',
 });
 
-export default function SimonPulseGame({ onBackToHub, onScoreUpdate }) {
+export default function SimonPulseGame({ onBackToHub, onScoreUpdate, isPaused = false }) {
+  const isPausedRef = useRef(isPaused);
+  isPausedRef.current = isPaused;
   const { width } = useWindowDimensions();
   const boardSize = Math.min(348, width - 32);
   const padSize = Math.floor((boardSize - 34) / 3);
@@ -126,7 +128,7 @@ export default function SimonPulseGame({ onBackToHub, onScoreUpdate }) {
 
   const handlePadPress = useCallback(
     (padId) => {
-      if (phase !== 'INPUT') return;
+      if (phase !== 'INPUT' || isPausedRef.current) return;
 
       setActivePad(padId);
       setTimeout(() => setActivePad(null), 160);
@@ -250,7 +252,7 @@ export default function SimonPulseGame({ onBackToHub, onScoreUpdate }) {
             visible={phase === 'GAME_OVER'}
             type="GAME_OVER"
             title="SEQUENCE DESYNC!"
-            subtitle={`PULSE PATTERN BROKEN // REACHED LEVEL ${stepCount}`}
+            subtitle={`PULSE PATTERN BROKEN // REACHED LEVEL ${sequence.length}`}
             score={score}
             bestScore={bestScore}
             accentColor="#FF007F"

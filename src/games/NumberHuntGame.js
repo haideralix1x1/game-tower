@@ -68,7 +68,9 @@ const shuffleNumbers = (count) => {
   return arr;
 };
 
-export default function NumberHuntGame({ onBackToHub, onScoreUpdate }) {
+export default function NumberHuntGame({ onBackToHub, onScoreUpdate, isPaused = false }) {
+  const isPausedRef = useRef(isPaused);
+  isPausedRef.current = isPaused;
   const { width } = useWindowDimensions();
   const boardSize = Math.min(360, width - 28);
   const juiceRef = useRef(null);
@@ -126,6 +128,7 @@ export default function NumberHuntGame({ onBackToHub, onScoreUpdate }) {
 
   const handleTapNum = useCallback(
     (num) => {
+      if (isPausedRef.current) return;
       if (num !== target) {
         triggerSliceHaptic();
         if (juiceRef.current) juiceRef.current.shake(5, 3);

@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
@@ -25,7 +26,9 @@ const TARGET_RADIUS = 62;
 const BLADE_LENGTH = 38;
 const MIN_BLADE_ANGLE_DIFF = 14; // Degrees between blades to avoid collision
 
-export default function KnifeHitGame({ onBackToHub, onScoreUpdate }) {
+export default function KnifeHitGame({ onBackToHub, onScoreUpdate, isPaused = false }) {
+  const isPausedRef = useRef(isPaused);
+  isPausedRef.current = isPaused;
   const { width, height } = useWindowDimensions();
   const arenaWidth = width;
   const arenaHeight = height - 130;
@@ -34,6 +37,23 @@ export default function KnifeHitGame({ onBackToHub, onScoreUpdate }) {
   const launcherY = arenaHeight - 90;
 
   const [level, setLevel] = useState(1);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const savedLvl = await AsyncStorage.getItem(STORAGE_LEVEL_KEY);
+        const savedScore = await AsyncStorage.getItem(STORAGE_BEST_KEY);
+        if (savedLvl !== null) {
+          const pLvl = parseInt(savedLvl, 10);
+          if (!isNaN(pLvl) && pLvl >= 1) setLevel(pLvl);
+        }
+        if (savedScore !== null) {
+          const pScore = parseInt(savedScore, 10);
+          if (!isNaN(pScore)) setBestScore(pScore);
+        }
+      } catch {}
+    })();
+  }, []);
   const [score, setScore] = useState(0);
 
   // Core rotation angle
@@ -94,6 +114,10 @@ export default function KnifeHitGame({ onBackToHub, onScoreUpdate }) {
     let active = true;
 
     const tick = () => {
+      if (isPausedRef.current) {
+        animFrameRef.current = requestAnimationFrame(tick);
+        return;
+      }
       if (!active) return;
 
       // Update core rotation
@@ -171,7 +195,7 @@ export default function KnifeHitGame({ onBackToHub, onScoreUpdate }) {
 
   // Tap to fling blade
   const handleThrow = () => {
-    if (flyingBlade !== null || bladesRemaining <= 0 || modalVisible) return;
+    if (isPausedRef.current || flyingBlade !== null || bladesRemaining <= 0 || modalVisible) return;
     playSliceSound();
     triggerMediumHaptic();
 
@@ -212,7 +236,7 @@ export default function KnifeHitGame({ onBackToHub, onScoreUpdate }) {
   return (
     <View style={styles.container}>
       <MiniGameHeader
-        floorNum={31}
+        floorNum={30}
         gameTitle="CYBER BLADE TARGET"
         category="RHYTHM PRECISION"
         accentColor="#00F5FF"

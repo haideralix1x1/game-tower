@@ -71,7 +71,9 @@ const pickSpawnValue = (highestTile = 2) => {
   return pool[Math.floor(Math.random() * pool.length)];
 };
 
-export default function Game2048({ onBackToHub, onScoreUpdate }) {
+export default function Game2048({ onBackToHub, onScoreUpdate, isPaused = false }) {
+  const isPausedRef = useRef(isPaused);
+  isPausedRef.current = isPaused;
   const { width } = useWindowDimensions();
   const boardWidth = Math.min(360, width - 24);
   const cellWidth = Math.floor((boardWidth - 16) / COLS);
@@ -81,14 +83,48 @@ export default function Game2048({ onBackToHub, onScoreUpdate }) {
   const juiceRef = useRef(null);
 
   const [grid, setGrid] = useState(() => createEmptyGrid());
-  const [aimCol, setAimCol] = useState(2);
+  const [fallingCol, setFallingCol] = useState(2);
+  const [fallingRow, setFallingRow] = useState(0);
   const [currentVal, setCurrentVal] = useState(2);
   const [nextVal, setNextVal] = useState(4);
   const [score, setScore] = useState(0);
   const [bestScore, setBestScore] = useState(0);
   const [maxTile, setMaxTile] = useState(2);
   const [isGameOver, setIsGameOver] = useState(false);
-  const [isDropping, setIsDropping] = useState(false);
+
+  const gridRef = useRef(grid);
+  gridRef.current = grid;
+  const fallingColRef = useRef(fallingCol);
+  fallingColRef.current = fallingCol;
+  const fallingRowRef = useRef(fallingRow);
+  fallingRowRef.current = fallingRow;
+  const currentValRef = useRef(currentVal);
+  currentValRef.current = currentVal;
+  const nextValRef = useRef(nextVal);
+  nextValRef.current = nextVal;
+  const scoreRef = useRef(score);
+  scoreRef.current = score;
+  const maxTileRef = useRef(maxTile);
+  maxTileRef.current = maxTile;
+  const isLockingRef = useRef(false);
+  const boardRef = useRef(null);
+  const boardPosRef = useRef({ pageX: 0, width: boardWidth });
+  const panStartRef = useRef({ startX: 0, startY: 0, startCol: 2, hasDropped: false });
+
+  const updateBoardPosition = useCallback(() => {
+    if (boardRef.current) {
+      boardRef.current.measureInWindow((x, y, w, h) => {
+        if (w > 0) {
+          boardPosRef.current = { pageX: x, width: w };
+        }
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    const t = setTimeout(updateBoardPosition, 250);
+    return () => clearTimeout(t);
+  }, [updateBoardPosition]);
 
   useEffect(() => {
     (async () => {
@@ -116,18 +152,29 @@ export default function Game2048({ onBackToHub, onScoreUpdate }) {
   );
 
   const startNewGame = useCallback(() => {
-    setGrid(createEmptyGrid());
+    const emptyGrid = createEmptyGrid();
+    setGrid(emptyGrid);
+    gridRef.current = emptyGrid;
     setScore(0);
+    scoreRef.current = 0;
     setMaxTile(2);
-    setAimCol(2);
-    setCurrentVal(pickSpawnValue(2));
-    setNextVal(pickSpawnValue(2));
+    maxTileRef.current = 2;
+    setFallingCol(2);
+    fallingColRef.current = 2;
+    setFallingRow(0);
+    fallingRowRef.current = 0;
+    const initialVal = pickSpawnValue(2);
+    const initialNext = pickSpawnValue(2);
+    setCurrentVal(initialVal);
+    currentValRef.current = initialVal;
+    setNextVal(initialNext);
+    nextValRef.current = initialNext;
     setIsGameOver(false);
-    setIsDropping(false);
+    isLockingRef.current = false;
     if (juiceRef.current) juiceRef.current.flash(COLORS.cyan);
   }, []);
 
-  // Calculate lowest empty row in aimed column
+  // Calculate lowest empty row in column
   const getLowestEmptyRow = (g, col) => {
     for (let r = ROWS - 1; r >= 0; r -= 1) {
       if (g[r][col] === 0) return r;
@@ -220,43 +267,20 @@ export default function Game2048({ onBackToHub, onScoreUpdate }) {
     };
   };
 
-  // Perform drop of current box into selected column
-  const dropBox = useCallback(
-    (targetCol) => {
-      if (isGameOver || isDropping) return;
+  // Lock falling tile in target position and trigger merge cascade
+  const lockFallingTile = useCallback(
+    (targetRow, targetCol) => {
+      if (isLockingRef.current || isGameOver) return;
+      isLockingRef.current = true;
 
-      const col = typeof targetCol === 'number' ? targetCol : aimCol;
-      const targetRow = getLowestEmptyRow(grid, col);
-
-      // If column is completely full to the top -> check if game over
-      if (targetRow === -1) {
-        triggerSliceHaptic();
-        if (juiceRef.current) {
-          juiceRef.current.shake(6, 4);
-          juiceRef.current.popup('COLUMN FULL', 'CHOOSE ANOTHER', COLORS.danger);
-        }
-
-        // Check if all columns are full
-        const allFull = grid[0].every((v) => v !== 0);
-        if (allFull) {
-          setIsGameOver(true);
-          triggerGameOverHaptic();
-          playGameOverSound();
-          if (juiceRef.current) {
-            juiceRef.current.shake(14, 10);
-            juiceRef.current.flash(COLORS.danger);
-          }
-        }
-        return;
-      }
-
-      setIsDropping(true);
       triggerLightHaptic();
       playTapSound();
 
       // Place block at target position
-      const initialPlaced = grid.map((row) => [...row]);
-      initialPlaced[targetRow][col] = currentVal;
+      const val = currentValRef.current;
+      const initialPlaced = gridRef.current.map((row) => [...row]);
+      initialPlaced[targetRow][targetCol] = val;
+      gridRef.current = initialPlaced;
       setGrid(initialPlaced);
 
       setTimeout(() => {
@@ -264,14 +288,16 @@ export default function Game2048({ onBackToHub, onScoreUpdate }) {
         const { finalGrid, scoreGained, maxTile: highestMerged, combos } =
           processCascade(initialPlaced);
 
+        gridRef.current = finalGrid;
         setGrid(finalGrid);
-        setIsDropping(false);
 
-        const nextScore = score + scoreGained;
+        const nextScore = scoreRef.current + scoreGained;
+        scoreRef.current = nextScore;
         setScore(nextScore);
         saveBest(nextScore);
 
-        let newMax = Math.max(maxTile, highestMerged, currentVal);
+        let newMax = Math.max(maxTileRef.current, highestMerged, val);
+        maxTileRef.current = newMax;
         setMaxTile(newMax);
 
         // Feedback & Celebrations
@@ -304,65 +330,197 @@ export default function Game2048({ onBackToHub, onScoreUpdate }) {
           }
         }
 
-        // Advance Next Drop Block
-        setCurrentVal(nextVal);
-        setNextVal(pickSpawnValue(newMax));
+        // Advance to next tile
+        const nextValToUse = nextValRef.current;
+        const newUpcoming = pickSpawnValue(newMax);
+        currentValRef.current = nextValToUse;
+        setCurrentVal(nextValToUse);
+        nextValRef.current = newUpcoming;
+        setNextVal(newUpcoming);
 
-        // Check Game Over condition: all top row cells filled and no adjacent merges exist
-        const topRowFull = finalGrid[0].every((v) => v !== 0);
-        if (topRowFull) {
-          // Check if any move is possible in the full grid
-          let anyPossible = false;
-          for (let r = 0; r < ROWS; r += 1) {
-            for (let c = 0; c < COLS; c += 1) {
-              const val = finalGrid[r][c];
-              if (
-                (r + 1 < ROWS && finalGrid[r + 1][c] === val) ||
-                (c + 1 < COLS && finalGrid[r][c + 1] === val)
-              ) {
-                anyPossible = true;
-                break;
+        // Position new tile at top
+        let nextSpawnCol = fallingColRef.current;
+        if (finalGrid[0][nextSpawnCol] !== 0) {
+          const availableCols = [2, 1, 3, 0, 4].filter((c) => finalGrid[0][c] === 0);
+          if (availableCols.length === 0) {
+            // Check if any move is possible in the full grid
+            let anyPossible = false;
+            for (let r = 0; r < ROWS; r += 1) {
+              for (let c = 0; c < COLS; c += 1) {
+                const v = finalGrid[r][c];
+                if (
+                  (r + 1 < ROWS && finalGrid[r + 1][c] === v) ||
+                  (c + 1 < COLS && finalGrid[r][c + 1] === v)
+                ) {
+                  anyPossible = true;
+                  break;
+                }
               }
+              if (anyPossible) break;
             }
-            if (anyPossible) break;
-          }
 
-          if (!anyPossible) {
-            setIsGameOver(true);
-            triggerGameOverHaptic();
-            playGameOverSound();
-            if (juiceRef.current) {
-              juiceRef.current.shake(14, 10);
-              juiceRef.current.flash(COLORS.danger);
+            if (!anyPossible) {
+              setIsGameOver(true);
+              triggerGameOverHaptic();
+              playGameOverSound();
+              if (juiceRef.current) {
+                juiceRef.current.shake(14, 10);
+                juiceRef.current.flash(COLORS.danger);
+              }
+              isLockingRef.current = false;
+              return;
             }
+            nextSpawnCol = 2;
+          } else {
+            nextSpawnCol = availableCols[0];
           }
         }
+
+        fallingColRef.current = nextSpawnCol;
+        setFallingCol(nextSpawnCol);
+        fallingRowRef.current = 0;
+        setFallingRow(0);
+        isLockingRef.current = false;
       }, 90);
     },
-    [isGameOver, isDropping, aimCol, grid, currentVal, nextVal, score, maxTile, saveBest]
+    [isGameOver, saveBest]
   );
 
-  // PanResponder to drag aimCol across columns
+  // Instantly slam current tile down to the lowest empty spot in current column
+  const hardDrop = useCallback(() => {
+    if (isPausedRef.current || isGameOver || isLockingRef.current) return;
+    const curCol = fallingColRef.current;
+    const lowestRow = getLowestEmptyRow(gridRef.current, curCol);
+    if (lowestRow === -1) {
+      triggerSliceHaptic();
+      return;
+    }
+    lockFallingTile(lowestRow, curCol);
+  }, [isGameOver, lockFallingTile]);
+
+  // Horizontally shift the falling tile to target column if path is clear
+  const moveHorizontal = useCallback(
+    (targetCol) => {
+      if (isPausedRef.current || isGameOver || isLockingRef.current) return;
+      const col = Math.max(0, Math.min(COLS - 1, targetCol));
+      const curRow = fallingRowRef.current;
+
+      // Check if target column is open from top down to curRow
+      let canMove = true;
+      for (let r = 0; r <= curRow; r += 1) {
+        if (gridRef.current[r][col] !== 0) {
+          canMove = false;
+          break;
+        }
+      }
+
+      if (canMove && col !== fallingColRef.current) {
+        fallingColRef.current = col;
+        setFallingCol(col);
+        triggerLightHaptic();
+        playTapSound();
+      }
+    },
+    [isGameOver]
+  );
+
+  // Step falling tile down by one row (Tetris auto-drop)
+  const stepDown = useCallback(() => {
+    if (isPausedRef.current || isGameOver || isLockingRef.current) return;
+
+    const curCol = fallingColRef.current;
+    const curRow = fallingRowRef.current;
+
+    if (curRow + 1 < ROWS && gridRef.current[curRow + 1][curCol] === 0) {
+      const nextRow = curRow + 1;
+      fallingRowRef.current = nextRow;
+      setFallingRow(nextRow);
+    } else {
+      // Reached floor or another block -> lock in place
+      lockFallingTile(curRow, curCol);
+    }
+  }, [isGameOver, lockFallingTile]);
+
+  // Auto-drop interval (slowly descends like Tetris)
+  useEffect(() => {
+    if (isGameOver) return;
+
+    const dropInterval = Math.max(420, 750 - Math.floor(score / 600) * 30);
+    const timer = setInterval(() => {
+      stepDown();
+    }, dropInterval);
+
+    return () => clearInterval(timer);
+  }, [isGameOver, score, stepDown]);
+
+    // PanResponder to swipe across screen to shift columns or swipe down to hard drop
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderMove: (evt) => {
-        const touchX = evt.nativeEvent.locationX;
-        const col = Math.max(0, Math.min(COLS - 1, Math.floor(touchX / cellWidth)));
-        setAimCol(col);
+      onMoveShouldSetPanResponder: (_, gesture) =>
+        Math.hypot(gesture.dx, gesture.dy) > 5,
+      onPanResponderGrant: (evt) => {
+        if (isPausedRef.current || isGameOver || isLockingRef.current) return;
+        const { pageX, pageY } = evt.nativeEvent;
+        panStartRef.current = {
+          startX: pageX,
+          startY: pageY,
+          startCol: fallingColRef.current,
+          hasDropped: false,
+        };
+
+        const relX = pageX - (boardPosRef.current.pageX || 0);
+        const targetCol = Math.max(0, Math.min(COLS - 1, Math.floor((relX - 8) / cellWidth)));
+        if (targetCol !== fallingColRef.current) {
+          moveHorizontal(targetCol);
+        }
       },
-      onPanResponderRelease: (evt) => {
-        const touchX = evt.nativeEvent.locationX;
-        const col = Math.max(0, Math.min(COLS - 1, Math.floor(touchX / cellWidth)));
-        setAimCol(col);
-        dropBox(col);
+      onPanResponderMove: (evt, gestureState) => {
+        if (isPausedRef.current || isGameOver || isLockingRef.current) return;
+        const { dy, vy } = gestureState;
+
+        // Fast downward swipe triggers Hard Drop
+        if (!panStartRef.current.hasDropped && (dy > 40 || vy > 0.8)) {
+          panStartRef.current.hasDropped = true;
+          hardDrop();
+          return;
+        }
+
+        // Horizontal finger tracking across columns
+        const { pageX } = evt.nativeEvent;
+        const relX = pageX - (boardPosRef.current.pageX || 0);
+        const targetCol = Math.max(0, Math.min(COLS - 1, Math.floor((relX - 8) / cellWidth)));
+        if (targetCol !== fallingColRef.current) {
+          moveHorizontal(targetCol);
+        }
+      },
+      onPanResponderRelease: (evt, gestureState) => {
+        if (isPausedRef.current || isGameOver || isLockingRef.current) return;
+        const { dx, dy, vy } = gestureState;
+
+        if (!panStartRef.current.hasDropped) {
+          if (dy > 30 || vy > 0.6) {
+            hardDrop();
+          } else if (Math.abs(dx) > 24) {
+            const dir = dx > 0 ? 1 : -1;
+            moveHorizontal(fallingColRef.current + dir);
+          } else if (Math.abs(dx) < 12 && Math.abs(dy) < 12) {
+            const { pageX } = evt.nativeEvent;
+            const relX = pageX - (boardPosRef.current.pageX || 0);
+            const tappedCol = Math.max(0, Math.min(COLS - 1, Math.floor((relX - 8) / cellWidth)));
+            if (tappedCol === fallingColRef.current) {
+              hardDrop();
+            } else {
+              moveHorizontal(tappedCol);
+            }
+          }
+        }
       },
     })
   ).current;
 
-  // Ghost landing indicator row for aimed column
-  const landingRow = getLowestEmptyRow(grid, aimCol);
+  // Ghost landing indicator row for active falling column
+  const landingRow = getLowestEmptyRow(grid, fallingCol);
 
   return (
     <JuiceEngine ref={juiceRef}>
@@ -386,7 +544,7 @@ export default function Game2048({ onBackToHub, onScoreUpdate }) {
           {/* Top Drop Launcher HUD */}
           <View style={[localStyles.launcherHud, { width: boardWidth }]}>
             <View style={localStyles.launcherInfoBox}>
-              <Text style={localStyles.launcherLabel}>AIMING BOX</Text>
+              <Text style={localStyles.launcherLabel}>FALLING BOX</Text>
               <View
                 style={[
                   localStyles.previewTile,
@@ -441,7 +599,9 @@ export default function Game2048({ onBackToHub, onScoreUpdate }) {
 
           {/* Interactive Drop Board Container */}
           <View
+            ref={boardRef}
             {...panResponder.panHandlers}
+            onLayout={updateBoardPosition}
             style={[
               localStyles.board,
               { width: boardWidth, height: boardHeight },
@@ -453,7 +613,7 @@ export default function Game2048({ onBackToHub, onScoreUpdate }) {
               style={[
                 localStyles.aimBeam,
                 {
-                  left: 8 + aimCol * cellWidth,
+                  left: 8 + fallingCol * cellWidth,
                   width: cellWidth,
                   height: boardHeight - 16,
                 },
@@ -461,54 +621,74 @@ export default function Game2048({ onBackToHub, onScoreUpdate }) {
             />
 
             {/* Matrix Grid of Blocks */}
-            {grid.map((row, rIdx) => (
+            <View pointerEvents="none" style={localStyles.gridInner}>
+              {grid.map((row, rIdx) => (
               <View key={`row_${rIdx}`} style={localStyles.row}>
                 {row.map((val, cIdx) => {
-                  const theme = getTileTheme(val);
+                  const isFalling =
+                    !isGameOver && rIdx === fallingRow && cIdx === fallingCol;
                   const isGhostTarget =
-                    val === 0 && rIdx === landingRow && cIdx === aimCol;
+                    !isGameOver &&
+                    !isFalling &&
+                    val === 0 &&
+                    rIdx === landingRow &&
+                    cIdx === fallingCol;
+
+                  const displayVal = isFalling ? currentVal : val;
+                  const theme = getTileTheme(displayVal);
 
                   return (
-                    <Pressable
+                    <View
                       key={`cell_${rIdx}_${cIdx}`}
-                      onPress={() => dropBox(cIdx)}
                       style={[
                         localStyles.cell,
                         {
                           width: cellWidth,
                           height: cellHeight,
-                          borderColor: isGhostTarget
+                          borderColor: isFalling
+                            ? '#FFFFFF'
+                            : isGhostTarget
                             ? getTileTheme(currentVal).border
                             : theme.border,
                           borderStyle: isGhostTarget ? 'dashed' : 'solid',
-                          borderWidth: isGhostTarget ? 2 : 1.2,
-                          backgroundColor: isGhostTarget
+                          borderWidth: isFalling ? 2.5 : isGhostTarget ? 2 : 1.2,
+                          backgroundColor: isFalling
+                            ? theme.bg[0]
+                            : isGhostTarget
                             ? 'rgba(0, 245, 255, 0.12)'
                             : theme.bg[0],
+                          transform: isFalling ? [{ scale: 1.05 }] : undefined,
+                          zIndex: isFalling ? 5 : 1,
                         },
                       ]}
                     >
-                      {val > 0 ? (
-                        <Text
-                          style={[
-                            localStyles.tileNumber,
-                            {
-                              color: theme.text,
-                              fontSize:
-                                val >= 1024 ? 13 : val >= 128 ? 15 : 18,
-                            },
-                          ]}
-                        >
-                          {val}
-                        </Text>
+                      {displayVal > 0 ? (
+                        <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+                          <Text
+                            style={[
+                              localStyles.tileNumber,
+                              {
+                                color: theme.text,
+                                fontSize:
+                                  displayVal >= 1024 ? 13 : displayVal >= 128 ? 15 : 18,
+                              },
+                            ]}
+                          >
+                            {displayVal}
+                          </Text>
+                          {isFalling && (
+                            <Text style={localStyles.fallingIndicator}>▼</Text>
+                          )}
+                        </View>
                       ) : isGhostTarget ? (
                         <Text style={localStyles.ghostText}>▼</Text>
                       ) : null}
-                    </Pressable>
-                  );
-                })}
-              </View>
-            ))}
+                    </View>
+                    );
+                  })}
+                </View>
+              ))}
+            </View>
 
             {/* Game Over Modal */}
             <GameResultModal
@@ -529,13 +709,16 @@ export default function Game2048({ onBackToHub, onScoreUpdate }) {
           <View style={[localStyles.bottomControls, { width: boardWidth }]}>
             <View style={localStyles.columnSelectorRow}>
               {[0, 1, 2, 3, 4].map((c) => {
-                const isSelected = aimCol === c;
+                const isSelected = fallingCol === c;
                 return (
                   <Pressable
                     key={`col_btn_${c}`}
                     onPress={() => {
-                      setAimCol(c);
-                      dropBox(c);
+                      if (fallingCol === c) {
+                        hardDrop();
+                      } else {
+                        moveHorizontal(c);
+                      }
                     }}
                     style={[
                       localStyles.colBtn,
@@ -557,14 +740,14 @@ export default function Game2048({ onBackToHub, onScoreUpdate }) {
             </View>
 
             <Pressable
-              onPress={() => dropBox(aimCol)}
+              onPress={hardDrop}
               style={({ pressed }) => [
                 localStyles.dropActionBtn,
                 pressed && { transform: [{ scale: 0.96 }], opacity: 0.85 },
               ]}
             >
               <Text style={localStyles.dropActionText}>
-                DROP INTO COLUMN {aimCol + 1} ▾
+                HARD DROP IN COL {fallingCol + 1} ▾ (OR SWIPE DOWN)
               </Text>
             </Pressable>
           </View>
@@ -676,6 +859,12 @@ const localStyles = StyleSheet.create({
   ghostText: {
     fontSize: 12,
     color: 'rgba(0, 245, 255, 0.65)',
+  },
+  fallingIndicator: {
+    fontSize: 8,
+    color: '#FFFFFF',
+    marginTop: -2,
+    fontWeight: '900',
   },
   bottomControls: {
     marginTop: 6,

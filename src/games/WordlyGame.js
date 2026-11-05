@@ -12,6 +12,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS } from '../../styles';
 import MiniGameHeader from '../components/MiniGameHeader';
+import { VALID_5_LETTER_WORDS } from '../data/wordleDictionary';
 import JuiceEngine from '../components/JuiceEngine';
 import GameResultModal from '../components/GameResultModal';
 import {
@@ -173,6 +174,17 @@ export default function WordlyGame({ onBackToHub, onScoreUpdate }) {
           triggerSliceHaptic();
           if (juiceRef.current) juiceRef.current.shake(6, 2);
           setStatusMessage('NEED ALL 5 LETTERS TO SUBMIT!');
+          return;
+        }
+
+        if (!VALID_5_LETTER_WORDS.has(currentGuess)) {
+          triggerSliceHaptic();
+          playTapSound();
+          if (juiceRef.current) {
+            juiceRef.current.shake(8, 4);
+            juiceRef.current.popup('INVALID WORD', 'NOT IN WORD LIST', COLORS.danger);
+          }
+          setStatusMessage('NOT IN WORD LIST! (REAL WORDS ONLY)');
           return;
         }
 

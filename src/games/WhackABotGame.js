@@ -57,7 +57,9 @@ const monoFont = Platform.select({
   default: 'monospace',
 });
 
-export default function WhackABotGame({ onBackToHub, onScoreUpdate }) {
+export default function WhackABotGame({ onBackToHub, onScoreUpdate, isPaused = false }) {
+  const isPausedRef = useRef(isPaused);
+  isPausedRef.current = isPaused;
   const { width } = useWindowDimensions();
   const boardSize = Math.min(360, width - 24);
 
@@ -124,6 +126,7 @@ export default function WhackABotGame({ onBackToHub, onScoreUpdate }) {
     if (!running) return undefined;
 
     const spawnTimer = setInterval(() => {
+      if (isPausedRef.current) return;
       setActiveBots((prev) => {
         const now = Date.now();
         const next = {};
@@ -163,6 +166,7 @@ export default function WhackABotGame({ onBackToHub, onScoreUpdate }) {
     }, activeMode.spawnMs);
 
     const clockTimer = setInterval(() => {
+      if (isPausedRef.current) return;
       setTimeLeft((t) => {
         if (t <= 1) {
           setRunning(false);
@@ -183,7 +187,7 @@ export default function WhackABotGame({ onBackToHub, onScoreUpdate }) {
 
   const handleHoleTap = useCallback(
     (idx) => {
-      if (!running || !activeBots[idx]) return;
+      if (isPausedRef.current || !running || !activeBots[idx]) return;
 
       const bot = activeBots[idx];
 

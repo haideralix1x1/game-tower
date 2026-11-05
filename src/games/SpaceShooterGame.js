@@ -76,7 +76,9 @@ const POWERUP_TYPES = {
   },
 };
 
-export default function SpaceShooterGame({ onBackToHub, onScoreUpdate }) {
+export default function SpaceShooterGame({ onBackToHub, onScoreUpdate, isPaused = false }) {
+  const isPausedRef = useRef(isPaused);
+  isPausedRef.current = isPaused;
   const { width, height } = useWindowDimensions();
   const arenaWidth = Math.min(390, width - 24);
   const arenaHeight = Math.min(520, Math.max(380, height - 215));
@@ -122,8 +124,8 @@ export default function SpaceShooterGame({ onBackToHub, onScoreUpdate }) {
   // 1:1 Smooth Delta PanResponder - Completely fixes the left/right snapping bug
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponder: () => Boolean(engRef.current.running),
+      onMoveShouldSetPanResponder: () => Boolean(engRef.current.running),
       onPanResponderGrant: (evt, gestureState) => {
         dragStartRef.current.startShipX = engRef.current.shipX;
       },
@@ -202,6 +204,11 @@ export default function SpaceShooterGame({ onBackToHub, onScoreUpdate }) {
     let lastTs = 0;
 
     const tick = (ts) => {
+      if (isPausedRef.current) {
+        lastTs = ts;
+        rafId = requestAnimationFrame(tick);
+        return;
+      }
       if (!lastTs) lastTs = ts;
       const dt = Math.min(0.033, (ts - lastTs) / 1000);
       lastTs = ts;
@@ -272,8 +279,25 @@ export default function SpaceShooterGame({ onBackToHub, onScoreUpdate }) {
           eng.spawnTimer = 0;
           const roll = Math.random();
 
-          // Spawn Squadrons: Multi-enemy waves (double or trio)
-          if (roll < 0.35 && eng.score > 100) {
+          // Armored Turret Gun Platform (Heavy 5 HP Boss-Mini with Dual Autocannons)
+          if (roll < 0.22 && eng.score > 80) {
+            const ex = 18 + Math.random() * (arenaWidth - 68);
+            eng.enemies.push({
+              id: `en_turret_${ts}`,
+              x: ex,
+              y: -42,
+              w: 48,
+              h: 36,
+              speed: 48 + Math.min(30, eng.score * 0.04),
+              color: '#00F5FF',
+              type: 'TURRET',
+              maxHp: 5,
+              hp: 5,
+              shootTimer: 1.2,
+              hitFlash: 0,
+              alive: true,
+            });
+          } else if (roll < 0.45 && eng.score > 100) {
             // Double Squadron
             const x1 = 12 + Math.random() * (arenaWidth * 0.4 - 36);
             const x2 = arenaWidth * 0.5 + Math.random() * (arenaWidth * 0.4 - 36);
@@ -333,8 +357,10 @@ export default function SpaceShooterGame({ onBackToHub, onScoreUpdate }) {
               speed: 70 + Math.min(60, eng.score * 0.06),
               color: '#FF0055',
               type: 'CRUISER',
-              hp: 2,
+              maxHp: 3,
+              hp: 3,
               shootTimer: 0.9,
+              hitFlash: 0,
               alive: true,
             });
           } else {
@@ -376,9 +402,26 @@ export default function SpaceShooterGame({ onBackToHub, onScoreUpdate }) {
               ny + b.h >= en.y
             ) {
               en.hp -= 1;
+              en.hitFlash = 0.14;
+
+              // Armor deflection sparks when taking damage
+              for (let s = 0; s < 4; s += 1) {
+                eng.explosions.push({
+                  id: `def_${ts}_${s}_${Math.random()}`,
+                  x: nx + b.w / 2,
+                  y: ny,
+                  vx: (Math.random() - 0.5) * 140,
+                  vy: (Math.random() - 0.5) * 140,
+                  size: 2.5,
+                  color: en.hitFlash ? '#FFFFFF' : '#FFE600',
+                  opacity: 0.9,
+                  decay: 3.5,
+                });
+              }
+
               if (en.hp <= 0) {
                 en.alive = false;
-                const pointGain = en.type === 'CRUISER' ? 50 : en.type === 'DIVER' ? 35 : 25;
+                const pointGain = en.type === 'TURRET' ? 100 : en.type === 'CRUISER' ? 50 : en.type === 'DIVER' ? 35 : 25;
                 eng.score += pointGain;
                 setScore(eng.score);
                 persistBest(eng.score);
@@ -388,7 +431,7 @@ export default function SpaceShooterGame({ onBackToHub, onScoreUpdate }) {
                 // Spawn localized in-arena blast particles right over the enemy!
                 const exX = en.x + en.w / 2;
                 const exY = en.y + en.h / 2;
-                const sparkCount = en.type === 'CRUISER' ? 22 : 14;
+                const sparkCount = en.type === 'TURRET' ? 32 : en.type === 'CRUISER' ? 22 : 14;
                 for (let k = 0; k < sparkCount; k += 1) {
                   const angle = (Math.PI * 2 * k) / sparkCount + (Math.random() - 0.5) * 0.35;
                   const speed = 70 + Math.random() * 160;
@@ -410,7 +453,7 @@ export default function SpaceShooterGame({ onBackToHub, onScoreUpdate }) {
                 }
 
                 // Power-up Drop Chance: 28% from any enemy, 100% from Cruisers
-                const shouldDrop = en.type === 'CRUISER' || Math.random() < 0.28;
+                const shouldDrop = en.type === 'TURRET' || en.type === 'CRUISER' || Math.random() < 0.28;
                 if (shouldDrop) {
                   const pKeys = Object.keys(POWERUP_TYPES);
                   const pType = POWERUP_TYPES[pKeys[Math.floor(Math.random() * pKeys.length)]];
@@ -452,8 +495,38 @@ export default function SpaceShooterGame({ onBackToHub, onScoreUpdate }) {
           const en = eng.enemies[i];
           if (!en.alive) continue;
 
-          // Enemy Shooting AI (Cruisers shoot red laser spikes)
-          if (en.type === 'CRUISER') {
+          // Enemy Shooting AI (Cruisers & Armored Turrets)
+          if (en.hitFlash > 0) {
+            en.hitFlash = Math.max(0, en.hitFlash - dt);
+          }
+
+          if (en.type === 'TURRET') {
+            en.shootTimer -= dt;
+            if (en.shootTimer <= 0) {
+              en.shootTimer = 1.4;
+              playSliceSound();
+              // Left autocannon barrel
+              eng.enemyBullets.push({
+                id: `eb_t1_${ts}_${Math.random()}`,
+                x: en.x + 8,
+                y: en.y + en.h + 2,
+                vy: 220 + Math.min(70, eng.score * 0.07),
+                w: 6,
+                h: 14,
+                color: '#FFE600',
+              });
+              // Right autocannon barrel
+              eng.enemyBullets.push({
+                id: `eb_t2_${ts}_${Math.random()}`,
+                x: en.x + en.w - 14,
+                y: en.y + en.h + 2,
+                vy: 220 + Math.min(70, eng.score * 0.07),
+                w: 6,
+                h: 14,
+                color: '#FFE600',
+              });
+            }
+          } else if (en.type === 'CRUISER') {
             en.shootTimer -= dt;
             if (en.shootTimer <= 0) {
               en.shootTimer = 1.6;
@@ -823,9 +896,53 @@ export default function SpaceShooterGame({ onBackToHub, onScoreUpdate }) {
                   },
                 ]}
               >
-                {en.type === 'CRUISER' ? (
+                {/* Armored Mini Health Bar */}
+                {en.maxHp && en.maxHp > 1 && (
+                  <View style={localStyles.healthBarTrack}>
+                    <View
+                      style={[
+                        localStyles.healthBarFill,
+                        {
+                          width: `${Math.max(0, (en.hp / en.maxHp) * 100)}%`,
+                          backgroundColor:
+                            en.hp / en.maxHp > 0.5
+                              ? '#39FF14'
+                              : en.hp / en.maxHp > 0.25
+                              ? '#FFD166'
+                              : '#FF0055',
+                        },
+                      ]}
+                    />
+                  </View>
+                )}
+
+                {en.type === 'TURRET' ? (
+                  <Svg width={en.w} height={en.h} viewBox="0 0 48 36">
+                    {/* Armored Octagonal Fortress Base */}
+                    <Polygon
+                      points="12,0 36,0 48,10 48,26 36,36 12,36 0,26 0,10"
+                      fill={en.hitFlash > 0 ? '#FFFFFF' : '#1A0E2E'}
+                      stroke={en.hitFlash > 0 ? '#FFE600' : '#00F5FF'}
+                      strokeWidth="2.2"
+                    />
+                    {/* Left Autocannon Barrel */}
+                    <Rect x="6" y="22" width="6" height="12" fill="#FFE600" stroke="#FFFFFF" strokeWidth="1" />
+                    {/* Right Autocannon Barrel */}
+                    <Rect x="36" y="22" width="6" height="12" fill="#FFE600" stroke="#FFFFFF" strokeWidth="1" />
+                    {/* Rotating Turret Dome */}
+                    <Circle cx="24" cy="18" r="9" fill="#0C152B" stroke="#00F5FF" strokeWidth="1.8" />
+                    {/* Targeting Eye */}
+                    <Circle cx="24" cy="18" r="4.5" fill="#FF0055" />
+                    <Circle cx="24" cy="18" r="1.8" fill="#FFFFFF" />
+                  </Svg>
+                ) : en.type === 'CRUISER' ? (
                   <Svg width={en.w} height={en.h} viewBox="0 0 42 28">
-                    <Polygon points="21,0 42,12 36,28 6,28 0,12" fill="#240722" stroke="#FF0055" strokeWidth="2" />
+                    <Polygon
+                      points="21,0 42,12 36,28 6,28 0,12"
+                      fill={en.hitFlash > 0 ? '#FFFFFF' : '#240722'}
+                      stroke={en.hitFlash > 0 ? '#FFE600' : '#FF0055'}
+                      strokeWidth="2"
+                    />
                     <Circle cx="21" cy="14" r="4" fill="#FF0055" />
                     <Rect x="8" y="24" width="4" height="4" fill="#FF5E00" />
                     <Rect x="30" y="24" width="4" height="4" fill="#FF5E00" />
@@ -902,24 +1019,25 @@ export default function SpaceShooterGame({ onBackToHub, onScoreUpdate }) {
               </Svg>
             </View>
 
-            <GameResultModal
-              visible={status === 'GAME_OVER'}
-              type="GAME_OVER"
-              title="SECTOR BREACHED!"
-              subtitle="STARFIGHTER HULL INTEGRITY LOST"
-              score={score}
-              bestScore={bestScore}
-              accentColor="#00F5FF"
-              onRetry={resetGame}
-              retryLabel="SCRAMBLE FIGHTER"
-              onBackToHub={onBackToHub}
-            />
           </View>
 
           <Text style={localStyles.hint}>
             DRAG ANYWHERE TO PILOT JET // DODGE LASERS // COLLECT 3X & MEGA POWERUPS
           </Text>
         </View>
+
+        <GameResultModal
+          visible={status === 'GAME_OVER'}
+          type="GAME_OVER"
+          title="SECTOR BREACHED!"
+          subtitle="STARFIGHTER HULL INTEGRITY LOST"
+          score={score}
+          bestScore={bestScore}
+          accentColor="#00F5FF"
+          onRetry={resetGame}
+          retryLabel="SCRAMBLE FIGHTER"
+          onBackToHub={onBackToHub}
+        />
       </View>
     </JuiceEngine>
   );
@@ -1011,6 +1129,22 @@ const localStyles = StyleSheet.create({
     position: 'absolute',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  healthBarTrack: {
+    position: 'absolute',
+    top: -7,
+    left: 2,
+    right: 2,
+    height: 4,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    borderRadius: 2,
+    borderWidth: 0.8,
+    borderColor: 'rgba(255, 255, 255, 0.45)',
+    overflow: 'hidden',
+  },
+  healthBarFill: {
+    height: '100%',
+    borderRadius: 1.5,
   },
   powerupPill: {
     position: 'absolute',

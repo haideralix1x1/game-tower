@@ -44,7 +44,10 @@ const randomFood = (snake) => {
   }
 };
 
-export default function CyberSnakeGame({ onBackToHub, onScoreUpdate }) {
+export default function CyberSnakeGame({ onBackToHub, onScoreUpdate, isPaused = false }) {
+  const isPausedRef = useRef(isPaused);
+  isPausedRef.current = isPaused;
+
   const { width } = useWindowDimensions();
   const boardSize = Math.min(360, width - 28);
   const cellSize = Math.floor((boardSize - 16) / GRID_COUNT);
@@ -129,6 +132,7 @@ export default function CyberSnakeGame({ onBackToHub, onScoreUpdate }) {
   }, []);
 
   const changeDirection = useCallback((dr, dc) => {
+    if (isPausedRef.current) return;
     const cur = engineRef.current.dir;
     if (cur.dr + dr === 0 && cur.dc + dc === 0) return;
     engineRef.current.nextDir = { dr, dc };
@@ -136,8 +140,38 @@ export default function CyberSnakeGame({ onBackToHub, onScoreUpdate }) {
     playTapSound();
   }, []);
 
+  // Screen Left / Right Tap Cycle Steering:
+  // Left Tap = Counter-Clockwise Cycle (Relative Left: UP -> LEFT -> DOWN -> RIGHT)
+  // Right Tap = Clockwise / Reverse Cycle (Relative Right: UP -> RIGHT -> DOWN -> LEFT)
+  const turnCycle = useCallback((isReverseCycle) => {
+    if (isPausedRef.current || !engineRef.current.running) return;
+    const cur = engineRef.current.nextDir || engineRef.current.dir;
+    let next = null;
+
+    if (cur.dr === -1 && cur.dc === 0) {
+      // Currently moving UP
+      next = isReverseCycle ? { dr: 0, dc: 1 } : { dr: 0, dc: -1 }; // RIGHT or LEFT
+    } else if (cur.dr === 0 && cur.dc === 1) {
+      // Currently moving RIGHT
+      next = isReverseCycle ? { dr: 1, dc: 0 } : { dr: -1, dc: 0 }; // DOWN or UP
+    } else if (cur.dr === 1 && cur.dc === 0) {
+      // Currently moving DOWN
+      next = isReverseCycle ? { dr: 0, dc: -1 } : { dr: 0, dc: 1 }; // LEFT or RIGHT
+    } else if (cur.dr === 0 && cur.dc === -1) {
+      // Currently moving LEFT
+      next = isReverseCycle ? { dr: -1, dc: 0 } : { dr: 1, dc: 0 }; // UP or DOWN
+    }
+
+    if (next) {
+      engineRef.current.nextDir = next;
+      triggerLightHaptic();
+      playTapSound();
+    }
+  }, []);
+
   useEffect(() => {
     const timer = setInterval(() => {
+      if (isPausedRef.current) return;
       const eng = engineRef.current;
       if (!eng.running) return;
 
@@ -243,6 +277,20 @@ export default function CyberSnakeGame({ onBackToHub, onScoreUpdate }) {
                 },
               ]}
             >
+              {/* Left / Right Screen Tap Zones */}
+              <View style={StyleSheet.absoluteFillObject} pointerEvents="box-none">
+                <View style={localStyles.tapZonesRow} pointerEvents="box-none">
+                  <Pressable
+                    style={localStyles.tapZoneHalf}
+                    onPress={() => turnCycle(false)}
+                  />
+                  <Pressable
+                    style={localStyles.tapZoneHalf}
+                    onPress={() => turnCycle(true)}
+                  />
+                </View>
+              </View>
+
               {/* Food Orb */}
               <View
                 style={[
@@ -283,7 +331,7 @@ export default function CyberSnakeGame({ onBackToHub, onScoreUpdate }) {
                 visible={status === 'GAME_OVER'}
                 type="GAME_OVER"
                 title="SERPENT CRASHED!"
-                subtitle={`NEON TAIL LENGTH: ${snake.length} BLOCKS`}
+                subtitle={`NEON TAIL LENGTH: ${renderState.snake.length} BLOCKS`}
                 score={score}
                 bestScore={bestScore}
                 accentColor={COLORS.matrixMint}
@@ -294,33 +342,37 @@ export default function CyberSnakeGame({ onBackToHub, onScoreUpdate }) {
             </View>
           </GestureDetector>
 
-          <View style={localStyles.dpadContainer}>
+          {/* Dual Cyber Steering Pedals (Tap Screen or Buttons to Cycle) */}
+          <View style={[localStyles.steeringRow, { width: cellSize * GRID_COUNT + 16 }]}>
             <Pressable
-              onPress={() => changeDirection(-1, 0)}
-              style={localStyles.dpadBtn}
+              onPress={() => turnCycle(false)}
+              style={({ pressed }) => [
+                localStyles.steeringPedal,
+                localStyles.steeringPedalLeft,
+                pressed && { opacity: 0.7, transform: [{ scale: 0.96 }] },
+              ]}
             >
-              <Text style={localStyles.dpadArrow}>▲</Text>
+              <Text style={localStyles.steeringPedalIcon}>⟲</Text>
+              <View style={localStyles.steeringTextWrap}>
+                <Text style={localStyles.steeringPedalTitle}>CYCLE</Text>
+                <Text style={localStyles.steeringPedalSub}>TAP LEFT</Text>
+              </View>
             </Pressable>
-            <View style={localStyles.dpadMid}>
-              <Pressable
-                onPress={() => changeDirection(0, -1)}
-                style={localStyles.dpadBtn}
-              >
-                <Text style={localStyles.dpadArrow}>◀</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => changeDirection(1, 0)}
-                style={localStyles.dpadBtn}
-              >
-                <Text style={localStyles.dpadArrow}>▼</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => changeDirection(0, 1)}
-                style={localStyles.dpadBtn}
-              >
-                <Text style={localStyles.dpadArrow}>▶</Text>
-              </Pressable>
-            </View>
+
+            <Pressable
+              onPress={() => turnCycle(true)}
+              style={({ pressed }) => [
+                localStyles.steeringPedal,
+                localStyles.steeringPedalRight,
+                pressed && { opacity: 0.7, transform: [{ scale: 0.96 }] },
+              ]}
+            >
+              <View style={[localStyles.steeringTextWrap, { alignItems: 'flex-end' }]}>
+                <Text style={[localStyles.steeringPedalTitle, { color: COLORS.cyan }]}>REVERSE</Text>
+                <Text style={localStyles.steeringPedalSub}>TAP RIGHT</Text>
+              </View>
+              <Text style={[localStyles.steeringPedalIcon, { color: COLORS.cyan }]}>⟳</Text>
+            </Pressable>
           </View>
         </View>
       </View>
@@ -378,27 +430,69 @@ const localStyles = StyleSheet.create({
     fontWeight: '900',
     color: '#030308',
   },
-  dpadContainer: {
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 14,
-  },
-  dpadMid: {
+  tapZonesRow: {
+    flex: 1,
     flexDirection: 'row',
-    gap: 10,
   },
-  dpadBtn: {
-    width: 64,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: 'rgba(0, 245, 212, 0.14)',
-    borderWidth: 1,
-    borderColor: 'rgba(0, 245, 212, 0.45)',
+  tapZoneHalf: {
+    flex: 1,
+    height: '100%',
+  },
+  steeringRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 16,
+    gap: 12,
+  },
+  steeringPedal: {
+    flex: 1,
+    height: 52,
+    borderRadius: 14,
+    borderWidth: 1.6,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: 16,
+    gap: 10,
+    backgroundColor: 'rgba(8, 16, 24, 0.85)',
   },
-  dpadArrow: {
-    fontSize: 17,
+  steeringPedalLeft: {
+    borderColor: 'rgba(0, 245, 212, 0.45)',
+    shadowColor: COLORS.matrixMint,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  steeringPedalRight: {
+    borderColor: 'rgba(0, 245, 255, 0.45)',
+    shadowColor: COLORS.cyan,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  steeringTextWrap: {
+    flexDirection: 'column',
+  },
+  steeringPedalTitle: {
+    fontFamily: monoFont,
+    fontSize: 12,
+    fontWeight: '900',
+    color: COLORS.matrixMint,
+    letterSpacing: 1.2,
+  },
+  steeringPedalSub: {
+    fontFamily: monoFont,
+    fontSize: 8.5,
+    fontWeight: '800',
+    color: '#8A8F9E',
+    letterSpacing: 0.8,
+    marginTop: 1,
+  },
+  steeringPedalIcon: {
+    fontSize: 22,
     color: COLORS.matrixMint,
     fontWeight: '900',
   },

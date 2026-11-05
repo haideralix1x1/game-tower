@@ -93,7 +93,9 @@ const generateQuestion = (modeKey = 'MEDIUM', level = 1) => {
   return { text: `${a} ${op} ${b}`, answer, choices: shuffled };
 };
 
-export default function MathBlitzGame({ onBackToHub, onScoreUpdate }) {
+export default function MathBlitzGame({ onBackToHub, onScoreUpdate, isPaused = false }) {
+  const isPausedRef = useRef(isPaused);
+  isPausedRef.current = isPaused;
   const juiceRef = useRef(null);
 
   const [modeKey, setModeKey] = useState('MEDIUM');
@@ -150,6 +152,7 @@ export default function MathBlitzGame({ onBackToHub, onScoreUpdate }) {
   useEffect(() => {
     if (!running) return () => {};
     const timer = setInterval(() => {
+      if (isPausedRef.current) return;
       setTimeLeft((t) => {
         if (t <= 1) {
           clearInterval(timer);
@@ -169,7 +172,7 @@ export default function MathBlitzGame({ onBackToHub, onScoreUpdate }) {
 
   const handleAnswer = useCallback(
     (chosen) => {
-      if (!running) return;
+      if (isPausedRef.current || !running) return;
 
       if (chosen === question.answer) {
         const bonus = (streak + 1) * 5;

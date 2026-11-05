@@ -32,7 +32,9 @@ const monoFont = Platform.select({
   default: 'monospace',
 });
 
-export default function NeonFlappyGame({ onBackToHub, onScoreUpdate }) {
+export default function NeonFlappyGame({ onBackToHub, onScoreUpdate, isPaused = false }) {
+  const isPausedRef = useRef(isPaused);
+  isPausedRef.current = isPaused;
   const { width, height } = useWindowDimensions();
   const arenaWidth = Math.min(380, width - 24);
   const arenaHeight = Math.min(490, Math.max(350, height - 190));
@@ -103,6 +105,7 @@ export default function NeonFlappyGame({ onBackToHub, onScoreUpdate }) {
   }, [arenaHeight]);
 
   const handleThrust = useCallback(() => {
+    if (isPausedRef.current) return;
     const eng = engRef.current;
     if (eng.status === 'GAME_OVER') return;
     if (eng.status === 'READY') {
@@ -122,6 +125,11 @@ export default function NeonFlappyGame({ onBackToHub, onScoreUpdate }) {
     let lastTs = 0;
 
     const loop = (ts) => {
+      if (isPausedRef.current) {
+        lastTs = ts;
+        rafId = requestAnimationFrame(loop);
+        return;
+      }
       if (!lastTs) lastTs = ts;
       const dt = Math.min(0.032, (ts - lastTs) / 1000);
       lastTs = ts;

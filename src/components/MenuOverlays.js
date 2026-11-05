@@ -176,7 +176,7 @@ export default function MenuOverlays({
               ]}
             >
               <Text style={[styles.secondaryButtonText, { color: COLORS.cyan }]}>
-                ← BACK TO GAME TOWER
+                ← BACK TO NEO GAME TOWER
               </Text>
             </Pressable>
           </Animated.View>
@@ -286,7 +286,7 @@ export default function MenuOverlays({
               ]}
             >
               <Text style={[styles.secondaryButtonText, { color: COLORS.cyan }]}>
-                ← BACK TO GAME TOWER
+                ← BACK TO NEO GAME TOWER
               </Text>
             </Pressable>
           </Animated.View>

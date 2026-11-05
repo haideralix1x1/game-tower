@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
+import { View, Text, Pressable, StyleSheet, Platform, Modal } from 'react-native';
 import Animated, { FadeIn, ZoomIn } from 'react-native-reanimated';
 import { COLORS } from '../../styles';
 import { triggerLightHaptic } from '../utils/haptics';
@@ -59,6 +59,13 @@ export default function GameResultModal({
   };
 
   return (
+    <Modal
+      transparent
+      visible={visible}
+      animationType="none"
+      statusBarTranslucent
+      onRequestClose={handleBack || handleRetry}
+    >
     <Animated.View
       entering={FadeIn.duration(200)}
       style={localStyles.overlay}
@@ -106,7 +113,7 @@ export default function GameResultModal({
                 pressed && { opacity: 0.7, transform: [{ scale: 0.95 }] },
               ]}
             >
-              <Text style={localStyles.backText}>HUB</Text>
+              <Text style={localStyles.backBtnText}>HUB</Text>
             </Pressable>
           ) : null}
 
@@ -129,20 +136,21 @@ export default function GameResultModal({
             </Text>
           </Pressable>
         </View>
-      </Animated.View>
+            </Animated.View>
     </Animated.View>
+    </Modal>
   );
 }
 
 const localStyles = StyleSheet.create({
   overlay: {
-    ...StyleSheet.absoluteFillObject,
+    flex: 1,
+    width: '100%',
+    height: '100%',
     backgroundColor: 'rgba(3, 3, 10, 0.88)',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 20,
-    zIndex: 99999,
-    elevation: 25000,
   },
   card: {
     width: '100%',
@@ -152,6 +160,8 @@ const localStyles = StyleSheet.create({
     borderWidth: 1.6,
     padding: 22,
     alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.4,
     shadowRadius: 16,
@@ -172,7 +182,7 @@ const localStyles = StyleSheet.create({
     fontSize: 11,
     fontFamily: monoFont,
     fontWeight: '700',
-    color: '#E2E8F0',
+    color: '#00F5FF',
     textAlign: 'center',
     marginTop: 8,
     marginBottom: 14,
@@ -216,10 +226,10 @@ const localStyles = StyleSheet.create({
   },
   backBtn: {
     flex: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: 'rgba(0, 245, 255, 0.12)',
     borderRadius: 12,
     borderWidth: 1.2,
-    borderColor: 'rgba(255, 255, 255, 0.22)',
+    borderColor: 'rgba(0, 245, 255, 0.5)',
     paddingVertical: 12,
     alignItems: 'center',
     justifyContent: 'center',
@@ -228,7 +238,7 @@ const localStyles = StyleSheet.create({
     fontSize: 11,
     fontFamily: monoFont,
     fontWeight: '900',
-    color: '#E2E8F0',
+    color: '#00F5FF',
     letterSpacing: 0.8,
   },
   retryBtn: {

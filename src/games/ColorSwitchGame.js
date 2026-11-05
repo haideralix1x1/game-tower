@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
@@ -7,11 +8,10 @@ import {
   useWindowDimensions,
   Platform,
 } from 'react-native';
-import Svg, { Circle, Path, G, Rect } from 'react-native-svg';
+import Svg, { Circle, Path, G } from 'react-native-svg';
 import { COLORS } from '../../styles';
 import MiniGameHeader from '../components/MiniGameHeader';
 import GameResultModal from '../components/GameResultModal';
-import JuiceEngine from '../components/JuiceEngine';
 import { playTapSound, playSliceSound, playGameOverSound } from '../utils/sound';
 import { triggerLightHaptic, triggerMediumHaptic, triggerGameOverHaptic } from '../utils/haptics';
 
@@ -20,6 +20,8 @@ const monoFont = Platform.select({
   android: 'monospace',
   default: 'monospace',
 });
+
+const STORAGE_BEST_KEY = '@game_tower:best_switch_v1';
 
 const BALL_RADIUS = 12;
 const GRAVITY = 0.22;
@@ -70,49 +72,64 @@ function isColorMatch(localAngle, ballColor) {
   );
 }
 
-export default function ColorSwitchGame({ onBackToHub, onScoreUpdate }) {
+export default function ColorSwitchGame({ onBackToHub, onScoreUpdate, isPaused = false }) {
+  const isPausedRef = useRef(isPaused);
+  isPausedRef.current = isPaused;
+
   const { width, height } = useWindowDimensions();
   const arenaWidth = width;
   const arenaHeight = height - 130;
 
   const [score, setScore] = useState(0);
   const [bestScore, setBestScore] = useState(0);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const saved = await AsyncStorage.getItem(STORAGE_BEST_KEY);
+        if (saved !== null) {
+          const p = parseInt(saved, 10);
+          if (!isNaN(p)) setBestScore(p);
+        }
+      } catch {}
+    })();
+  }, []);
   const [ballColor, setBallColor] = useState(SWITCH_COLORS[0]);
   const [colorNotification, setColorNotification] = useState(null);
 
-  // Ball physics
-  const [ballY, setBallY] = useState(arenaHeight * 0.72);
-  const [ballVy, setBallVy] = useState(0);
-  const [cameraY, setCameraY] = useState(0);
-
-  // Obstacles & pickups
-  const [obstacles, setObstacles] = useState([]);
-  const [pickups, setPickups] = useState([]);
+  // Consolidated 60 FPS Visual Frame State (Only 1 state update per frame to eliminate lag)
+  const [frame, setFrame] = useState({
+    ballY: arenaHeight * 0.72,
+    cameraY: 0,
+    tick: 0,
+  });
 
   // Game state
   const [isPlaying, setIsPlaying] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
 
-  const ballYRef = useRef(ballY);
-  ballYRef.current = ballY;
-  const ballVyRef = useRef(ballVy);
-  ballVyRef.current = ballVy;
-  const cameraYRef = useRef(cameraY);
-  cameraYRef.current = cameraY;
+  // Synchronous physics refs
+  const ballYRef = useRef(arenaHeight * 0.72);
+  const ballVyRef = useRef(0);
+  const cameraYRef = useRef(0);
   const ballColorRef = useRef(ballColor);
   ballColorRef.current = ballColor;
+  const scoreRef = useRef(0);
 
   const pickupsRef = useRef([]);
   const obstaclesRef = useRef([]);
-
   const animFrameRef = useRef(null);
+  const tickRef = useRef(0);
 
   // Generate obstacle course with clearly colored swapper orbs
   const initGame = useCallback(() => {
+    scoreRef.current = 0;
     setScore(0);
-    setBallY(arenaHeight * 0.72);
-    setBallVy(0);
-    setCameraY(0);
+    ballYRef.current = arenaHeight * 0.72;
+    ballVyRef.current = 0;
+    cameraYRef.current = 0;
+    tickRef.current = 0;
+
     const initialColor = SWITCH_COLORS[Math.floor(Math.random() * SWITCH_COLORS.length)];
     setBallColor(initialColor);
     ballColorRef.current = initialColor;
@@ -120,12 +137,18 @@ export default function ColorSwitchGame({ onBackToHub, onScoreUpdate }) {
     setIsPlaying(false);
     setModalVisible(false);
 
+    setFrame({
+      ballY: arenaHeight * 0.72,
+      cameraY: 0,
+      tick: 0,
+    });
+
     const initialObs = [];
     const initialPickups = [];
 
-    // Create 18 vertical obstacles spaced 280px apart
+    // Create 20 vertical obstacles spaced 290px apart
     let lastColor = initialColor;
-    for (let i = 0; i < 18; i++) {
+    for (let i = 0; i < 20; i++) {
       const obsY = arenaHeight * 0.42 - i * 290;
       initialObs.push({
         id: `obs_${i}`,
@@ -145,7 +168,7 @@ export default function ColorSwitchGame({ onBackToHub, onScoreUpdate }) {
       });
 
       // Color swapper orb between obstacles with explicit, distinct target color!
-      if (i < 17) {
+      if (i < 19) {
         const otherColors = SWITCH_COLORS.filter((c) => c !== lastColor);
         const targetColor = otherColors[Math.floor(Math.random() * otherColors.length)];
         lastColor = targetColor;
@@ -163,8 +186,6 @@ export default function ColorSwitchGame({ onBackToHub, onScoreUpdate }) {
 
     obstaclesRef.current = initialObs;
     pickupsRef.current = initialPickups;
-    setObstacles(initialObs);
-    setPickups(initialPickups);
   }, [arenaHeight]);
 
   useEffect(() => {
@@ -173,13 +194,22 @@ export default function ColorSwitchGame({ onBackToHub, onScoreUpdate }) {
 
   // Tap to jump
   const handleJump = () => {
+    if (isPausedRef.current) return;
     if (!isPlaying) {
       setIsPlaying(true);
     }
-    setBallVy(JUMP_FORCE);
+    ballVyRef.current = JUMP_FORCE;
     playTapSound();
     triggerLightHaptic();
   };
+
+  const handleGameOver = useCallback(() => {
+    setIsPlaying(false);
+    playGameOverSound();
+    triggerGameOverHaptic();
+    setBestScore((prev) => Math.max(prev, scoreRef.current));
+    setModalVisible(true);
+  }, []);
 
   // Main 60 FPS Physics & Collision Loop
   useEffect(() => {
@@ -189,6 +219,11 @@ export default function ColorSwitchGame({ onBackToHub, onScoreUpdate }) {
 
     const tick = () => {
       if (!active) return;
+      if (isPausedRef.current) {
+        animFrameRef.current = requestAnimationFrame(tick);
+        return;
+      }
+      tickRef.current += 1;
 
       // Update ball position
       const nextVy = ballVyRef.current + GRAVITY;
@@ -196,14 +231,11 @@ export default function ColorSwitchGame({ onBackToHub, onScoreUpdate }) {
 
       ballVyRef.current = nextVy;
       ballYRef.current = nextY;
-      setBallY(nextY);
-      setBallVy(nextVy);
 
       // Camera follow
       const targetCamY = Math.max(0, arenaHeight * 0.5 - nextY);
       if (targetCamY > cameraYRef.current) {
         cameraYRef.current = targetCamY;
-        setCameraY(targetCamY);
       }
 
       // Fall off bottom check
@@ -232,49 +264,41 @@ export default function ColorSwitchGame({ onBackToHub, onScoreUpdate }) {
           }
         }
       }
-      setObstacles([...currentObs]);
 
       // Check Pickups synchronously using pickupsRef
       const currentPickups = pickupsRef.current;
-      let pickupStateChanged = false;
-
       for (let i = 0; i < currentPickups.length; i++) {
         const p = currentPickups[i];
         if (p.taken) continue;
 
         if (Math.abs(nextY - p.y) < BALL_RADIUS + 14) {
           p.taken = true;
-          pickupStateChanged = true;
 
           if (p.type === 'STAR') {
             playSliceSound();
             triggerMediumHaptic();
-            setScore((s) => {
-              const ns = s + 1;
-              onScoreUpdate?.(ns);
-              return ns;
-            });
+            scoreRef.current += 1;
+            setScore(scoreRef.current);
+            onScoreUpdate?.(scoreRef.current);
+            AsyncStorage.setItem(STORAGE_BEST_KEY, String(scoreRef.current)).catch(() => {});
           } else if (p.type === 'SWAPPER') {
-            // Instantly change ball color to the exact color of the picked orb!
             playSliceSound();
             triggerMediumHaptic();
-
-            const pickedColor = p.color;
-            ballColorRef.current = pickedColor;
-            setBallColor(pickedColor);
-
-            // Visual feedback popup
-            setColorNotification(`✦ ${p.colorName} ✦`);
-            setTimeout(() => {
-              setColorNotification(null);
-            }, 900);
+            const newC = p.color || SWITCH_COLORS[0];
+            setBallColor(newC);
+            ballColorRef.current = newC;
+            setColorNotification(`COLOR SWAPPED: ${p.colorName}!`);
+            setTimeout(() => setColorNotification(null), 1500);
           }
         }
       }
 
-      if (pickupStateChanged) {
-        setPickups([...currentPickups]);
-      }
+      // Single consolidated frame update (Zero lag)
+      setFrame({
+        ballY: nextY,
+        cameraY: cameraYRef.current,
+        tick: tickRef.current,
+      });
 
       animFrameRef.current = requestAnimationFrame(tick);
     };
@@ -285,47 +309,70 @@ export default function ColorSwitchGame({ onBackToHub, onScoreUpdate }) {
       active = false;
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     };
-  }, [isPlaying, arenaHeight]);
-
-  const handleGameOver = () => {
-    setIsPlaying(false);
-    if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
-    playGameOverSound();
-    triggerGameOverHaptic();
-    setBestScore((b) => Math.max(b, score));
-    setModalVisible(true);
-  };
+  }, [arenaHeight, handleGameOver, isPlaying, onScoreUpdate]);
 
   const handleRetry = () => {
     initGame();
   };
 
+  const { ballY, cameraY } = frame;
   const centerX = arenaWidth * 0.5;
+
+  // Viewport Culling: Only render obstacles and pickups that are actually inside or near the viewport!
+  const visibleObstacles = obstaclesRef.current.filter((obs) => {
+    const screenY = obs.y + cameraY;
+    return screenY > -140 && screenY < arenaHeight + 140;
+  });
+
+  const visiblePickups = pickupsRef.current.filter((p) => {
+    if (p.taken) return false;
+    const screenY = p.y + cameraY;
+    return screenY > -50 && screenY < arenaHeight + 50;
+  });
 
   return (
     <View style={styles.container}>
       <MiniGameHeader
-        floorNum={25}
-        gameTitle="COLOR SWITCH NEO"
-        category="ARCADE REFLEX"
-        accentColor="#FF007F"
+        floorNum={12}
+        gameTitle="CYBER COLOR SWITCH"
+        category="COLOR ARCADE"
+        accentColor="#00F5FF"
         score={score}
         onBack={onBackToHub}
         onBackToHub={onBackToHub}
       />
 
+      {/* Top HUD */}
+      <View style={styles.topHud}>
+        <View style={styles.hudBadge}>
+          <Text style={styles.hudLabel}>CURRENT COLOR</Text>
+          <View style={styles.colorPill}>
+            <View style={[styles.colorDot, { backgroundColor: ballColor }]} />
+            <Text style={[styles.colorText, { color: ballColor }]}>
+              {COLOR_NAMES[ballColor] || 'COLOR'}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.hudBadge}>
+          <Text style={styles.hudLabel}>STARS</Text>
+          <Text style={styles.scoreVal}>⭐ {score}</Text>
+        </View>
+      </View>
+
+      {/* Game Canvas */}
       <Pressable style={styles.arena} onPress={handleJump}>
         <Svg width={arenaWidth} height={arenaHeight} style={StyleSheet.absoluteFill}>
-          {/* Obstacles & Pickups translated by cameraY */}
-          <G y={cameraY}>
-            {obstacles.map((obs) => {
+          <G transform={`translate(0, ${cameraY})`}>
+            {/* Viewport-Culled Rotating Multi-Color Ring Obstacles */}
+            {visibleObstacles.map((obs) => {
               const r = obs.radius;
               return (
                 <G
                   key={obs.id}
                   transform={`rotate(${obs.rotation}, ${centerX}, ${obs.y})`}
                 >
-                  {/* Quadrant 0: Top (270°) to Right (360°/0°) -> Cyan */}
+                  {/* Quadrant 0: Top (270°) to Right (360°) -> Cyan */}
                   <Path
                     d={`M ${centerX} ${obs.y - r} A ${r} ${r} 0 0 1 ${centerX + r} ${obs.y}`}
                     stroke={SWITCH_COLORS[0]}
@@ -361,9 +408,8 @@ export default function ColorSwitchGame({ onBackToHub, onScoreUpdate }) {
               );
             })}
 
-            {/* Stars & Color Swapper Orbs */}
-            {pickups.map((p) => {
-              if (p.taken) return null;
+            {/* Viewport-Culled Stars & Color Swapper Orbs */}
+            {visiblePickups.map((p) => {
               if (p.type === 'STAR') {
                 return (
                   <G key={p.id}>
@@ -373,7 +419,7 @@ export default function ColorSwitchGame({ onBackToHub, onScoreUpdate }) {
                 );
               }
 
-              // Color Swapper Orb visibly showing the exact color you will pick up!
+              // Color Swapper Orb visibly showing exact target color
               const orbColor = p.color || SWITCH_COLORS[0];
               return (
                 <G key={p.id}>
@@ -456,51 +502,95 @@ export default function ColorSwitchGame({ onBackToHub, onScoreUpdate }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#040114',
+    backgroundColor: '#03030A',
+  },
+  topHud: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    backgroundColor: 'rgba(8, 8, 22, 0.9)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0, 245, 255, 0.15)',
+  },
+  hudBadge: {
+    alignItems: 'center',
+  },
+  hudLabel: {
+    fontFamily: monoFont,
+    fontSize: 9,
+    color: '#8A8F9E',
+    fontWeight: '800',
+    marginBottom: 2,
+    letterSpacing: 0.8,
+  },
+  colorPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  colorDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  colorText: {
+    fontFamily: monoFont,
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 0.8,
+  },
+  scoreVal: {
+    fontFamily: monoFont,
+    fontSize: 14,
+    color: '#FFD166',
+    fontWeight: '900',
   },
   arena: {
     flex: 1,
-    position: 'relative',
+    backgroundColor: '#050212',
   },
   colorNotifBadge: {
     position: 'absolute',
     top: 24,
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-    zIndex: 100,
+    alignSelf: 'center',
+    backgroundColor: 'rgba(5, 2, 18, 0.95)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+    shadowColor: '#00F5FF',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.6,
+    shadowRadius: 8,
+    elevation: 8,
   },
   colorNotifText: {
     fontFamily: monoFont,
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '900',
-    letterSpacing: 2,
-    backgroundColor: 'rgba(5, 2, 20, 0.92)',
-    paddingHorizontal: 20,
-    paddingVertical: 7,
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: '#FFFFFF',
-    textShadowColor: 'rgba(255, 255, 255, 0.6)',
-    textShadowRadius: 6,
+    letterSpacing: 1.2,
   },
   tapHintContainer: {
     position: 'absolute',
-    left: 0,
-    right: 0,
-    alignItems: 'center',
+    alignSelf: 'center',
+    backgroundColor: 'rgba(0, 245, 255, 0.14)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 245, 255, 0.4)',
   },
   tapHintText: {
     fontFamily: monoFont,
-    fontSize: 12,
-    fontWeight: '900',
+    fontSize: 10.5,
     color: '#00F5FF',
-    letterSpacing: 1,
-    backgroundColor: 'rgba(4, 1, 20, 0.85)',
-    paddingHorizontal: 16,
-    paddingVertical: 7,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 245, 255, 0.4)',
+    fontWeight: '800',
+    letterSpacing: 0.8,
   },
 });

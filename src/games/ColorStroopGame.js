@@ -48,7 +48,9 @@ const nextPrompt = () => {
   return { word: wordItem.name, inkHex: ink.hex, isMatch: false };
 };
 
-export default function ColorStroopGame({ onBackToHub, onScoreUpdate }) {
+export default function ColorStroopGame({ onBackToHub, onScoreUpdate, isPaused = false }) {
+  const isPausedRef = useRef(isPaused);
+  isPausedRef.current = isPaused;
   const juiceRef = useRef(null);
   const [prompt, setPrompt] = useState(() => nextPrompt());
   const [score, setScore] = useState(0);
@@ -91,6 +93,7 @@ export default function ColorStroopGame({ onBackToHub, onScoreUpdate }) {
   useEffect(() => {
     if (!running) return undefined;
     const id = setInterval(() => {
+      if (isPausedRef.current) return;
       setTimeLeft((t) => {
         if (t <= 1) {
           setRunning(false);
@@ -104,7 +107,7 @@ export default function ColorStroopGame({ onBackToHub, onScoreUpdate }) {
 
   const handleChoice = useCallback(
     (userSaysMatch) => {
-      if (!running) return;
+      if (!running || isPausedRef.current) return;
       if (userSaysMatch === prompt.isMatch) {
         const nextStreak = streak + 1;
         const gained = 20 + nextStreak * 5;

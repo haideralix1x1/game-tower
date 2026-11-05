@@ -1,9 +1,9 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  Pressable,
   PanResponder,
   useWindowDimensions,
   Platform,
@@ -24,7 +24,11 @@ import MiniGameHeader from '../components/MiniGameHeader';
 import GameResultModal from '../components/GameResultModal';
 import JuiceEngine from '../components/JuiceEngine';
 import { playTapSound, playSliceSound, playGameOverSound } from '../utils/sound';
-import { triggerLightHaptic, triggerMediumHaptic, triggerGameOverHaptic } from '../utils/haptics';
+import {
+  triggerLightHaptic,
+  triggerMediumHaptic,
+  triggerGameOverHaptic,
+} from '../utils/haptics';
 
 const monoFont = Platform.select({
   ios: 'Menlo',
@@ -35,7 +39,7 @@ const monoFont = Platform.select({
 const DOG_RADIUS = 26;
 const BEE_RADIUS = 9;
 const SURVIVE_TIME = 6;
-const PLATFORM_WIDTH = 96;
+const PLATFORM_WIDTH = 100;
 const PLATFORM_HEIGHT = 16;
 
 // Helper: distance from point (px, py) to line segment (x1, y1)-(x2, y2)
@@ -47,15 +51,34 @@ function distPointToSegment(px, py, x1, y1, x2, y2) {
   return Math.hypot(px - (x1 + t * (x2 - x1)), py - (y1 + t * (y2 - y1)));
 }
 
-export default function SaveTheDogGame({ onBackToHub, onScoreUpdate }) {
-  const { width, height } = useWindowDimensions();
-  const arenaWidth = width;
-  const arenaHeight = height - 130;
+// 2D line segment intersection check for direct line-of-sight
+function linesIntersect(x1, y1, x2, y2, x3, y3, x4, y4) {
+  const denom = (y4 - y3) * (x2 - x1) - (x4 - x3) * (y2 - y1);
+  if (Math.abs(denom) < 0.000001) return false;
+  const ua = ((x4 - x3) * (y1 - y3) - (y4 - y3) * (x1 - x3)) / denom;
+  const ub = ((x2 - x1) * (y1 - y3) - (y2 - y1) * (x1 - x3)) / denom;
+  return ua >= 0 && ua <= 1 && ub >= 0 && ub <= 1;
+}
 
-  // Short Platform elevated in the middle of the screen
-  const platformY = Math.round(arenaHeight * 0.48);
+export default function SaveTheDogGame({ onBackToHub, onScoreUpdate, isPaused = false }) {
+  const isPausedRef = useRef(isPaused);
+  isPausedRef.current = isPaused;
+
+  const { width, height } = useWindowDimensions();
+
+  // Dynamic layout measurement to guarantee true full-screen arena
+  const [arenaLayout, setArenaLayout] = useState({
+    width: width,
+    height: Math.max(400, height - 70),
+  });
+
+  const arenaWidth = arenaLayout.width;
+  const arenaHeight = arenaLayout.height;
+
+  // Short platform elevated in the mid-screen
+  const platformY = Math.round(arenaHeight * 0.50);
   // Toxic Acid Water pool down below
-  const acidY = arenaHeight - 65;
+  const acidY = arenaHeight - 48;
 
   const [platform, setPlatform] = useState({
     x: (arenaWidth - PLATFORM_WIDTH) / 2,
@@ -67,8 +90,25 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate }) {
   platformRef.current = platform;
 
   const [level, setLevel] = useState(1);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const savedLvl = await AsyncStorage.getItem(STORAGE_LEVEL_KEY);
+        const savedScore = await AsyncStorage.getItem(STORAGE_BEST_KEY);
+        if (savedLvl !== null) {
+          const pLvl = parseInt(savedLvl, 10);
+          if (!isNaN(pLvl) && pLvl >= 1) setLevel(pLvl);
+        }
+        if (savedScore !== null) {
+          const pScore = parseInt(savedScore, 10);
+          if (!isNaN(pScore)) setScore(pScore);
+        }
+      } catch {}
+    })();
+  }, []);
   const [score, setScore] = useState(0);
-  const [gameState, setGameState] = useState('DRAWING'); // 'DRAWING', 'SWARMING', 'OVER'
+  const [gameState, setGameState] = useState('DRAWING'); // 'DRAWING' | 'SWARMING' | 'OVER'
   const [timeLeft, setTimeLeft] = useState(SURVIVE_TIME);
   const [inkLeft, setInkLeft] = useState(100);
 
@@ -79,7 +119,7 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate }) {
   // Dog position & velocity
   const [dog, setDog] = useState({
     x: arenaWidth * 0.5,
-    y: groundY - DOG_RADIUS,
+    y: platformY - DOG_RADIUS,
     vy: 0,
   });
 
@@ -90,6 +130,7 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate }) {
   // Result modal state
   const [modalVisible, setModalVisible] = useState(false);
   const [modalType, setModalType] = useState('win');
+  const [modalMessage, setModalMessage] = useState('');
 
   const dogRef = useRef(dog);
   dogRef.current = dog;
@@ -127,7 +168,7 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate }) {
         arenaWidth * 0.5 + ((lvl % 2 === 0 ? 1 : -1) * 36) - PLATFORM_WIDTH / 2
       );
       const newPlat = {
-        x: Math.max(24, Math.min(arenaWidth - PLATFORM_WIDTH - 24, platX)),
+        x: Math.max(20, Math.min(arenaWidth - PLATFORM_WIDTH - 20, platX)),
         y: platformY,
         width: PLATFORM_WIDTH,
         height: PLATFORM_HEIGHT,
@@ -146,13 +187,13 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate }) {
       const newHives = [];
       for (let i = 0; i < hiveCount; i++) {
         const hx = (arenaWidth * (i + 1)) / (hiveCount + 1);
-        const hy = 80 + (i % 2) * 26;
+        const hy = 50 + (i % 2) * 24;
         newHives.push({ id: `hive_${i}`, x: hx, y: hy });
       }
       setHives(newHives);
 
       // Bees
-      const beeCount = 8 + Math.min(10, lvl * 2);
+      const beeCount = 8 + Math.min(12, lvl * 2);
       const initialBees = [];
       for (let i = 0; i < beeCount; i++) {
         const h = newHives[i % newHives.length];
@@ -162,6 +203,8 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate }) {
           y: h.y + (Math.random() - 0.5) * 16,
           vx: (Math.random() - 0.5) * 2,
           vy: 1 + Math.random() * 2,
+          flankBias: i % 3 === 0 ? 1 : i % 3 === 1 ? -1 : 0, // 1 = right flanker, -1 = left flanker, 0 = direct
+          buzzOffset: Math.random() * Math.PI * 2,
         });
       }
       setBees(initialBees);
@@ -178,89 +221,33 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate }) {
     };
   }, [level, initLevel]);
 
-  // PanResponder to draw lines (bulletproof coordinates without snapping)
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => gameStateRef.current === 'DRAWING',
-      onMoveShouldSetPanResponder: () => gameStateRef.current === 'DRAWING',
-      onPanResponderGrant: (evt) => {
-        if (gameStateRef.current !== 'DRAWING') return;
-        const { locationX, locationY } = evt.nativeEvent;
-        // Don't draw over action buttons at bottom
-        if (locationY > arenaHeight - 75) return;
-        setCurrentLine([{ x: locationX, y: locationY }]);
-      },
-      onPanResponderMove: (evt) => {
-        if (gameStateRef.current !== 'DRAWING') return;
-        const { locationX, locationY } = evt.nativeEvent;
-        if (locationY > arenaHeight - 75) return;
-
-        setCurrentLine((prev) => {
-          if (prev.length === 0) return [{ x: locationX, y: locationY }];
-          const last = prev[prev.length - 1];
-
-          // Protection against coordinate snapping glitch
-          const deltaY = Math.abs(locationY - last.y);
-          const deltaX = Math.abs(locationX - last.x);
-          if (deltaY > 90 || deltaX > 90) return prev;
-
-          const dist = Math.hypot(deltaX, deltaY);
-          if (dist > 5) {
-            setInkLeft((ink) => Math.max(0, ink - dist * 0.08));
-            return [...prev, { x: locationX, y: locationY }];
-          }
-          return prev;
-        });
-      },
-      onPanResponderRelease: () => {
-        if (gameStateRef.current !== 'DRAWING') return;
-        setCurrentLine((line) => {
-          if (line.length > 2) {
-            setSavedLines((all) => {
-              const updated = [...all, line];
-              savedLinesRef.current = updated;
-              return updated;
-            });
-            playTapSound();
-          }
-          return [];
-        });
-      },
-    })
-  ).current;
-
-  // Clear drawn line
-  const handleClear = () => {
-    if (gameState !== 'DRAWING') return;
-    setSavedLines([]);
-    savedLinesRef.current = [];
-    linesVelocityRef.current = { vx: 0, vy: 0 };
-    setCurrentLine([]);
-    setInkLeft(100);
-    playTapSound();
-  };
-
-  // Launch the Bee Swarm!
-  const launchSwarm = () => {
-    if (gameState !== 'DRAWING') return;
-    if (currentLine.length > 2) {
-      setSavedLines((all) => {
-        const updated = [...all, currentLine];
-        savedLinesRef.current = updated;
-        return updated;
-      });
-      setCurrentLine([]);
+  // Launch Swarm IMMEDIATELY with fast line gravity activation
+  const activateSwarmImmediately = useCallback((finalLine) => {
+    let allLines = savedLinesRef.current;
+    if (finalLine && finalLine.length > 2) {
+      allLines = [...allLines, finalLine];
+      setSavedLines(allLines);
+      savedLinesRef.current = allLines;
     }
+    setCurrentLine([]);
 
+    if (allLines.length === 0) return;
+
+    // Transition to SWARMING state
     setGameState('SWARMING');
     gameStateRef.current = 'SWARMING';
     setTimeLeft(SURVIVE_TIME);
     timeLeftRef.current = SURVIVE_TIME;
-    linesVelocityRef.current = { vx: 0, vy: 0 };
+
+    // Fast initial downward velocity for the line
+    linesVelocityRef.current = { vx: 0, vy: 1.2 };
+
     playSliceSound();
     triggerMediumHaptic();
 
+    // 6-second survival countdown timer
     timerRef.current = setInterval(() => {
+      if (isPausedRef.current) return;
       setTimeLeft((prev) => {
         if (prev <= 1) {
           clearInterval(timerRef.current);
@@ -270,9 +257,52 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate }) {
         return prev - 1;
       });
     }, 1000);
-  };
+  }, []);
 
-  // 60 FPS Swarm, Dog & Line Gravity Physics Loop
+  // PanResponder to draw lines (Lifting finger IMMEDIATELY launches swarm and drops lines!)
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => !isPausedRef.current && gameStateRef.current === 'DRAWING',
+      onMoveShouldSetPanResponder: () => !isPausedRef.current && gameStateRef.current === 'DRAWING',
+      onPanResponderGrant: (evt) => {
+        if (gameStateRef.current !== 'DRAWING') return;
+        const { locationX, locationY } = evt.nativeEvent;
+        setCurrentLine([{ x: locationX, y: locationY }]);
+      },
+      onPanResponderMove: (evt) => {
+        if (gameStateRef.current !== 'DRAWING') return;
+        const { locationX, locationY } = evt.nativeEvent;
+
+        setCurrentLine((prev) => {
+          if (prev.length === 0) return [{ x: locationX, y: locationY }];
+          const last = prev[prev.length - 1];
+
+          const deltaY = Math.abs(locationY - last.y);
+          const deltaX = Math.abs(locationX - last.x);
+          if (deltaY > 80 || deltaX > 80) return prev;
+
+          const dist = Math.hypot(deltaX, deltaY);
+          if (dist > 5) {
+            setInkLeft((ink) => Math.max(0, ink - dist * 0.08));
+            return [...prev, { x: locationX, y: locationY }];
+          }
+          return prev;
+        });
+      },
+      onPanResponderRelease: (evt) => {
+        if (gameStateRef.current !== 'DRAWING') return;
+        // As soon as user releases finger: immediately activate swarm and gravity!
+        setCurrentLine((line) => {
+          if (line.length > 2) {
+            activateSwarmImmediately(line);
+          }
+          return [];
+        });
+      },
+    })
+  ).current;
+
+  // 60 FPS Swarm, Dog & Fast Line Gravity Physics Loop
   useEffect(() => {
     if (gameState !== 'SWARMING') return;
 
@@ -280,58 +310,188 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate }) {
 
     const tick = () => {
       if (!active || gameStateRef.current !== 'SWARMING') return;
+      if (isPausedRef.current) {
+        animFrameRef.current = requestAnimationFrame(tick);
+        return;
+      }
 
       const currentDog = { ...dogRef.current };
       let lines = savedLinesRef.current;
       const lVel = linesVelocityRef.current;
 
-      // 1. Calculate Bees Movement & Physical Push Force onto Drawn Lines
+      // 1. Calculate Intelligent Bees Pathfinding & Flanking Movement
       let pushForceX = 0;
       let pushForceY = 0;
       let stung = false;
 
-      const currentBees = beesRef.current;
-      const updatedBees = currentBees.map((b) => {
-        const dx = currentDog.x - b.x;
-        const dy = currentDog.y - b.y;
-        const distToDog = Math.hypot(dx, dy);
+      // Collect all open endpoints / tips of all drawn lines to navigate around obstacles
+      const lineTips = [];
+      for (const line of lines) {
+        if (line.length >= 2) {
+          const startPt = line[0];
+          const endPt = line[line.length - 1];
 
-        // Sting check
-        if (distToDog < DOG_RADIUS + BEE_RADIUS - 4) {
-          stung = true;
+          // Waypoint extended outward from start tip
+          const sDx = line[0].x - line[1].x;
+          const sDy = line[0].y - line[1].y;
+          const sLen = Math.hypot(sDx, sDy) || 1;
+          lineTips.push({
+            x: startPt.x + (sDx / sLen) * 20,
+            y: startPt.y + (sDy / sLen) * 20,
+            rawX: startPt.x,
+            rawY: startPt.y,
+          });
+
+          // Waypoint extended outward from end tip
+          const eDx = line[line.length - 1].x - line[line.length - 2].x;
+          const eDy = line[line.length - 1].y - line[line.length - 2].y;
+          const eLen = Math.hypot(eDx, eDy) || 1;
+          lineTips.push({
+            x: endPt.x + (eDx / eLen) * 20,
+            y: endPt.y + (eDy / eLen) * 20,
+            rawX: endPt.x,
+            rawY: endPt.y,
+          });
+        }
+      }
+
+      const currentBees = beesRef.current;
+      const updatedBees = currentBees.map((b, beeIdx) => {
+        const dxToDog = currentDog.x - b.x;
+        const dyToDog = currentDog.y - b.y;
+        const distToDog = Math.hypot(dxToDog, dyToDog);
+
+        // Check if direct line-of-sight to the dog is blocked by any drawn line
+        let isDirectBlocked = false;
+        for (const line of lines) {
+          for (let i = 0; i < line.length - 1; i++) {
+            if (
+              linesIntersect(
+                b.x,
+                b.y,
+                currentDog.x,
+                currentDog.y,
+                line[i].x,
+                line[i].y,
+                line[i + 1].x,
+                line[i + 1].y
+              )
+            ) {
+              isDirectBlocked = true;
+              break;
+            }
+          }
+          if (isDirectBlocked) break;
         }
 
-        // Desired velocity towards dog
-        const speed = 3.4 + level * 0.15;
-        const dirX = dx / (distToDog || 1);
-        const dirY = dy / (distToDog || 1);
-        let vx = dirX * speed + (Math.random() - 0.5) * 1.6;
-        let vy = dirY * speed + (Math.random() - 0.5) * 1.6;
+        // Sting check: A bee CANNOT sting through a barrier into the safe area!
+        if (distToDog < DOG_RADIUS + BEE_RADIUS - 2) {
+          if (!isDirectBlocked) {
+            stung = true;
+          }
+        }
+
+        // Intelligent Pathfinding: If blocked, navigate around obstacle tips to find a way to the dog!
+        let targetX = currentDog.x;
+        let targetY = currentDog.y;
+
+        if (isDirectBlocked && lineTips.length > 0) {
+          let bestTip = lineTips[0];
+          let bestMetric = Infinity;
+
+          for (const tip of lineTips) {
+            const distToTip = Math.hypot(tip.x - b.x, tip.y - b.y);
+            const distTipToDog = Math.hypot(currentDog.x - tip.x, currentDog.y - tip.y);
+
+            // Flank personality: left flankers favor open ends on the left, right flankers favor open ends on the right
+            let biasBonus = 0;
+            if (b.flankBias === -1 && tip.x < currentDog.x) biasBonus = -40;
+            if (b.flankBias === 1 && tip.x > currentDog.x) biasBonus = -40;
+
+            const metric = distToTip + distTipToDog * 0.8 + biasBonus;
+            if (metric < bestMetric) {
+              bestMetric = metric;
+              bestTip = tip;
+            }
+          }
+
+          targetX = bestTip.x;
+          targetY = bestTip.y;
+        }
+
+        const toTargetX = targetX - b.x;
+        const toTargetY = targetY - b.y;
+        const distToTarget = Math.hypot(toTargetX, toTargetY) || 1;
+
+        const baseSpeed = 3.9 + level * 0.16;
+        const dirX = toTargetX / distToTarget;
+        const dirY = toTargetY / distToTarget;
+
+        // Organic swarm buzzing jitter
+        const buzz = Math.sin(Date.now() * 0.012 + (b.buzzOffset || 0)) * 1.6;
+        let vx = dirX * baseSpeed + buzz * (-dirY);
+        let vy = dirY * baseSpeed + buzz * dirX;
+
+        // Swarm separation: bees repel each other slightly so they spread out and probe all sides
+        for (let j = 0; j < currentBees.length; j++) {
+          if (j === beeIdx) continue;
+          const other = currentBees[j];
+          const sepDx = b.x - other.x;
+          const sepDy = b.y - other.y;
+          const sepDist = Math.hypot(sepDx, sepDy);
+          if (sepDist > 0 && sepDist < 16) {
+            vx += (sepDx / sepDist) * 1.2;
+            vy += (sepDy / sepDist) * 1.2;
+          }
+        }
 
         let nextBeeX = b.x + vx;
         let nextBeeY = b.y + vy;
 
-        // Check barrier collisions & transfer physical push force
+        // Continuous collision detection and firm safe-area boundary containment
         for (const line of lines) {
           for (let i = 0; i < line.length - 1; i++) {
             const p1 = line[i];
             const p2 = line[i + 1];
+            const crossed = linesIntersect(b.x, b.y, nextBeeX, nextBeeY, p1.x, p1.y, p2.x, p2.y);
             const d = distPointToSegment(nextBeeX, nextBeeY, p1.x, p1.y, p2.x, p2.y);
-            if (d < BEE_RADIUS + 5) {
-              // The bee's impact transfers physical momentum/force onto the drawn line!
-              pushForceX += dirX * 0.75;
-              pushForceY += dirY * 0.75;
 
-              // Bounce the bee off the line
+            if (crossed || d < BEE_RADIUS + 5) {
+              // Apply physical push force to the line from the outside
+              pushForceX += (dxToDog / (distToDog || 1)) * 0.95;
+              pushForceY += (dyToDog / (distToDog || 1)) * 0.95;
+
+              // Calculate closest point on the line to bee's prior position
               const segDx = p2.x - p1.x;
               const segDy = p2.y - p1.y;
+              const segLenSq = segDx * segDx + segDy * segDy || 1;
+              const t = Math.max(0, Math.min(1, ((b.x - p1.x) * segDx + (b.y - p1.y) * segDy) / segLenSq));
+              const closeX = p1.x + t * segDx;
+              const closeY = p1.y + t * segDy;
+
+              // Normal vector pointing strictly AWAY from the line towards the bee's origin
+              const fromWallX = b.x - closeX;
+              const fromWallY = b.y - closeY;
+              const fromDist = Math.hypot(fromWallX, fromWallY) || 1;
+              const awayNormX = fromWallX / fromDist;
+              const awayNormY = fromWallY / fromDist;
+
+              // Firmly clamp bee outside the barrier so it NEVER penetrates the safe area
+              nextBeeX = closeX + awayNormX * (BEE_RADIUS + 5);
+              nextBeeY = closeY + awayNormY * (BEE_RADIUS + 5);
+
+              // Slide along line tangent towards the open ends
               const len = Math.hypot(segDx, segDy) || 1;
-              const normX = -segDy / len;
-              const normY = segDx / len;
-              nextBeeX = b.x + normX * speed * 2;
-              nextBeeY = b.y + normY * speed * 2;
-              vx = normX * speed;
-              vy = normY * speed;
+              const dotTangent = (vx * segDx + vy * segDy) / len;
+              const slideDir = dotTangent >= 0 ? 1 : -1;
+              nextBeeX += (segDx / len) * baseSpeed * 0.85 * slideDir;
+              nextBeeY += (segDy / len) * baseSpeed * 0.85 * slideDir;
+
+              // Double check: if still in safe area / crossed line, revert to b.x, b.y
+              if (linesIntersect(b.x, b.y, nextBeeX, nextBeeY, p1.x, p1.y, p2.x, p2.y)) {
+                nextBeeX = b.x;
+                nextBeeY = b.y;
+              }
               break;
             }
           }
@@ -350,11 +510,11 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate }) {
       setBees(updatedBees);
 
       if (stung && gameStateRef.current === 'SWARMING') {
-        handleLose();
+        handleLose('STUNG BY THE SWARM!');
         return;
       }
 
-      // 2. Line Physics (Gravity, Mass, Bee Push Momentum, Ground Friction)
+      // 2. FAST DRAWN LINE GRAVITY & SOLID PHYSICS
       let totalPts = 0;
       let lowestY = -Infinity;
       let minX = Infinity;
@@ -370,19 +530,18 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate }) {
       }
 
       if (totalPts > 0) {
-        // Line mass: longer lines are heavier, small lines get shoved easily
-        const mass = Math.max(1, totalPts / 12);
+        const mass = Math.max(1, totalPts / 10);
         lVel.vx += pushForceX / mass;
         lVel.vy += pushForceY / mass;
 
-        // Gravity pulls line down
-        lVel.vy += 0.35;
+        // FAST GRAVITY: Line drops quickly and snappy!
+        lVel.vy += 0.95;
 
         // Air drag
-        lVel.vx *= 0.90;
-        lVel.vy *= 0.95;
+        lVel.vx *= 0.91;
+        lVel.vy *= 0.94;
 
-        // Platform & Acid pool surface collision check
+        // Platform & Acid surface collision check
         const plat = platformRef.current;
         let restsOnPlatform = false;
         for (const line of lines) {
@@ -390,7 +549,7 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate }) {
             if (
               pt.x >= plat.x - 4 &&
               pt.x <= plat.x + plat.width + 4 &&
-              Math.abs(pt.y - (plat.y - 2)) < 6
+              Math.abs(pt.y - (plat.y - 2)) < 8
             ) {
               restsOnPlatform = true;
               break;
@@ -401,15 +560,15 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate }) {
 
         const onGround = lowestY >= acidY - 4 || restsOnPlatform;
         if (onGround) {
-          lVel.vx *= 0.78; // Surface friction resists sliding
-          if (lVel.vy > 0) lVel.vy = 0; // Resting
+          lVel.vx *= 0.72; // Surface friction
+          if (lVel.vy > 0) lVel.vy = 0; // Settles firmly
         }
 
         // Left / Right screen boundary
         if (minX + lVel.vx < 4 && lVel.vx < 0) lVel.vx = 0;
         if (maxX + lVel.vx > arenaWidth - 4 && lVel.vx > 0) lVel.vx = 0;
 
-        // Dog collision with line: line cannot crush into dog; transfers partial horizontal nudge
+        // Dog collision with line: line cannot crush into dog; gently rests around it
         for (const line of lines) {
           for (let i = 0; i < line.length - 1; i++) {
             const p1 = line[i];
@@ -434,7 +593,6 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate }) {
           lines = lines.map((line) =>
             line.map((pt) => {
               let ny = pt.y + dy;
-              // If resting on top of short platform
               if (
                 pt.x >= plat.x - 4 &&
                 pt.x <= plat.x + plat.width + 4 &&
@@ -454,32 +612,32 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate }) {
         }
       }
 
-      // 3. Dog Gravity, Short Platform Landing & Acid Water Hazard
-      currentDog.vy += 0.32;
+      // 3. Fast Dog Gravity, Platform Landing & Acid Water Hazard
+      currentDog.vy += 0.75;
       let nextDogY = currentDog.y + currentDog.vy;
 
       const plat = platformRef.current;
       const isOverPlatform =
-        currentDog.x >= plat.x - 6 &&
-        currentDog.x <= plat.x + plat.width + 6;
+        currentDog.x >= plat.x - 8 &&
+        currentDog.x <= plat.x + plat.width + 8;
 
-      // Platform Landing: Dog lands on short platform top
+      // Platform Landing
       if (
         isOverPlatform &&
-        currentDog.y <= plat.y - DOG_RADIUS + 4 &&
+        currentDog.y <= plat.y - DOG_RADIUS + 6 &&
         nextDogY >= plat.y - DOG_RADIUS
       ) {
         nextDogY = plat.y - DOG_RADIUS;
         currentDog.vy = 0;
       }
 
-      // Check Dog collision with drawn lines (drawn line can catch/support dog if falling!)
+      // Drawn line can catch the dog
       for (const line of lines) {
         for (let i = 0; i < line.length - 1; i++) {
           const p1 = line[i];
           const p2 = line[i + 1];
           const d = distPointToSegment(currentDog.x, nextDogY, p1.x, p1.y, p2.x, p2.y);
-          if (d < DOG_RADIUS + 3) {
+          if (d < DOG_RADIUS + 4) {
             nextDogY = currentDog.y;
             currentDog.vy = 0;
             break;
@@ -487,14 +645,14 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate }) {
         }
       }
 
-      // ACID WATER HAZARD: If dog falls off short platform into the bubbling acid lake!
+      // Acid Water Hazard
       if (nextDogY >= acidY - DOG_RADIUS) {
         nextDogY = acidY - DOG_RADIUS;
         currentDog.y = nextDogY;
         dogRef.current = currentDog;
         setDog(currentDog);
         if (gameStateRef.current === 'SWARMING') {
-          handleLose();
+          handleLose('DOG FELL INTO TOXIC ACID!');
         }
         return;
       }
@@ -522,17 +680,19 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate }) {
     if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     if (timerRef.current) clearInterval(timerRef.current);
 
-    JuiceEngine.celebrate(dog.x, dog.y);
+    JuiceEngine.celebrate(dogRef.current.x, dogRef.current.y);
     const winPoints = 300 + Math.floor(inkLeft * 2);
     const nextScore = score + winPoints;
     setScore(nextScore);
     onScoreUpdate?.(nextScore);
+      AsyncStorage.setItem(STORAGE_BEST_KEY, String(nextScore)).catch(() => {});
 
+    setModalMessage('SURVIVED THE SWARM! EXCELLENT DEFENSE!');
     setModalType('win');
     setModalVisible(true);
   };
 
-  const handleLose = () => {
+  const handleLose = (msg = 'LEVEL FAILED!') => {
     if (gameStateRef.current !== 'SWARMING') return;
     setGameState('OVER');
     gameStateRef.current = 'OVER';
@@ -541,12 +701,17 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate }) {
 
     playGameOverSound();
     triggerGameOverHaptic();
+    setModalMessage(msg);
     setModalType('gameover');
     setModalVisible(true);
   };
 
   const handleNextLevel = () => {
-    setLevel((lvl) => lvl + 1);
+    setLevel((lvl) => {
+      const nl = lvl + 1;
+      AsyncStorage.setItem(STORAGE_LEVEL_KEY, String(nl)).catch(() => {});
+      return nl;
+    });
   };
 
   const handleRetry = () => {
@@ -565,21 +730,23 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate }) {
   return (
     <View style={styles.container}>
       <MiniGameHeader
-        floorNum={22}
+        floorNum={21}
         gameTitle="SAVE CYBER DOGE"
         category="PHYSICS PUZZLE"
         accentColor="#FFD166"
         score={score}
         onBack={onBackToHub}
         onBackToHub={onBackToHub}
+        onReset={handleRetry}
       />
 
-      {/* Top HUD: Level, Ink & Status */}
+      {/* Top HUD: Level, Ink & Survival Countdown */}
       <View style={styles.topBar}>
         <View style={styles.badgeBox}>
           <Text style={styles.badgeLabel}>LEVEL</Text>
           <Text style={[styles.badgeVal, { color: '#FFD166' }]}>{level}</Text>
         </View>
+
         <View style={styles.badgeBox}>
           <Text style={styles.badgeLabel}>ENERGY INK</Text>
           <View style={styles.inkTrack}>
@@ -594,21 +761,38 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate }) {
             />
           </View>
         </View>
+
         <View style={styles.badgeBox}>
-          <Text style={styles.badgeLabel}>SURVIVE</Text>
+          <Text style={styles.badgeLabel}>STATUS</Text>
           <Text
             style={[
               styles.badgeVal,
-              { color: timeLeft <= 2 ? '#FF0055' : COLORS.matrixMint },
+              {
+                color:
+                  gameState === 'SWARMING'
+                    ? timeLeft <= 2
+                      ? '#FF0055'
+                      : COLORS.matrixMint
+                    : '#00F5FF',
+              },
             ]}
           >
-            {gameState === 'SWARMING' ? `${timeLeft}s` : 'READY'}
+            {gameState === 'SWARMING' ? `DEFEND: ${timeLeft}s` : 'DRAW SHIELD'}
           </Text>
         </View>
       </View>
 
-      {/* Touch Arena: pointerEvents="none" on SVG so touches NEVER jump or snap! */}
-      <View style={styles.arena} {...panResponder.panHandlers}>
+      {/* True Full-Screen Touch Arena with NO button overlays */}
+      <View
+        style={styles.arena}
+        onLayout={(e) => {
+          const { width: w, height: h } = e.nativeEvent.layout;
+          if (w > 0 && h > 0 && (w !== arenaLayout.width || h !== arenaLayout.height)) {
+            setArenaLayout({ width: w, height: h });
+          }
+        }}
+        {...panResponder.panHandlers}
+      >
         <Svg
           width={arenaWidth}
           height={arenaHeight}
@@ -633,12 +817,11 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate }) {
 
           {/* Short Elevated Cyber Platform Under Dog */}
           <G>
-            {/* Structural Support Pylons */}
             <Line
               x1={platform.x + 18}
               y1={platform.y + platform.height}
               x2={platform.x + 30}
-              y2={platform.y + platform.height + 42}
+              y2={platform.y + platform.height + 40}
               stroke="#FF007F"
               strokeWidth={3}
             />
@@ -646,15 +829,15 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate }) {
               x1={platform.x + platform.width - 18}
               y1={platform.y + platform.height}
               x2={platform.x + platform.width - 30}
-              y2={platform.y + platform.height + 42}
+              y2={platform.y + platform.height + 40}
               stroke="#FF007F"
               strokeWidth={3}
             />
             <Line
               x1={platform.x + 28}
-              y1={platform.y + platform.height + 42}
+              y1={platform.y + platform.height + 40}
               x2={platform.x + platform.width - 28}
-              y2={platform.y + platform.height + 42}
+              y2={platform.y + platform.height + 40}
               stroke="#00F5FF"
               strokeWidth={2}
             />
@@ -670,7 +853,6 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate }) {
               stroke="#00F5FF"
               strokeWidth={2}
             />
-            {/* Glowing Top Ledge */}
             <Line
               x1={platform.x}
               y1={platform.y}
@@ -679,20 +861,10 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate }) {
               stroke="#00F5FF"
               strokeWidth={3.5}
             />
-            <Line
-              x1={platform.x + 4}
-              y1={platform.y + 4}
-              x2={platform.x + platform.width - 4}
-              y2={platform.y + 4}
-              stroke="#FFD166"
-              strokeWidth={1.2}
-              strokeDasharray="4 4"
-            />
           </G>
 
           {/* Toxic Acid Water Hazard Down Below */}
           <G>
-            {/* Acid Water Lake */}
             <Rect
               x={0}
               y={acidY}
@@ -700,7 +872,6 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate }) {
               height={arenaHeight - acidY}
               fill="url(#acidGrad)"
             />
-            {/* Acid Surface Wave Crest */}
             <Line
               x1={0}
               y1={acidY}
@@ -719,22 +890,20 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate }) {
               strokeDasharray="8 6"
               opacity={0.8}
             />
-            {/* Bubbling Acid Droplets */}
             <Circle cx={arenaWidth * 0.16} cy={acidY + 12} r={6} fill="#70FF00" opacity={0.7} />
             <Circle cx={arenaWidth * 0.36} cy={acidY + 18} r={9} fill="#39FF14" opacity={0.8} />
             <Circle cx={arenaWidth * 0.64} cy={acidY + 14} r={7} fill="#70FF00" opacity={0.75} />
             <Circle cx={arenaWidth * 0.86} cy={acidY + 20} r={10} fill="#39FF14" opacity={0.85} />
-            {/* Danger Hazard Text */}
             <SvgText
               x={arenaWidth * 0.5}
-              y={acidY + 34}
+              y={acidY + 28}
               textAnchor="middle"
               fill="#062F12"
-              fontSize={12}
+              fontSize={11}
               fontFamily={monoFont}
               fontWeight="900"
             >
-              ☣ TOXIC ACID WATER - PROTECT FROM FALL ☣
+              ☣ TOXIC ACID WATER - DO NOT FALL ☣
             </SvgText>
           </G>
 
@@ -753,7 +922,7 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate }) {
             </G>
           ))}
 
-          {/* Saved Drawn Lines (Physics Barriers with Gravity) */}
+          {/* Saved Drawn Lines (Physics Barriers with Fast Gravity) */}
           {savedLines.map((line, idx) => (
             <Path
               key={`line_${idx}`}
@@ -796,13 +965,6 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate }) {
             <Circle cx={dog.x + 8} cy={dog.y - 4} r={3.5} fill="#050212" />
             {/* Dog Nose & Smile */}
             <Circle cx={dog.x} cy={dog.y + 4} r={4.5} fill="#FF0055" />
-            <Text
-              x={dog.x - 12}
-              y={dog.y + 20}
-              style={styles.dogMouthText}
-            >
-              ∪
-            </Text>
           </G>
 
           {/* Bees */}
@@ -816,7 +978,6 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate }) {
                 stroke="#000000"
                 strokeWidth={1.5}
               />
-              {/* Stripes */}
               <Line
                 x1={bee.x - 5}
                 y1={bee.y}
@@ -825,7 +986,6 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate }) {
                 stroke="#000000"
                 strokeWidth={2}
               />
-              {/* Wings */}
               <Circle
                 cx={bee.x}
                 cy={bee.y - 7}
@@ -835,27 +995,15 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate }) {
             </G>
           ))}
         </Svg>
-      </View>
 
-      {/* Control Buttons during DRAWING state (Well below the mid-screen dog) */}
-      {gameState === 'DRAWING' && (
-        <View style={styles.actionRow} pointerEvents="box-none">
-          <Pressable
-            style={styles.clearBtn}
-            onPress={handleClear}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <Text style={styles.clearBtnText}>↺ CLEAR</Text>
-          </Pressable>
-          <Pressable
-            style={styles.swarmBtn}
-            onPress={launchSwarm}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          >
-            <Text style={styles.swarmBtnText}>🛡️ RELEASE SWARM</Text>
-          </Pressable>
-        </View>
-      )}
+        {/* Helpful drawing guide when starting */}
+        {gameState === 'DRAWING' && currentLine.length === 0 && (
+          <View style={styles.hintContainer} pointerEvents="none">
+            <Text style={styles.hintText}>DRAW A SHIELD AROUND DOGE</Text>
+            <Text style={styles.hintSub}>RELEASE FINGER TO UNLEASH SWARM & GRAVITY</Text>
+          </View>
+        )}
+      </View>
 
       <GameResultModal
         visible={modalVisible}
@@ -865,6 +1013,7 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate }) {
         onRetry={modalType === 'win' ? handleNextLevel : handleRetry}
         onBackToHub={onBackToHub}
         buttonText={modalType === 'win' ? 'NEXT LEVEL' : 'TRY AGAIN'}
+        message={modalMessage}
       />
     </View>
   );
@@ -917,54 +1066,32 @@ const styles = StyleSheet.create({
     flex: 1,
     position: 'relative',
   },
-  actionRow: {
+  hintContainer: {
     position: 'absolute',
-    bottom: 24,
+    top: 75,
     left: 20,
     right: 20,
-    flexDirection: 'row',
-    justifyContent: 'center',
     alignItems: 'center',
-    gap: 16,
-    zIndex: 1000,
-    elevation: 1000,
   },
-  clearBtn: {
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
-    paddingHorizontal: 20,
-    paddingVertical: 13,
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.35)',
-  },
-  clearBtnText: {
-    fontFamily: monoFont,
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-  swarmBtn: {
-    backgroundColor: '#FF6D00',
-    paddingHorizontal: 28,
-    paddingVertical: 13,
-    borderRadius: 24,
-    borderWidth: 1.5,
-    borderColor: '#FFD166',
-    shadowColor: '#FF6D00',
-    shadowRadius: 10,
-    shadowOpacity: 0.7,
-    elevation: 6,
-  },
-  swarmBtnText: {
+  hintText: {
     fontFamily: monoFont,
     fontSize: 14,
     fontWeight: '900',
-    color: '#FFFFFF',
-    letterSpacing: 1,
+    color: '#00F5FF',
+    letterSpacing: 1.5,
+    backgroundColor: 'rgba(4, 2, 18, 0.88)',
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 245, 255, 0.35)',
   },
-  dogMouthText: {
-    fontSize: 12,
-    fontWeight: '900',
-    color: '#050212',
+  hintSub: {
+    fontFamily: monoFont,
+    fontSize: 9.5,
+    fontWeight: '700',
+    color: 'rgba(255, 255, 255, 0.75)',
+    marginTop: 6,
+    letterSpacing: 0.5,
   },
 });

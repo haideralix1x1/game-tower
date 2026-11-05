@@ -49,3 +49,4 @@ yarn-error.*
 /gt_screen.png
 /dump*.xml
 /window_dump.xml
+/c/

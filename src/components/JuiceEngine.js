@@ -16,6 +16,8 @@ import Animated, {
   FadeIn,
 } from 'react-native-reanimated';
 import { COLORS } from '../../styles';
+import { triggerLightHaptic } from '../utils/haptics';
+import { playTapSound } from '../utils/sound';
 
 const monoFont = Platform.select({
   ios: 'Menlo',

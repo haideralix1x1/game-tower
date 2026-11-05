@@ -58,6 +58,13 @@ export const SUDOKU_MODES = {
     bonus: 750,
     accent: COLORS.magenta,
   },
+  EXTREME: {
+    id: 'EXTREME',
+    label: 'EXTREME',
+    clues: 20,
+    bonus: 1200,
+    accent: '#FF0055',
+  },
 };
 
 // Check if placing num at (row, col) is valid
@@ -766,7 +773,7 @@ const localStyles = StyleSheet.create({
     marginBottom: 6,
   },
   modePill: {
-    paddingHorizontal: 12,
+    paddingHorizontal: 9,
     paddingVertical: 5,
     borderRadius: 10,
     borderWidth: 1,
