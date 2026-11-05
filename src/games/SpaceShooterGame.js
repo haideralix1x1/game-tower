@@ -96,6 +96,7 @@ export default function SpaceShooterGame({ onBackToHub, onScoreUpdate }) {
     enemies: [],
     enemyBullets: [],
     powerups: [],
+    explosions: [],
     hasShield: false,
     powerupTimeLeft: 0,
   });
@@ -107,6 +108,7 @@ export default function SpaceShooterGame({ onBackToHub, onScoreUpdate }) {
     enemies: [],
     enemyBullets: [],
     powerups: [],
+    explosions: [],
     activePowerup: null,
     hasShield: false,
     fireTimer: 0,
@@ -172,6 +174,7 @@ export default function SpaceShooterGame({ onBackToHub, onScoreUpdate }) {
       enemies: [],
       enemyBullets: [],
       powerups: [],
+      explosions: [],
       activePowerup: null,
       hasShield: false,
       fireTimer: 0,
@@ -187,6 +190,7 @@ export default function SpaceShooterGame({ onBackToHub, onScoreUpdate }) {
       enemies: [],
       enemyBullets: [],
       powerups: [],
+      explosions: [],
       hasShield: false,
       powerupTimeLeft: 0,
     });
@@ -381,9 +385,28 @@ export default function SpaceShooterGame({ onBackToHub, onScoreUpdate }) {
                 triggerSliceHaptic();
                 playPerfectSound((eng.score / 25) % 8 + 1);
 
+                // Spawn localized in-arena blast particles right over the enemy!
+                const exX = en.x + en.w / 2;
+                const exY = en.y + en.h / 2;
+                const sparkCount = en.type === 'CRUISER' ? 22 : 14;
+                for (let k = 0; k < sparkCount; k += 1) {
+                  const angle = (Math.PI * 2 * k) / sparkCount + (Math.random() - 0.5) * 0.35;
+                  const speed = 70 + Math.random() * 160;
+                  eng.explosions.push({
+                    id: `ex_${ts}_${k}_${Math.random()}`,
+                    x: exX,
+                    y: exY,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed,
+                    size: 3.5 + Math.random() * 4.5,
+                    color: k % 2 === 0 ? en.color : (k % 3 === 0 ? '#FFFFFF' : '#FFD700'),
+                    opacity: 1,
+                    decay: 2.2 + Math.random() * 1.1,
+                  });
+                }
+
                 if (juiceRef.current) {
                   juiceRef.current.shake(5, 3);
-                  juiceRef.current.burst(en.x + en.w / 2, en.y + en.h / 2, en.color, 12);
                 }
 
                 // Power-up Drop Chance: 28% from any enemy, 100% from Cruisers
@@ -475,6 +498,23 @@ export default function SpaceShooterGame({ onBackToHub, onScoreUpdate }) {
               setStatus('GAME_OVER');
               triggerGameOverHaptic();
               playGameOverSound();
+              const pX = eng.shipX + shipW / 2;
+              const pY = shipY + shipH / 2;
+              for (let k = 0; k < 22; k += 1) {
+                const angle = (Math.PI * 2 * k) / 22 + (Math.random() - 0.5) * 0.3;
+                const speed = 70 + Math.random() * 170;
+                eng.explosions.push({
+                  id: `pex_${ts}_${k}`,
+                  x: pX,
+                  y: pY,
+                  vx: Math.cos(angle) * speed,
+                  vy: Math.sin(angle) * speed,
+                  size: 4 + Math.random() * 5,
+                  color: k % 2 === 0 ? COLORS.danger : (k % 3 === 0 ? '#FFFFFF' : COLORS.orange),
+                  opacity: 1,
+                  decay: 1.8,
+                });
+              }
               if (juiceRef.current) {
                 juiceRef.current.shake(14, 10);
                 juiceRef.current.flash(COLORS.danger);
@@ -524,6 +564,23 @@ export default function SpaceShooterGame({ onBackToHub, onScoreUpdate }) {
               setStatus('GAME_OVER');
               triggerGameOverHaptic();
               playGameOverSound();
+              const pX = eng.shipX + shipW / 2;
+              const pY = shipY + shipH / 2;
+              for (let k = 0; k < 22; k += 1) {
+                const angle = (Math.PI * 2 * k) / 22 + (Math.random() - 0.5) * 0.3;
+                const speed = 70 + Math.random() * 170;
+                eng.explosions.push({
+                  id: `pex_b_${ts}_${k}`,
+                  x: pX,
+                  y: pY,
+                  vx: Math.cos(angle) * speed,
+                  vy: Math.sin(angle) * speed,
+                  size: 4 + Math.random() * 5,
+                  color: k % 2 === 0 ? COLORS.danger : (k % 3 === 0 ? '#FFFFFF' : COLORS.orange),
+                  opacity: 1,
+                  decay: 1.8,
+                });
+              }
               if (juiceRef.current) {
                 juiceRef.current.shake(14, 10);
                 juiceRef.current.flash(COLORS.danger);
@@ -574,15 +631,53 @@ export default function SpaceShooterGame({ onBackToHub, onScoreUpdate }) {
         }
         eng.powerups = nextPowerups;
 
+        // --- 8. Update In-Arena Blast Explosions ---
+        const nextExplosions = [];
+        for (let i = 0; i < eng.explosions.length; i += 1) {
+          const ep = eng.explosions[i];
+          const nextOp = ep.opacity - ep.decay * dt;
+          if (nextOp > 0.04) {
+            nextExplosions.push({
+              ...ep,
+              x: ep.x + ep.vx * dt,
+              y: ep.y + ep.vy * dt,
+              vx: ep.vx * 0.90,
+              vy: ep.vy * 0.90,
+              opacity: nextOp,
+            });
+          }
+        }
+        eng.explosions = nextExplosions;
+
         setFrame({
           shipX: eng.shipX,
           bullets: [...eng.bullets],
           enemies: [...eng.enemies],
           enemyBullets: [...eng.enemyBullets],
           powerups: [...eng.powerups],
+          explosions: [...eng.explosions],
           hasShield: eng.hasShield,
           powerupTimeLeft: eng.activePowerup ? eng.activePowerup.timeLeft : 0,
         });
+      } else if (eng.explosions.length > 0) {
+        // Allow in-arena game over death explosions to finish smoothly
+        const nextExplosions = [];
+        for (let i = 0; i < eng.explosions.length; i += 1) {
+          const ep = eng.explosions[i];
+          const nextOp = ep.opacity - ep.decay * dt;
+          if (nextOp > 0.04) {
+            nextExplosions.push({
+              ...ep,
+              x: ep.x + ep.vx * dt,
+              y: ep.y + ep.vy * dt,
+              vx: ep.vx * 0.90,
+              vy: ep.vy * 0.90,
+              opacity: nextOp,
+            });
+          }
+        }
+        eng.explosions = nextExplosions;
+        setFrame((prev) => ({ ...prev, explosions: [...eng.explosions] }));
       }
 
       rafId = requestAnimationFrame(tick);
@@ -745,6 +840,29 @@ export default function SpaceShooterGame({ onBackToHub, onScoreUpdate }) {
                   </Svg>
                 )}
               </View>
+            ))}
+
+            {/* In-Arena Enemy & Starfighter Blast Explosions */}
+            {frame.explosions && frame.explosions.map((ex) => (
+              <View
+                key={ex.id}
+                pointerEvents="none"
+                style={{
+                  position: 'absolute',
+                  left: ex.x - ex.size / 2,
+                  top: ex.y - ex.size / 2,
+                  width: ex.size,
+                  height: ex.size,
+                  borderRadius: ex.size / 2,
+                  backgroundColor: ex.color,
+                  opacity: ex.opacity,
+                  shadowColor: ex.color,
+                  shadowOffset: { width: 0, height: 0 },
+                  shadowRadius: 6,
+                  shadowOpacity: 0.95,
+                  elevation: 4,
+                }}
+              />
             ))}
 
             {/* Player Starfighter */}

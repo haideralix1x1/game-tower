@@ -94,18 +94,18 @@ const JuiceEngine = forwardRef(({ children }, ref) => {
       const list = [];
       for (let i = 0; i < count; i += 1) {
         const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.4;
-        const speed = 90 + Math.random() * 230;
-        const size = 4 + Math.random() * 6;
+        const speed = 75 + Math.random() * 160;
+        const size = 3.5 + Math.random() * 5.5;
         list.push({
           id: nextFxId(),
           x: cx,
           y: cy,
           vx: Math.cos(angle) * speed,
-          vy: Math.sin(angle) * speed - 65,
+          vy: Math.sin(angle) * speed,
           size,
           isDiamond: i % 2 === 0,
           opacity: 1,
-          decay: 1.3 + Math.random() * 0.7,
+          decay: 2.2 + Math.random() * 1.1,
           color:
             i % 3 === 0
               ? '#FFFFFF'
@@ -204,7 +204,8 @@ const JuiceEngine = forwardRef(({ children }, ref) => {
               ...p,
               x: p.x + p.vx * dt,
               y: p.y + p.vy * dt,
-              vy: p.vy + 980 * dt,
+              vx: p.vx * 0.90,
+              vy: p.vy * 0.90,
               opacity: op,
             });
           }

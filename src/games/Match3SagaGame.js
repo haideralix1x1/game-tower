@@ -51,6 +51,8 @@ export default function Match3SagaGame({ onBackToHub, onScoreUpdate }) {
   // Juice Feedback: Floating text & burst particles
   const [floatingJuice, setFloatingJuice] = useState(null);
   const [juiceParticles, setJuiceParticles] = useState([]);
+  const particleAnimRef = useRef(null);
+  const particlesRef = useRef([]);
 
   // Result modal state
   const [modalVisible, setModalVisible] = useState(false);
@@ -70,30 +72,75 @@ export default function Match3SagaGame({ onBackToHub, onScoreUpdate }) {
     };
   };
 
-  // Spawn juice splash particles
-  const triggerJuiceBurst = (centerR, centerC, color) => {
+  // Spawn juice splash particles across all matched tiles
+  const triggerJuiceBurst = (matchedTiles) => {
+    if (!matchedTiles || matchedTiles.length === 0) return;
+
     const newParticles = [];
-    for (let i = 0; i < 10; i++) {
-      const angle = (i / 10) * Math.PI * 2 + (Math.random() - 0.5) * 0.5;
-      const dist = 18 + Math.random() * 26;
-      newParticles.push({
-        id: `p_${Date.now()}_${i}`,
-        x: (centerC + 0.5) * (cellSize + 4) + Math.cos(angle) * dist,
-        y: (centerR + 0.5) * (cellSize + 4) + Math.sin(angle) * dist,
-        r: 3 + Math.random() * 3,
-        color,
-        opacity: 0.9,
-      });
-    }
+    matchedTiles.forEach((tile, tileIdx) => {
+      const cx = 4 + (tile.c + 0.5) * (cellSize + 4);
+      const cy = 4 + (tile.r + 0.5) * (cellSize + 4);
+      const count = 9;
+      for (let i = 0; i < count; i += 1) {
+        const angle = (i / count) * Math.PI * 2 + (Math.random() - 0.5) * 0.4;
+        const speed = 40 + Math.random() * 85;
+        newParticles.push({
+          id: `p_${Date.now()}_${tileIdx}_${i}_${Math.random()}`,
+          x: cx,
+          y: cy,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          r: 3 + Math.random() * 3.5,
+          color: i % 2 === 0 ? tile.color : (i % 3 === 0 ? '#FFFFFF' : '#FFD700'),
+          opacity: 1,
+          decay: 2.2 + Math.random() * 1.0,
+        });
+      }
+    });
+
+    particlesRef.current = newParticles;
     setJuiceParticles(newParticles);
 
     const callout = JUICE_CALLOUTS[Math.floor(Math.random() * JUICE_CALLOUTS.length)];
     setFloatingJuice(callout);
 
-    setTimeout(() => {
-      setJuiceParticles([]);
-      setFloatingJuice(null);
-    }, 850);
+    if (particleAnimRef.current) cancelAnimationFrame(particleAnimRef.current);
+    let lastTime = Date.now();
+
+    const animateParticles = () => {
+      const now = Date.now();
+      const dt = Math.min(0.04, (now - lastTime) / 1000);
+      lastTime = now;
+
+      const current = particlesRef.current;
+      const updated = [];
+      for (let i = 0; i < current.length; i += 1) {
+        const p = current[i];
+        const nextOp = p.opacity - p.decay * dt;
+        if (nextOp > 0.05) {
+          updated.push({
+            ...p,
+            x: p.x + p.vx * dt,
+            y: p.y + p.vy * dt,
+            vx: p.vx * 0.88,
+            vy: p.vy * 0.88,
+            opacity: nextOp,
+          });
+        }
+      }
+
+      particlesRef.current = updated;
+      setJuiceParticles(updated);
+
+      if (updated.length > 0) {
+        particleAnimRef.current = requestAnimationFrame(animateParticles);
+      } else {
+        setJuiceParticles([]);
+        setFloatingJuice(null);
+      }
+    };
+
+    particleAnimRef.current = requestAnimationFrame(animateParticles);
   };
 
   // Initialize board with fruits & hurdles
@@ -171,6 +218,7 @@ export default function Match3SagaGame({ onBackToHub, onScoreUpdate }) {
 
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
+      if (particleAnimRef.current) cancelAnimationFrame(particleAnimRef.current);
     };
   }, []);
 
@@ -234,10 +282,8 @@ export default function Match3SagaGame({ onBackToHub, onScoreUpdate }) {
 
     if (toClear.size === 0) return false;
 
-    // First matched coordinate for particle splash
-    let splashR = 3;
-    let splashC = 3;
-    let splashColor = '#FF0055';
+    // Collect all matched tiles for localized particle smash bursts
+    const matchedTiles = [];
 
     // Clear matched tiles and damage adjacent sugar bricks
     const newBoard = board.map((row) => [...row]);
@@ -246,11 +292,8 @@ export default function Match3SagaGame({ onBackToHub, onScoreUpdate }) {
 
     toClear.forEach((key) => {
       const [r, c] = key.split(',').map(Number);
-      splashR = r;
-      splashC = c;
-      if (newBoard[r][c]?.color) {
-        splashColor = newBoard[r][c].color;
-      }
+      const color = newBoard[r][c]?.color || '#FF0055';
+      matchedTiles.push({ r, c, color });
 
       // Check 4 adjacent neighbors
       const neighbors = [
@@ -278,8 +321,8 @@ export default function Match3SagaGame({ onBackToHub, onScoreUpdate }) {
       newBoard[r][c] = null;
     });
 
-    // Particle burst
-    triggerJuiceBurst(splashR, splashC, splashColor);
+    // Particle burst across all matched locations
+    triggerJuiceBurst(matchedTiles);
 
     if (bricksDestroyed > 0) {
       setBricksLeft((b) => Math.max(0, b - bricksDestroyed));
