@@ -66,31 +66,22 @@ export default function GameResultModal({
       statusBarTranslucent
       onRequestClose={handleBack || handleRetry}
     >
-      <Pressable
-        style={localStyles.overlay}
-        onPress={(e) => {
-          e.stopPropagation?.();
-        }}
-        onStartShouldSetResponder={() => true}
-        onMoveShouldSetResponder={() => true}
-        onResponderTerminationRequest={() => false}
-      >
+      <View style={localStyles.overlay}>
+        {/* Backdrop Tint */}
         <Animated.View
-          entering={FadeIn.duration(200)}
+          entering={FadeIn.duration(180)}
           style={StyleSheet.absoluteFillObject}
           pointerEvents="none"
         >
           <View style={localStyles.backdropTint} />
         </Animated.View>
 
+        {/* Modal Card */}
         <Animated.View
-          entering={ZoomIn.duration(240)}
+          entering={ZoomIn.duration(220)}
           style={[localStyles.card, { borderColor: accent }]}
         >
-          <Pressable
-            onPress={(e) => e.stopPropagation?.()}
-            style={{ width: '100%', alignItems: 'center' }}
-          >
+          <View style={{ width: '100%', alignItems: 'center' }}>
             <Text style={localStyles.icon}>{icon}</Text>
             <Text style={[localStyles.title, { color: accent }]}>
               {displayTitle}
@@ -123,7 +114,7 @@ export default function GameResultModal({
               {onBackToHub ? (
                 <Pressable
                   onPress={handleBack}
-                  hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
+                  hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
                   style={({ pressed }) => [
                     localStyles.backBtn,
                     pressed && { opacity: 0.7, transform: [{ scale: 0.95 }] },
@@ -135,7 +126,7 @@ export default function GameResultModal({
 
               <Pressable
                 onPress={handleRetry}
-                hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
+                hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
                 style={({ pressed }) => [
                   localStyles.retryBtn,
                   { backgroundColor: accent },
@@ -152,9 +143,9 @@ export default function GameResultModal({
                 </Text>
               </Pressable>
             </View>
-          </Pressable>
+          </View>
         </Animated.View>
-      </Pressable>
+      </View>
     </Modal>
   );
 }
@@ -169,7 +160,6 @@ const localStyles = StyleSheet.create({
     justifyContent: 'center',
     padding: 20,
     zIndex: 999999,
-    elevation: 999999,
   },
   backdropTint: {
     ...StyleSheet.absoluteFillObject,
@@ -188,7 +178,7 @@ const localStyles = StyleSheet.create({
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.4,
     shadowRadius: 16,
-    elevation: 30000,
+    zIndex: 1000,
   },
   icon: {
     fontSize: 34,

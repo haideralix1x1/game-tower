@@ -386,7 +386,6 @@ const localStyles = StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 9999,
-    elevation: 9999,
   },
   ring: {
     position: 'absolute',

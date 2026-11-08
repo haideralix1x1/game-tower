@@ -1245,31 +1245,28 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
               triggerLightHaptic();
             }}
           >
-            <Pressable
-              style={hubStyles.exitOverlay}
-              onPress={(e) => {
-                e.stopPropagation?.();
-              }}
-              onStartShouldSetResponder={() => true}
-              onMoveShouldSetResponder={() => true}
-              onResponderTerminationRequest={() => false}
-            >
-              <Animated.View
-                entering={FadeIn.duration(180)}
+            <View style={hubStyles.exitOverlay}>
+              {/* Tap backdrop to resume */}
+              <Pressable
                 style={StyleSheet.absoluteFillObject}
-                pointerEvents="none"
+                onPress={() => {
+                  setShowExitConfirm(false);
+                  triggerLightHaptic();
+                }}
               >
-                <View style={{ ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(3, 3, 10, 0.92)' }} />
-              </Animated.View>
+                <Animated.View
+                  entering={FadeIn.duration(180)}
+                  style={StyleSheet.absoluteFillObject}
+                >
+                  <View style={{ ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(3, 3, 10, 0.92)' }} />
+                </Animated.View>
+              </Pressable>
 
               <Animated.View
                 entering={ZoomIn.duration(200)}
                 style={hubStyles.exitCard}
               >
-                <Pressable
-                  onPress={(e) => e.stopPropagation?.()}
-                  style={{ width: '100%', alignItems: 'center' }}
-                >
+                <View style={{ width: '100%', alignItems: 'center' }}>
                   <Text style={hubStyles.exitWarnIcon}>⏸️</Text>
                   <Text style={hubStyles.exitTitle}>GAME PAUSED</Text>
                   <Text style={hubStyles.exitSubtitle}>
@@ -1282,23 +1279,29 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
                         setShowExitConfirm(false);
                         triggerLightHaptic();
                       }}
-                      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-                      style={hubStyles.exitResumeBtn}
+                      hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
+                      style={({ pressed }) => [
+                        hubStyles.exitResumeBtn,
+                        pressed && { opacity: 0.75, transform: [{ scale: 0.96 }] },
+                      ]}
                     >
                       <Text style={hubStyles.exitResumeText}>RESUME</Text>
                     </Pressable>
 
                     <Pressable
                       onPress={performExitToHub}
-                      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-                      style={hubStyles.exitConfirmBtn}
+                      hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
+                      style={({ pressed }) => [
+                        hubStyles.exitConfirmBtn,
+                        pressed && { opacity: 0.75, transform: [{ scale: 0.96 }] },
+                      ]}
                     >
                       <Text style={hubStyles.exitConfirmText}>EXIT TO MENU</Text>
                     </Pressable>
                   </View>
-                </Pressable>
+                </View>
               </Animated.View>
-            </Pressable>
+            </View>
           </Modal>
         )}
       </View>
@@ -2294,8 +2297,8 @@ const hubStyles = StyleSheet.create({
     borderBottomWidth: 1.5,
     borderBottomColor: 'rgba(0, 245, 255, 0.35)',
     backgroundColor: 'rgba(6, 4, 20, 0.92)',
-    zIndex: 20,
-    elevation: 20,
+    zIndex: 100,
+    elevation: 10,
   },
   hudTitleRow: {
     flexDirection: 'row',

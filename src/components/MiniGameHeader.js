@@ -197,8 +197,7 @@ const localStyles = StyleSheet.create({
     width: '100%',
     paddingHorizontal: 12,
     paddingBottom: 6,
-    zIndex: 9999,
-    elevation: 9999,
+    zIndex: 999,
   },
   bar: {
     flexDirection: 'row',
@@ -211,7 +210,7 @@ const localStyles = StyleSheet.create({
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.35,
     shadowRadius: 10,
-    elevation: 10000,
+    elevation: 8,
   },
   leftRow: {
     flexDirection: 'row',
