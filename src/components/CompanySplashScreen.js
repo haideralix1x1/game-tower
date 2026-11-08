@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   Animated,
   Easing,
   Platform,
+  Pressable,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle, Line, Defs, RadialGradient, Stop } from 'react-native-svg';
@@ -38,7 +39,7 @@ const createParticles = (w, h) => {
 };
 
 /**
- * Animated Full-Screen Company Splash Screen for Nameless Forge (2.6s Duration)
+ * Animated Fast-Boot Full-Screen Company Splash Screen for Nameless Forge (~0.75s Duration or Instant Tap-To-Skip)
  * @param {{ onFinish: () => void }} props
  */
 export default function CompanySplashScreen({ onFinish }) {
@@ -46,28 +47,42 @@ export default function CompanySplashScreen({ onFinish }) {
   const [progressPct, setProgressPct] = useState(0);
   const [statusText, setStatusText] = useState('INITIALIZING QUANTUM CORE...');
 
-  // Animations
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const logoScale = useRef(new Animated.Value(0.85)).current;
-  const logoPulse = useRef(new Animated.Value(1)).current;
-  const glowOpacity = useRef(new Animated.Value(0.3)).current;
-  const barAnim = useRef(new Animated.Value(0)).current;
+  // Lazy Animated Values without ref reads in render
+  const [fadeAnim] = useState(() => new Animated.Value(0));
+  const [logoScale] = useState(() => new Animated.Value(0.85));
+  const [logoPulse] = useState(() => new Animated.Value(1));
+  const [glowOpacity] = useState(() => new Animated.Value(0.3));
+  const [barAnim] = useState(() => new Animated.Value(0));
 
-  const particlesRef = useRef(createParticles(width, height));
+  const particles = useMemo(() => createParticles(width, height), [width, height]);
+  const isFinishedRef = useRef(false);
+
+  const finishEarly = useCallback(() => {
+    if (isFinishedRef.current) return;
+    isFinishedRef.current = true;
+    Animated.timing(fadeAnim, {
+      toValue: 0,
+      duration: 140,
+      easing: Easing.in(Easing.quad),
+      useNativeDriver: true,
+    }).start(() => {
+      onFinish?.();
+    });
+  }, [fadeAnim, onFinish]);
 
   useEffect(() => {
-    // 1. Initial smooth fade-in and scale-in of the logo
+    // 1. Snappy fade-in and scale-in of the logo
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 500,
+        duration: 200,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
       }),
       Animated.timing(logoScale, {
         toValue: 1,
-        duration: 700,
-        easing: Easing.out(Easing.back(1.4)),
+        duration: 280,
+        easing: Easing.out(Easing.back(1.2)),
         useNativeDriver: true,
       }),
     ]).start(() => {
@@ -76,14 +91,14 @@ export default function CompanySplashScreen({ onFinish }) {
         Animated.sequence([
           Animated.parallel([
             Animated.timing(logoPulse, {
-              toValue: 1.04,
-              duration: 900,
+              toValue: 1.03,
+              duration: 450,
               easing: Easing.inOut(Easing.quad),
               useNativeDriver: true,
             }),
             Animated.timing(glowOpacity, {
               toValue: 0.85,
-              duration: 900,
+              duration: 450,
               easing: Easing.inOut(Easing.quad),
               useNativeDriver: true,
             }),
@@ -91,13 +106,13 @@ export default function CompanySplashScreen({ onFinish }) {
           Animated.parallel([
             Animated.timing(logoPulse, {
               toValue: 0.98,
-              duration: 900,
+              duration: 450,
               easing: Easing.inOut(Easing.quad),
               useNativeDriver: true,
             }),
             Animated.timing(glowOpacity, {
               toValue: 0.35,
-              duration: 900,
+              duration: 450,
               easing: Easing.inOut(Easing.quad),
               useNativeDriver: true,
             }),
@@ -106,27 +121,30 @@ export default function CompanySplashScreen({ onFinish }) {
       ).start();
     });
 
-    // 3. 2.6-second smooth progressive loading sequence
+    // 3. Fast progressive boot sequence (750ms total)
     const startTime = Date.now();
-    const duration = 2600; // 2.6 seconds
+    const duration = 750;
 
     const interval = setInterval(() => {
+      if (isFinishedRef.current) {
+        clearInterval(interval);
+        return;
+      }
+
       const elapsed = Date.now() - startTime;
       const progress = Math.min(1, elapsed / duration);
       // Non-linear smooth easing for realistic cyber telemetry
-      const eased = Math.min(100, Math.floor(Math.pow(progress, 0.88) * 100));
+      const eased = Math.min(100, Math.floor(Math.pow(progress, 0.85) * 100));
 
       setProgressPct(eased);
       barAnim.setValue(eased / 100);
 
-      if (eased < 24) {
+      if (eased < 25) {
         setStatusText('INITIALIZING QUANTUM CORE...');
-      } else if (eased < 50) {
-        setStatusText('CALIBRATING 30 CYBER TOWERS...');
-      } else if (eased < 78) {
+      } else if (eased < 55) {
+        setStatusText('CALIBRATING 34 CYBER TOWERS...');
+      } else if (eased < 85) {
         setStatusText('SYNCHRONIZING AUDIO CHANNELS...');
-      } else if (eased < 96) {
-        setStatusText('ESTABLISHING NEURAL LINK...');
       } else {
         setStatusText('SYSTEM ONLINE // LAUNCHING');
       }
@@ -135,113 +153,113 @@ export default function CompanySplashScreen({ onFinish }) {
         clearInterval(interval);
         setProgressPct(100);
 
-        // Smooth cinematic fade-out transition
+        // Smooth cinematic fast fade-out transition
         setTimeout(() => {
-          Animated.timing(fadeAnim, {
-            toValue: 0,
-            duration: 420,
-            easing: Easing.in(Easing.quad),
-            useNativeDriver: true,
-          }).start(() => {
-            onFinish?.();
-          });
-        }, 150);
+          finishEarly();
+        }, 50);
       }
-    }, 25);
+    }, 16);
 
     return () => clearInterval(interval);
-  }, [barAnim, fadeAnim, glowOpacity, logoPulse, logoScale, onFinish]);
+  }, [barAnim, fadeAnim, finishEarly, glowOpacity, logoPulse, logoScale]);
 
   const maxBarWidth = Math.min(270, width - 70);
 
   return (
     <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
-      <LinearGradient
-        colors={['#02010A', '#080518', '#03010C']}
-        style={StyleSheet.absoluteFill}
-      />
+      <Pressable style={StyleSheet.absoluteFill} onPress={finishEarly}>
+        <LinearGradient
+          colors={['#02010A', '#080518', '#03010C']}
+          style={StyleSheet.absoluteFill}
+        />
 
-      {/* Ambient Cyber Particles & Nebula Glow Backdrop */}
-      <Svg width={width} height={height} style={StyleSheet.absoluteFill} pointerEvents="none">
-        <Defs>
-          <RadialGradient id="splashGlow" cx="50%" cy="50%" rx="50%" ry="50%">
-            <Stop offset="0%" stopColor="#00F5FF" stopOpacity="0.25" />
-            <Stop offset="55%" stopColor="#7928CA" stopOpacity="0.12" />
-            <Stop offset="100%" stopColor="#000000" stopOpacity="0" />
-          </RadialGradient>
-        </Defs>
+        {/* Ambient Cyber Particles & Nebula Glow Backdrop */}
+        <Svg width={width} height={height} style={StyleSheet.absoluteFill} pointerEvents="none">
+          <Defs>
+            <RadialGradient id="splashGlow" cx="50%" cy="50%" rx="50%" ry="50%">
+              <Stop offset="0%" stopColor="#00F5FF" stopOpacity="0.25" />
+              <Stop offset="55%" stopColor="#7928CA" stopOpacity="0.12" />
+              <Stop offset="100%" stopColor="#000000" stopOpacity="0" />
+            </RadialGradient>
+          </Defs>
 
-        <Circle cx={width * 0.5} cy={height * 0.44} r={170} fill="url(#splashGlow)" />
+          <Circle cx={width * 0.5} cy={height * 0.44} r={170} fill="url(#splashGlow)" />
 
-        {particlesRef.current.map((pt) => (
-          <Circle
-            key={pt.id}
-            cx={pt.x}
-            cy={pt.y}
-            r={pt.r}
-            fill={pt.color}
-            opacity={pt.opacity}
-          />
-        ))}
+          {particles.map((pt) => (
+            <Circle
+              key={pt.id}
+              cx={pt.x}
+              cy={pt.y}
+              r={pt.r}
+              fill={pt.color}
+              opacity={pt.opacity}
+            />
+          ))}
 
-        {/* Framing Cyber Grid Guideways */}
-        <Line x1={20} y1={height * 0.25} x2={20} y2={height * 0.75} stroke="rgba(0, 245, 255, 0.15)" strokeWidth={1} />
-        <Line x1={width - 20} y1={height * 0.25} x2={width - 20} y2={height * 0.75} stroke="rgba(0, 245, 255, 0.15)" strokeWidth={1} />
-      </Svg>
+          {/* Framing Cyber Grid Guideways */}
+          <Line x1={20} y1={height * 0.25} x2={20} y2={height * 0.75} stroke="rgba(0, 245, 255, 0.15)" strokeWidth={1} />
+          <Line x1={width - 20} y1={height * 0.25} x2={width - 20} y2={height * 0.75} stroke="rgba(0, 245, 255, 0.15)" strokeWidth={1} />
+        </Svg>
 
-      <View style={styles.centerBox}>
-        {/* Pulsing Neon Glow Aura */}
-        <Animated.View style={[styles.glowAura, { opacity: glowOpacity }]} />
+        <View style={styles.centerBox} pointerEvents="box-none">
+          {/* Pulsing Neon Glow Aura */}
+          <Animated.View style={[styles.glowAura, { opacity: glowOpacity }]} />
 
-        {/* Company Logo (Nameless Forge) with Breathing Scale */}
-        <Animated.View
-          style={[
-            styles.logoWrapper,
-            {
-              transform: [{ scale: Animated.multiply(logoScale, logoPulse) }],
-            },
-          ]}
-        >
-          <Image
-            source={companyLogoAsset}
-            style={styles.logoImage}
-            resizeMode="contain"
-          />
-        </Animated.View>
+          {/* Company Logo (Nameless Forge) with Breathing Scale */}
+          <Animated.View
+            style={[
+              styles.logoWrapper,
+              {
+                transform: [{ scale: Animated.multiply(logoScale, logoPulse) }],
+              },
+            ]}
+          >
+            <Image
+              source={companyLogoAsset}
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
+          </Animated.View>
 
-        {/* Studio Title */}
-        <Text style={styles.presentedByText}>A NAMELESS FORGE PRODUCTION</Text>
+          {/* Studio Title */}
+          <Text style={styles.presentedByText}>A NAMELESS FORGE PRODUCTION</Text>
 
-        {/* Cyber Loading Bar Section */}
-        <View style={[styles.loadingSection, { width: maxBarWidth }]}>
-          <View style={styles.loadingTrack}>
-            <View
-              style={[
-                styles.loadingFill,
-                { width: `${progressPct}%` },
-              ]}
-            >
-              <LinearGradient
-                colors={['#00F5FF', '#7928CA', '#FF007F']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={StyleSheet.absoluteFill}
-              />
+          {/* Cyber Loading Bar Section */}
+          <View style={[styles.loadingSection, { width: maxBarWidth }]}>
+            <View style={styles.loadingTrack}>
+              <View
+                style={[
+                  styles.loadingFill,
+                  { width: `${progressPct}%` },
+                ]}
+              >
+                <LinearGradient
+                  colors={['#00F5FF', '#7928CA', '#FF007F']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={StyleSheet.absoluteFill}
+                />
+              </View>
+            </View>
+
+            {/* Telemetry Status Line */}
+            <View style={styles.telemetryRow}>
+              <Text style={styles.statusLabel}>{statusText}</Text>
+              <Text style={styles.pctLabel}>{progressPct}%</Text>
             </View>
           </View>
-
-          {/* Telemetry Status Line */}
-          <View style={styles.telemetryRow}>
-            <Text style={styles.statusLabel}>{statusText}</Text>
-            <Text style={styles.pctLabel}>{progressPct}%</Text>
-          </View>
         </View>
-      </View>
 
-      {/* Cyber Footer Mark */}
-      <View style={styles.footerMark}>
-        <Text style={styles.footerText}>NEO GAME TOWER // SYSTEM BOOT</Text>
-      </View>
+        {/* Quick Tap-To-Skip Prompt */}
+        <View style={styles.skipPrompt} pointerEvents="none">
+          <Text style={styles.skipPromptText}>TAP TO SKIP ▶</Text>
+        </View>
+
+        {/* Cyber Footer Mark */}
+        <View style={styles.footerMark} pointerEvents="none">
+          <Text style={styles.footerText}>NEO GAME TOWER // SYSTEM BOOT</Text>
+        </View>
+      </Pressable>
     </Animated.View>
   );
 }
@@ -348,5 +366,23 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: 'rgba(255, 255, 255, 0.35)',
     letterSpacing: 1.5,
+  },
+  skipPrompt: {
+    position: 'absolute',
+    top: 50,
+    right: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
+    backgroundColor: 'rgba(0, 245, 255, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 245, 255, 0.35)',
+  },
+  skipPromptText: {
+    fontFamily: monoFont,
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#00F5FF',
+    letterSpacing: 1.2,
   },
 });

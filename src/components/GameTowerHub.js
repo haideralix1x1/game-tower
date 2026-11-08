@@ -572,9 +572,9 @@ export const TOWER_GAMES = [
 ];
 
 /**
- * @param {{ initialGameId?: string | null }} [props]
+ * @param {{ initialGameId?: string | null, isSplashActive?: boolean }} [props]
  */
-export default function GameTowerHub({ initialGameId = null } = {}) {
+export default function GameTowerHub({ initialGameId = null, isSplashActive = false } = {}) {
   const insets = useSafeAreaInsets();
   const safeTop = insets.top > 0 ? insets.top : Platform.OS === 'android' ? 8 : 0;
   const safeBottom = Math.max(insets.bottom, 12);
@@ -632,13 +632,13 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
     try {
       musicPlayer.loop = true;
       musicPlayer.volume = 0.55;
-      if (!isMusicMuted && activeGameId === null) {
+      if (!isMusicMuted && activeGameId === null && !isSplashActive) {
         musicPlayer.play();
       } else {
         musicPlayer.pause();
       }
     } catch {}
-  }, [musicPlayer, isMusicMuted, activeGameId]);
+  }, [musicPlayer, isMusicMuted, activeGameId, isSplashActive]);
 
   const toggleMusicMute = useCallback(async () => {
     triggerLightHaptic();

@@ -13,10 +13,9 @@ export default function App() {
     <GestureHandlerRootView style={styles.rootContainer}>
       <SafeAreaProvider style={styles.rootContainer}>
         <StatusBar hidden={true} />
-        {!isSplashDone ? (
+        <GameTowerHub isSplashActive={!isSplashDone} />
+        {!isSplashDone && (
           <CompanySplashScreen onFinish={() => setIsSplashDone(true)} />
-        ) : (
-          <GameTowerHub />
         )}
       </SafeAreaProvider>
     </GestureHandlerRootView>
