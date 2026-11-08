@@ -48,9 +48,11 @@ const monoFont = Platform.select({
 // Arena Dimensions
 const ARENA_W = 340;
 const ARENA_H = 420;
+const FLASHLIGHT_LEN = 60; // 60px flashlight beam ensures ladder zones remain safe
 
 /**
- * Curated Levels with Escalating Guards, Petrol Missions & Rival Thieves
+ * Curated Levels with Escalating Guards, Petrol Missions, Rival Thieves & Safe Ladder Corridors
+ * Guard patrol boundaries (minX, maxX) keep guard beams safely away from ladder zones (x: 75 & x: 265).
  */
 const CURATED_LEVELS = [
   // Level 1: Tutorial Infiltration (3 Floors, 1 Guard, Straight Heist)
@@ -60,15 +62,16 @@ const CURATED_LEVELS = [
     requiresPetrol: false,
     hasRival: false,
     stairs: [
-      { fromFloor: 0, toFloor: 1, x: 260 }, // Right stair to floor 1
-      { fromFloor: 1, toFloor: 2, x: 80 },  // Left stair to floor 2
+      { fromFloor: 0, toFloor: 1, x: 265 }, // Right stair to floor 1
+      { fromFloor: 1, toFloor: 2, x: 75 },  // Left stair to floor 2
     ],
     guards: [
-      { id: 'g0', floor: 1, minX: 110, maxX: 230, x: 170, dir: 1, speed: 1.1, pauseTimer: 0 },
+      { id: 'g0', floor: 1, minX: 140, maxX: 195, x: 170, dir: 1, speed: 1.1, pauseTimer: 0, alertTimer: 0 },
     ],
     diamond: { floor: 2, x: 250 },
     petrol: null,
     car: { floor: 0, x: 60 },
+    stonePickup: null,
   },
 
   // Level 2: Petrol Shortage (3 Floors, 2 Guards, Fuel Needed)
@@ -78,16 +81,17 @@ const CURATED_LEVELS = [
     requiresPetrol: true,
     hasRival: false,
     stairs: [
-      { fromFloor: 0, toFloor: 1, x: 70 },
-      { fromFloor: 1, toFloor: 2, x: 270 },
+      { fromFloor: 0, toFloor: 1, x: 75 },
+      { fromFloor: 1, toFloor: 2, x: 265 },
     ],
     guards: [
-      { id: 'g0', floor: 1, minX: 100, maxX: 240, x: 140, dir: -1, speed: 1.2, pauseTimer: 0 },
-      { id: 'g1', floor: 2, minX: 80, maxX: 220, x: 180, dir: 1, speed: 1.3, pauseTimer: 0 },
+      { id: 'g0', floor: 1, minX: 140, maxX: 195, x: 170, dir: -1, speed: 1.2, pauseTimer: 0, alertTimer: 0 },
+      { id: 'g1', floor: 2, minX: 140, maxX: 195, x: 170, dir: 1, speed: 1.25, pauseTimer: 0, alertTimer: 0 },
     ],
     diamond: { floor: 2, x: 70 },
-    petrol: { floor: 1, x: 280 }, // Petrol on Floor 1 right side
-    car: { floor: 0, x: 280 },
+    petrol: { floor: 1, x: 285 },
+    car: { floor: 0, x: 265 },
+    stonePickup: { floor: 1, x: 45 },
   },
 
   // Level 3: Rival Heist (4 Floors, 2 Guards, 1 Rival Thief)
@@ -97,17 +101,18 @@ const CURATED_LEVELS = [
     requiresPetrol: false,
     hasRival: true,
     stairs: [
-      { fromFloor: 0, toFloor: 1, x: 80 },
-      { fromFloor: 1, toFloor: 2, x: 260 },
-      { fromFloor: 2, toFloor: 3, x: 80 },
+      { fromFloor: 0, toFloor: 1, x: 75 },
+      { fromFloor: 1, toFloor: 2, x: 265 },
+      { fromFloor: 2, toFloor: 3, x: 75 },
     ],
     guards: [
-      { id: 'g0', floor: 1, minX: 110, maxX: 230, x: 160, dir: 1, speed: 1.3, pauseTimer: 0 },
-      { id: 'g1', floor: 2, minX: 110, maxX: 230, x: 180, dir: -1, speed: 1.4, pauseTimer: 0 },
+      { id: 'g0', floor: 1, minX: 140, maxX: 195, x: 170, dir: 1, speed: 1.3, pauseTimer: 0, alertTimer: 0 },
+      { id: 'g1', floor: 2, minX: 140, maxX: 195, x: 170, dir: -1, speed: 1.35, pauseTimer: 0, alertTimer: 0 },
     ],
-    diamond: { floor: 3, x: 260 },
+    diamond: { floor: 3, x: 265 },
     petrol: null,
-    car: { floor: 0, x: 270 },
+    car: { floor: 0, x: 265 },
+    stonePickup: { floor: 2, x: 285 },
   },
 
   // Level 4: Full Lockdown (4 Floors, 3 Guards, Petrol + Rival Thief)
@@ -117,18 +122,19 @@ const CURATED_LEVELS = [
     requiresPetrol: true,
     hasRival: true,
     stairs: [
-      { fromFloor: 0, toFloor: 1, x: 260 },
-      { fromFloor: 1, toFloor: 2, x: 80 },
-      { fromFloor: 2, toFloor: 3, x: 260 },
+      { fromFloor: 0, toFloor: 1, x: 265 },
+      { fromFloor: 1, toFloor: 2, x: 75 },
+      { fromFloor: 2, toFloor: 3, x: 265 },
     ],
     guards: [
-      { id: 'g0', floor: 1, minX: 110, maxX: 230, x: 130, dir: 1, speed: 1.4, pauseTimer: 0 },
-      { id: 'g1', floor: 2, minX: 110, maxX: 230, x: 200, dir: -1, speed: 1.5, pauseTimer: 0 },
-      { id: 'g2', floor: 3, minX: 70, maxX: 190, x: 140, dir: 1, speed: 1.6, pauseTimer: 0 },
+      { id: 'g0', floor: 1, minX: 140, maxX: 195, x: 160, dir: 1, speed: 1.35, pauseTimer: 0, alertTimer: 0 },
+      { id: 'g1', floor: 2, minX: 140, maxX: 195, x: 180, dir: -1, speed: 1.4, pauseTimer: 0, alertTimer: 0 },
+      { id: 'g2', floor: 3, minX: 140, maxX: 195, x: 170, dir: 1, speed: 1.45, pauseTimer: 0, alertTimer: 0 },
     ],
     diamond: { floor: 3, x: 70 },
-    petrol: { floor: 1, x: 70 },
+    petrol: { floor: 1, x: 65 },
     car: { floor: 0, x: 60 },
+    stonePickup: { floor: 2, x: 45 },
   },
 
   // Level 5: Penthouse Apex (5 Floors, 4 Guards, Master Infiltration)
@@ -138,20 +144,21 @@ const CURATED_LEVELS = [
     requiresPetrol: true,
     hasRival: true,
     stairs: [
-      { fromFloor: 0, toFloor: 1, x: 70 },
-      { fromFloor: 1, toFloor: 2, x: 270 },
-      { fromFloor: 2, toFloor: 3, x: 70 },
-      { fromFloor: 3, toFloor: 4, x: 270 },
+      { fromFloor: 0, toFloor: 1, x: 75 },
+      { fromFloor: 1, toFloor: 2, x: 265 },
+      { fromFloor: 2, toFloor: 3, x: 75 },
+      { fromFloor: 3, toFloor: 4, x: 265 },
     ],
     guards: [
-      { id: 'g0', floor: 1, minX: 100, maxX: 240, x: 160, dir: 1, speed: 1.5, pauseTimer: 0 },
-      { id: 'g1', floor: 2, minX: 100, maxX: 240, x: 140, dir: -1, speed: 1.6, pauseTimer: 0 },
-      { id: 'g2', floor: 3, minX: 100, maxX: 240, x: 200, dir: 1, speed: 1.7, pauseTimer: 0 },
-      { id: 'g3', floor: 4, minX: 60, maxX: 180, x: 120, dir: -1, speed: 1.8, pauseTimer: 0 },
+      { id: 'g0', floor: 1, minX: 140, maxX: 195, x: 170, dir: 1, speed: 1.45, pauseTimer: 0, alertTimer: 0 },
+      { id: 'g1', floor: 2, minX: 140, maxX: 195, x: 170, dir: -1, speed: 1.5, pauseTimer: 0, alertTimer: 0 },
+      { id: 'g2', floor: 3, minX: 140, maxX: 195, x: 170, dir: 1, speed: 1.55, pauseTimer: 0, alertTimer: 0 },
+      { id: 'g3', floor: 4, minX: 140, maxX: 195, x: 170, dir: -1, speed: 1.6, pauseTimer: 0, alertTimer: 0 },
     ],
     diamond: { floor: 4, x: 70 },
-    petrol: { floor: 2, x: 60 },
-    car: { floor: 0, x: 270 },
+    petrol: { floor: 2, x: 65 },
+    car: { floor: 0, x: 265 },
+    stonePickup: { floor: 3, x: 285 },
   },
 ];
 
@@ -169,6 +176,11 @@ export default function ThiefEscapeGame({
   const [isGameOver, setIsGameOver] = useState(false);
   const [victoryModal, setVictoryModal] = useState(false);
 
+  // Distractor stones
+  const [stones, setStones] = useState(3);
+  const [thrownStones, setThrownStones] = useState([]);
+  const [stonePickupTaken, setStonePickupTaken] = useState(false);
+
   // Active Level Config
   const levelConfig = CURATED_LEVELS[Math.min(level - 1, CURATED_LEVELS.length - 1)];
 
@@ -179,10 +191,13 @@ export default function ThiefEscapeGame({
     [floorHeight]
   );
 
-  // Player State
+  // Player State: supports smooth ladder climbing & stopping midway
   const [player, setPlayer] = useState({
     floor: 0,
-    x: levelConfig.car.x + 40,
+    x: levelConfig.car.x + (levelConfig.car.x < 150 ? 50 : -50),
+    y: null, // null when on floor; continuous coordinate when climbing
+    isClimbing: false,
+    stairIdx: null,
     isHiding: false,
     hasDiamond: false,
     hasPetrol: !levelConfig.requiresPetrol,
@@ -208,8 +223,9 @@ export default function ThiefEscapeGame({
   const [diamondTaken, setDiamondTaken] = useState(false);
   const [petrolTaken, setPetrolTaken] = useState(!levelConfig.requiresPetrol);
 
-  // Input Movement Refs
+  // Movement & Action Input Refs
   const inputDirRef = useRef(0); // -1 = left, 0 = idle, 1 = right
+  const climbDirRef = useRef(0); // -1 = climb up, 0 = hold/stop, 1 = climb down
   const isSneakRef = useRef(false);
 
   const playerRef = useRef(player);
@@ -237,6 +253,21 @@ export default function ThiefEscapeGame({
     petrolTakenRef.current = petrolTaken;
   }, [petrolTaken]);
 
+  const stonesRef = useRef(stones);
+  useEffect(() => {
+    stonesRef.current = stones;
+  }, [stones]);
+
+  const thrownStonesRef = useRef(thrownStones);
+  useEffect(() => {
+    thrownStonesRef.current = thrownStones;
+  }, [thrownStones]);
+
+  const stonePickupTakenRef = useRef(stonePickupTaken);
+  useEffect(() => {
+    stonePickupTakenRef.current = stonePickupTaken;
+  }, [stonePickupTaken]);
+
   // Load High Score
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY)
@@ -253,15 +284,18 @@ export default function ThiefEscapeGame({
       const initialPlayer = {
         floor: 0,
         x: cfg.car.x + (cfg.car.x < 150 ? 50 : -50),
+        y: null,
+        isClimbing: false,
+        stairIdx: null,
         isHiding: false,
         hasDiamond: false,
         hasPetrol: !cfg.requiresPetrol,
-        facing: 1,
+        facing: cfg.car.x < 150 ? 1 : -1,
       };
       setPlayer(initialPlayer);
       playerRef.current = initialPlayer;
 
-      const initialGuards = cfg.guards.map((g) => ({ ...g }));
+      const initialGuards = cfg.guards.map((g) => ({ ...g, alertTimer: 0 }));
       setGuards(initialGuards);
       guardsRef.current = initialGuards;
 
@@ -281,7 +315,15 @@ export default function ThiefEscapeGame({
       setPetrolTaken(!cfg.requiresPetrol);
       petrolTakenRef.current = !cfg.requiresPetrol;
 
+      setStones(3);
+      stonesRef.current = 3;
+      setThrownStones([]);
+      thrownStonesRef.current = [];
+      setStonePickupTaken(false);
+      stonePickupTakenRef.current = false;
+
       inputDirRef.current = 0;
+      climbDirRef.current = 0;
       isSneakRef.current = false;
       setIsGameOver(false);
       setVictoryModal(false);
@@ -310,6 +352,43 @@ export default function ThiefEscapeGame({
     });
   }, [initLevel, level]);
 
+  // Throw Distractor Stone in player's facing direction
+  const handleThrowStone = useCallback(() => {
+    if (isGameOver || isPaused || victoryModal) return;
+    if (stonesRef.current <= 0) {
+      triggerLightHaptic();
+      juiceRef.current?.popup('NO STONES!', 'Search floors for pebbles', '#FF0055');
+      return;
+    }
+
+    const curP = playerRef.current;
+    const curY = curP.isClimbing && curP.y != null ? curP.y : getFloorY(curP.floor);
+    const dir = curP.facing || 1;
+
+    const newStone = {
+      id: Date.now() + Math.random(),
+      x: curP.x + dir * 10,
+      y: curY - 18,
+      vx: dir * 5.2,
+      vy: -3.8, // ballistic upward angle
+      active: true,
+      life: 90,
+    };
+
+    setStones((s) => {
+      const next = s - 1;
+      stonesRef.current = next;
+      return next;
+    });
+
+    thrownStonesRef.current = [...thrownStonesRef.current, newStone];
+    setThrownStones(thrownStonesRef.current);
+
+    playSliceSound();
+    triggerMediumHaptic();
+    juiceRef.current?.popup('🪨 DISTRACTOR THROWN!', dir > 0 ? 'Towards Right ➔' : 'Towards Left ⬅', '#FFE600');
+  }, [isGameOver, isPaused, victoryModal, getFloorY]);
+
   // Main 60 FPS Game Loop
   useEffect(() => {
     if (isPaused || isGameOver || victoryModal) return;
@@ -319,16 +398,98 @@ export default function ThiefEscapeGame({
       const curGuards = guardsRef.current.map((g) => ({ ...g }));
       const curRival = { ...rivalRef.current };
 
-      // 1. Update Player Movement along platform
-      if (inputDirRef.current !== 0) {
-        curPlayer.x += inputDirRef.current * (isSneakRef.current ? 1.4 : 2.6);
-        curPlayer.facing = inputDirRef.current;
-      }
-      curPlayer.x = Math.max(30, Math.min(ARENA_W - 30, curPlayer.x));
-      curPlayer.isHiding = isSneakRef.current;
+      // 1. Update Player Movement (Smooth Ladder Climbing OR Walking)
+      if (curPlayer.isClimbing && curPlayer.stairIdx != null) {
+        const stair = levelConfig.stairs[curPlayer.stairIdx];
+        const yBottom = getFloorY(stair.fromFloor);
+        const yTop = getFloorY(stair.toFloor);
 
-      // 2. Update Guards Patrol
+        // Continuous vertical climbing movement
+        if (climbDirRef.current !== 0) {
+          curPlayer.y += climbDirRef.current * 2.4; // -1 moves up towards yTop, +1 moves down towards yBottom
+        }
+
+        // Stepping off onto Top Floor
+        if (curPlayer.y <= yTop) {
+          curPlayer.y = null;
+          curPlayer.floor = stair.toFloor;
+          curPlayer.isClimbing = false;
+          curPlayer.stairIdx = null;
+          triggerLightHaptic();
+          playSnapTickSound();
+        }
+        // Stepping off onto Bottom Floor
+        else if (curPlayer.y >= yBottom) {
+          curPlayer.y = null;
+          curPlayer.floor = stair.fromFloor;
+          curPlayer.isClimbing = false;
+          curPlayer.stairIdx = null;
+          triggerLightHaptic();
+          playSnapTickSound();
+        }
+        // Optional quick horizontal step off if near platform edge
+        else if (inputDirRef.current !== 0) {
+          if (Math.abs(curPlayer.y - yTop) < 14) {
+            curPlayer.y = null;
+            curPlayer.floor = stair.toFloor;
+            curPlayer.isClimbing = false;
+            curPlayer.stairIdx = null;
+            curPlayer.x += inputDirRef.current * 2.0;
+          } else if (Math.abs(curPlayer.y - yBottom) < 14) {
+            curPlayer.y = null;
+            curPlayer.floor = stair.fromFloor;
+            curPlayer.isClimbing = false;
+            curPlayer.stairIdx = null;
+            curPlayer.x += inputDirRef.current * 2.0;
+          }
+        }
+      } else {
+        // Normal horizontal walking on platform
+        if (inputDirRef.current !== 0) {
+          curPlayer.x += inputDirRef.current * (isSneakRef.current ? 1.4 : 2.6);
+          curPlayer.facing = inputDirRef.current;
+        }
+        curPlayer.x = Math.max(30, Math.min(ARENA_W - 30, curPlayer.x));
+        curPlayer.isHiding = isSneakRef.current;
+
+        // Ladder Climb Up Entry Check: near stair going up
+        if (climbDirRef.current === -1) {
+          const upIdx = levelConfig.stairs.findIndex(
+            (s) => s.fromFloor === curPlayer.floor && Math.abs(curPlayer.x - s.x) < 24
+          );
+          if (upIdx !== -1) {
+            const stair = levelConfig.stairs[upIdx];
+            curPlayer.isClimbing = true;
+            curPlayer.stairIdx = upIdx;
+            curPlayer.x = stair.x;
+            curPlayer.y = getFloorY(stair.fromFloor) - 4;
+            playSliceSound();
+            triggerLightHaptic();
+          }
+        }
+        // Ladder Climb Down Entry Check: near stair going down
+        else if (climbDirRef.current === 1) {
+          const downIdx = levelConfig.stairs.findIndex(
+            (s) => s.toFloor === curPlayer.floor && Math.abs(curPlayer.x - s.x) < 24
+          );
+          if (downIdx !== -1) {
+            const stair = levelConfig.stairs[downIdx];
+            curPlayer.isClimbing = true;
+            curPlayer.stairIdx = downIdx;
+            curPlayer.x = stair.x;
+            curPlayer.y = getFloorY(stair.toFloor) + 4;
+            playSliceSound();
+            triggerLightHaptic();
+          }
+        }
+      }
+
+      // 2. Update Guards Patrol & Alert Distractions
       curGuards.forEach((g) => {
+        if (g.alertTimer > 0) {
+          g.alertTimer -= 1;
+        }
+
         if (g.pauseTimer > 0) {
           g.pauseTimer -= 1;
         } else {
@@ -336,21 +497,78 @@ export default function ThiefEscapeGame({
           if (g.x >= g.maxX) {
             g.x = g.maxX;
             g.dir = -1;
-            g.pauseTimer = 30;
+            g.pauseTimer = 35;
           } else if (g.x <= g.minX) {
             g.x = g.minX;
             g.dir = 1;
-            g.pauseTimer = 30;
+            g.pauseTimer = 35;
           }
         }
       });
 
-      // 3. Update Vision Detection against Player
+      // 3. Update Thrown Stones Projectile Physics & Guard Distraction
+      const nextStones = [];
+      thrownStonesRef.current.forEach((st) => {
+        if (!st.active) return;
+
+        st.x += st.vx;
+        st.y += st.vy;
+        st.vy += 0.24; // gravity
+        st.life -= 1;
+
+        // Check impact with metal catwalk floors
+        let hitFloor = null;
+        for (let f = 0; f < levelConfig.floorsCount; f++) {
+          const fy = getFloorY(f);
+          if (st.vy > 0 && st.y >= fy - 6 && st.y <= fy + 14 && st.x >= 20 && st.x <= ARENA_W - 20) {
+            hitFloor = f;
+            st.y = fy - 2;
+            break;
+          }
+        }
+
+        const groundY = getFloorY(0);
+        if (st.y >= groundY) {
+          hitFloor = 0;
+          st.y = groundY;
+        }
+
+        if (hitFloor !== null && st.life > 0) {
+          // Stone hit floor: make sound & alert guards on this floor
+          playSnapTickSound();
+          triggerLightHaptic();
+          juiceRef.current?.burst(st.x, st.y, '#FFE600', 14);
+
+          curGuards.forEach((g) => {
+            if (g.floor === hitFloor) {
+              const dist = Math.abs(g.x - st.x);
+              if (dist < 150) {
+                g.pauseTimer = 100; // freeze in place / investigate for 1.6s
+                g.alertTimer = 100;
+                g.dir = st.x > g.x ? 1 : -1; // turn towards noise!
+              }
+            }
+          });
+
+          st.active = false;
+        } else if (st.life > 0 && st.x > 10 && st.x < ARENA_W - 10) {
+          nextStones.push(st);
+        }
+      });
+      thrownStonesRef.current = nextStones;
+      setThrownStones(nextStones);
+
+      // 4. Update Vision Detection against Player
+      // Note: If player is climbing mid-ladder, player is between floors and safe from horizontal beams!
       if (!curPlayer.isHiding) {
+        const playerY = curPlayer.isClimbing && curPlayer.y != null ? curPlayer.y : getFloorY(curPlayer.floor);
+
         curGuards.forEach((g) => {
-          if (g.floor === curPlayer.floor) {
+          const gy = getFloorY(g.floor);
+          // Only detected if player's vertical position aligns with guard's eye level (within 18px)
+          if (Math.abs(playerY - gy) < 18) {
             const dist = curPlayer.x - g.x;
-            const inCone = g.dir === 1 ? dist > 0 && dist < 85 : dist < 0 && dist > -85;
+            const inCone = g.dir === 1 ? dist > 0 && dist < FLASHLIGHT_LEN : dist < 0 && dist > -FLASHLIGHT_LEN;
             if (inCone) {
               handlePlayerBusted();
             }
@@ -358,7 +576,7 @@ export default function ThiefEscapeGame({
         });
       }
 
-      // 4. Update Rival AI Thief
+      // 5. Update Rival AI Thief
       if (levelConfig.hasRival && curRival.isAlive) {
         const hasD = curRival.hasDiamond;
         const targetFloor = hasD ? 0 : levelConfig.diamond.floor;
@@ -366,8 +584,9 @@ export default function ThiefEscapeGame({
         if (curRival.floor < targetFloor) {
           const upStair = levelConfig.stairs.find((s) => s.fromFloor === curRival.floor);
           if (upStair) {
-            if (Math.abs(curRival.x - upStair.x) < 5) {
+            if (Math.abs(curRival.x - upStair.x) < 6) {
               curRival.floor += 1;
+              curRival.x = upStair.x;
             } else {
               curRival.facing = curRival.x < upStair.x ? 1 : -1;
               curRival.x += curRival.facing * 1.6;
@@ -376,8 +595,9 @@ export default function ThiefEscapeGame({
         } else if (curRival.floor > targetFloor) {
           const downStair = levelConfig.stairs.find((s) => s.toFloor === curRival.floor);
           if (downStair) {
-            if (Math.abs(curRival.x - downStair.x) < 5) {
+            if (Math.abs(curRival.x - downStair.x) < 6) {
               curRival.floor -= 1;
+              curRival.x = downStair.x;
             } else {
               curRival.facing = curRival.x < downStair.x ? 1 : -1;
               curRival.x += curRival.facing * 1.6;
@@ -397,42 +617,58 @@ export default function ThiefEscapeGame({
               curRival.x += curRival.facing * 1.6;
             }
           } else if (hasD) {
-            if (curRival.floor === 0 && Math.abs(curRival.x - levelConfig.car.x) < 20) {
+            if (curRival.floor === 0 && Math.abs(curRival.x - levelConfig.car.x) < 25) {
               handlePlayerBusted();
             }
           }
         }
       }
 
-      // 5. Check Item Pickups: Diamond
-      if (!curPlayer.hasDiamond && !diamondTakenRef.current && curPlayer.floor === levelConfig.diamond.floor) {
-        if (Math.abs(curPlayer.x - levelConfig.diamond.x) < 18) {
+      // 6. Check Item Pickups: Diamond
+      if (!curPlayer.hasDiamond && !diamondTakenRef.current && curPlayer.floor === levelConfig.diamond.floor && !curPlayer.isClimbing) {
+        if (Math.abs(curPlayer.x - levelConfig.diamond.x) < 22) {
           curPlayer.hasDiamond = true;
           setDiamondTaken(true);
           diamondTakenRef.current = true;
           triggerPerfectHaptic();
           playPerfectSound();
           juiceRef.current?.burst(levelConfig.diamond.x, getFloorY(curPlayer.floor), '#00F5FF', 24);
-          juiceRef.current?.popup('💎 DIAMOND SECURED!', 'Now escape to the car!', '#00F5FF');
+          juiceRef.current?.popup('💎 DIAMOND SECURED!', 'Now escape to the getaway car!', '#00F5FF');
         }
       }
 
-      // 6. Check Item Pickups: Petrol
-      if (levelConfig.requiresPetrol && !curPlayer.hasPetrol && levelConfig.petrol && curPlayer.floor === levelConfig.petrol.floor) {
-        if (Math.abs(curPlayer.x - levelConfig.petrol.x) < 18) {
+      // 7. Check Item Pickups: Petrol Canister
+      if (levelConfig.requiresPetrol && !curPlayer.hasPetrol && levelConfig.petrol && curPlayer.floor === levelConfig.petrol.floor && !curPlayer.isClimbing) {
+        if (Math.abs(curPlayer.x - levelConfig.petrol.x) < 22) {
           curPlayer.hasPetrol = true;
           setPetrolTaken(true);
           petrolTakenRef.current = true;
           triggerSelectionHaptic();
           playTapSound();
           juiceRef.current?.burst(levelConfig.petrol.x, getFloorY(curPlayer.floor), '#FFE600', 16);
-          juiceRef.current?.popup('⛽ FUEL CANISTER SECURED!', 'Car fueled up', '#FFE600');
+          juiceRef.current?.popup('⛽ FUEL CANISTER SECURED!', 'Getaway car fueled up', '#FFE600');
         }
       }
 
-      // 7. Check Stealing Diamond Back from Rival Thief
-      if (levelConfig.hasRival && curRival.hasDiamond && curPlayer.floor === curRival.floor) {
-        if (Math.abs(curPlayer.x - curRival.x) < 22) {
+      // 8. Check Item Pickups: Stone Cache Refill
+      if (levelConfig.stonePickup && !stonePickupTakenRef.current && curPlayer.floor === levelConfig.stonePickup.floor && !curPlayer.isClimbing) {
+        if (Math.abs(curPlayer.x - levelConfig.stonePickup.x) < 22) {
+          setStonePickupTaken(true);
+          stonePickupTakenRef.current = true;
+          setStones((s) => {
+            const next = s + 2;
+            stonesRef.current = next;
+            return next;
+          });
+          triggerSelectionHaptic();
+          playTapSound();
+          juiceRef.current?.popup('🪨 FOUND STONES (+2)!', 'Restocked distractor rocks', '#FFE600');
+        }
+      }
+
+      // 9. Check Stealing Diamond Back from Rival Thief
+      if (levelConfig.hasRival && curRival.hasDiamond && curPlayer.floor === curRival.floor && !curPlayer.isClimbing) {
+        if (Math.abs(curPlayer.x - curRival.x) < 24) {
           curRival.hasDiamond = false;
           curPlayer.hasDiamond = true;
           triggerPerfectHaptic();
@@ -441,9 +677,9 @@ export default function ThiefEscapeGame({
         }
       }
 
-      // 8. Check Escape to Car on Ground Floor
-      if (curPlayer.floor === 0 && curPlayer.hasDiamond && curPlayer.hasPetrol) {
-        if (Math.abs(curPlayer.x - levelConfig.car.x) < 24) {
+      // 10. Check Escape to Car on Ground Floor (Wide 55px Hitbox ensures level clears smoothly!)
+      if (curPlayer.floor === 0 && !curPlayer.isClimbing && curPlayer.hasDiamond && curPlayer.hasPetrol) {
+        if (Math.abs(curPlayer.x - levelConfig.car.x) <= 55) {
           triggerPerfectHaptic();
           playPerfectSound();
           setVictoryModal(true);
@@ -472,49 +708,6 @@ export default function ThiefEscapeGame({
     return () => clearInterval(interval);
   }, [isPaused, isGameOver, victoryModal, levelConfig, getFloorY, handlePlayerBusted, level, highScore, onScoreUpdate]);
 
-  // Climb Up / Down Stairs handlers
-  const handleClimbUp = () => {
-    if (isGameOver || isPaused) return;
-
-    const stair = levelConfig.stairs.find(
-      (s) => s.fromFloor === player.floor && Math.abs(player.x - s.x) < 26
-    );
-
-    if (stair) {
-      setPlayer((p) => ({
-        ...p,
-        floor: stair.toFloor,
-        x: stair.x,
-      }));
-      playSliceSound();
-      triggerLightHaptic();
-      juiceRef.current?.popup('▲ ASCENDING', `Floor ${stair.toFloor}`, COLORS.cyan);
-    } else {
-      triggerLightHaptic();
-    }
-  };
-
-  const handleClimbDown = () => {
-    if (isGameOver || isPaused) return;
-
-    const stair = levelConfig.stairs.find(
-      (s) => s.toFloor === player.floor && Math.abs(player.x - s.x) < 26
-    );
-
-    if (stair) {
-      setPlayer((p) => ({
-        ...p,
-        floor: stair.fromFloor,
-        x: stair.x,
-      }));
-      playSliceSound();
-      triggerLightHaptic();
-      juiceRef.current?.popup('▼ DESCENDING', `Floor ${stair.fromFloor}`, COLORS.solarGold);
-    } else {
-      triggerLightHaptic();
-    }
-  };
-
   // Sneak / Hide Toggle
   const handleSneakPressIn = () => {
     isSneakRef.current = true;
@@ -542,6 +735,9 @@ export default function ThiefEscapeGame({
     setLevel(1);
     initLevel(1);
   };
+
+  // Active player vertical position
+  const activePlayerY = player.isClimbing && player.y != null ? player.y : getFloorY(player.floor);
 
   return (
     <View style={styles.container}>
@@ -573,6 +769,13 @@ export default function ThiefEscapeGame({
           </View>
 
           <View style={styles.statusBox}>
+            <Text style={styles.statusDim}>STONES</Text>
+            <Text style={[styles.statusVal, { color: stones > 0 ? '#FFE600' : 'rgba(255,255,255,0.4)' }]}>
+              {`🪨 x${stones}`}
+            </Text>
+          </View>
+
+          <View style={styles.statusBox}>
             <Text style={styles.statusDim}>FUEL</Text>
             <Text style={[styles.statusVal, { color: player.hasPetrol ? COLORS.matrixMint : '#FF0055' }]}>
               {player.hasPetrol ? 'READY ⛽' : 'EMPTY ⚠️'}
@@ -599,7 +802,7 @@ export default function ThiefEscapeGame({
                   <Stop offset="100%" stopColor="#050610" />
                 </SvgLinearGradient>
 
-                {/* Guard Flashlight Beam Gradient */}
+                {/* Guard Flashlight Beam Gradients */}
                 <SvgLinearGradient id="beamGradRight" x1="0" y1="0" x2="1" y2="0">
                   <Stop offset="0%" stopColor="#FFE600" stopOpacity="0.45" />
                   <Stop offset="100%" stopColor="#FFE600" stopOpacity="0.0" />
@@ -608,6 +811,17 @@ export default function ThiefEscapeGame({
                 <SvgLinearGradient id="beamGradLeft" x1="1" y1="0" x2="0" y2="0">
                   <Stop offset="0%" stopColor="#FFE600" stopOpacity="0.45" />
                   <Stop offset="100%" stopColor="#FFE600" stopOpacity="0.0" />
+                </SvgLinearGradient>
+
+                {/* Alert Distraction Beam Gradients */}
+                <SvgLinearGradient id="beamAlertRight" x1="0" y1="0" x2="1" y2="0">
+                  <Stop offset="0%" stopColor="#FF9900" stopOpacity="0.6" />
+                  <Stop offset="100%" stopColor="#FF9900" stopOpacity="0.0" />
+                </SvgLinearGradient>
+
+                <SvgLinearGradient id="beamAlertLeft" x1="1" y1="0" x2="0" y2="0">
+                  <Stop offset="0%" stopColor="#FF9900" stopOpacity="0.6" />
+                  <Stop offset="100%" stopColor="#FF9900" stopOpacity="0.0" />
                 </SvgLinearGradient>
 
                 {/* Vault Glow Gradient */}
@@ -643,25 +857,27 @@ export default function ThiefEscapeGame({
                 );
               })}
 
-              {/* Fire Escape Stairs / Ladders connecting floors */}
+              {/* Fire Escape Stairs / Ladders connecting floors with continuous rungs */}
               {levelConfig.stairs.map((stair, idx) => {
                 const y1 = getFloorY(stair.fromFloor);
                 const y2 = getFloorY(stair.toFloor);
+                const rungCount = Math.max(6, Math.floor(Math.abs(y1 - y2) / 12));
                 return (
                   <G key={`stair_${idx}`}>
-                    <Line x1={stair.x - 12} y1={y1} x2={stair.x - 12} y2={y2} stroke="#FFE600" strokeWidth={2} />
-                    <Line x1={stair.x + 12} y1={y1} x2={stair.x + 12} y2={y2} stroke="#FFE600" strokeWidth={2} />
-                    {Array.from({ length: 6 }).map((__, stepIdx) => {
-                      const stepY = y1 + ((y2 - y1) / 6) * stepIdx;
+                    <Line x1={stair.x - 11} y1={y1} x2={stair.x - 11} y2={y2} stroke="#FFE600" strokeWidth={2.2} />
+                    <Line x1={stair.x + 11} y1={y1} x2={stair.x + 11} y2={y2} stroke="#FFE600" strokeWidth={2.2} />
+                    {Array.from({ length: rungCount }).map((__, stepIdx) => {
+                      const stepY = y1 + ((y2 - y1) / rungCount) * stepIdx;
                       return (
                         <Line
                           key={`step_${stepIdx}`}
-                          x1={stair.x - 12}
+                          x1={stair.x - 11}
                           y1={stepY}
-                          x2={stair.x + 12}
+                          x2={stair.x + 11}
                           y2={stepY}
                           stroke="#FFE600"
-                          strokeWidth={1.5}
+                          strokeWidth={1.8}
+                          strokeOpacity={0.85}
                         />
                       );
                     })}
@@ -669,11 +885,40 @@ export default function ThiefEscapeGame({
                 );
               })}
 
-              {/* Ground Floor Getaway Car */}
+              {/* Ground Floor Getaway Car with Animated Escape Beacon */}
               <G>
-                <Rect x={levelConfig.car.x - 28} y={getFloorY(0) - 18} width={56} height={16} rx={5} fill="#141829" stroke="#FF0055" strokeWidth={1.5} />
-                <Circle cx={levelConfig.car.x - 18} cy={getFloorY(0) - 2} r={5} fill="#05060C" stroke="#FF0055" strokeWidth={1} />
-                <Circle cx={levelConfig.car.x + 18} cy={getFloorY(0) - 2} r={5} fill="#05060C" stroke="#FF0055" strokeWidth={1} />
+                {/* Active Escape Zone indicator when diamond & fuel are ready */}
+                {player.hasDiamond && player.hasPetrol && (
+                  <G>
+                    <Rect
+                      x={levelConfig.car.x - 34}
+                      y={getFloorY(0) - 24}
+                      width={68}
+                      height={26}
+                      rx={8}
+                      fill="none"
+                      stroke={COLORS.matrixMint}
+                      strokeWidth={2}
+                      strokeDasharray="6 4"
+                    />
+                    <Polygon
+                      points={`${levelConfig.car.x},${getFloorY(0) - 26} ${levelConfig.car.x - 7},${getFloorY(0) - 34} ${levelConfig.car.x + 7},${getFloorY(0) - 34}`}
+                      fill={COLORS.matrixMint}
+                    />
+                  </G>
+                )}
+
+                {/* Warning beacon if diamond is ready but petrol still needed */}
+                {player.hasDiamond && !player.hasPetrol && (
+                  <Polygon
+                    points={`${levelConfig.car.x},${getFloorY(0) - 24} ${levelConfig.car.x - 6},${getFloorY(0) - 32} ${levelConfig.car.x + 6},${getFloorY(0) - 32}`}
+                    fill="#FFE600"
+                  />
+                )}
+
+                <Rect x={levelConfig.car.x - 28} y={getFloorY(0) - 18} width={56} height={16} rx={5} fill="#141829" stroke={player.hasDiamond && player.hasPetrol ? COLORS.matrixMint : '#FF0055'} strokeWidth={1.8} />
+                <Circle cx={levelConfig.car.x - 18} cy={getFloorY(0) - 2} r={5} fill="#05060C" stroke={player.hasDiamond && player.hasPetrol ? COLORS.matrixMint : '#FF0055'} strokeWidth={1} />
+                <Circle cx={levelConfig.car.x + 18} cy={getFloorY(0) - 2} r={5} fill="#05060C" stroke={player.hasDiamond && player.hasPetrol ? COLORS.matrixMint : '#FF0055'} strokeWidth={1} />
                 <Polygon
                   points={`${levelConfig.car.x - 12},${getFloorY(0) - 18} ${levelConfig.car.x + 8},${getFloorY(0) - 18} ${levelConfig.car.x + 16},${getFloorY(0) - 8} ${levelConfig.car.x - 18},${getFloorY(0) - 8}`}
                   fill="#00F5FF44"
@@ -697,6 +942,15 @@ export default function ThiefEscapeGame({
                 </G>
               )}
 
+              {/* Stone Refill Cache on certain floors */}
+              {levelConfig.stonePickup && !stonePickupTaken && (
+                <G>
+                  <Circle cx={levelConfig.stonePickup.x - 3} cy={getFloorY(levelConfig.stonePickup.floor) - 5} r={3} fill="#8892B0" stroke="#FFFFFF" strokeWidth={0.8} />
+                  <Circle cx={levelConfig.stonePickup.x + 3} cy={getFloorY(levelConfig.stonePickup.floor) - 5} r={3.2} fill="#8892B0" stroke="#FFFFFF" strokeWidth={0.8} />
+                  <Circle cx={levelConfig.stonePickup.x} cy={getFloorY(levelConfig.stonePickup.floor) - 9} r={3} fill="#CCD6F6" stroke="#FFFFFF" strokeWidth={0.8} />
+                </G>
+              )}
+
               {/* Quantum Diamond in Vault */}
               {!diamondTaken && (
                 <G>
@@ -710,29 +964,51 @@ export default function ThiefEscapeGame({
                 </G>
               )}
 
-              {/* Patrolling Security Guards & Flashlight Vision Beams */}
+              {/* Patrolling Security Guards & Vision Beams */}
               {guards.map((g) => {
                 const gy = getFloorY(g.floor);
+                const isAlerted = g.alertTimer > 0;
+                const beamRightId = isAlerted ? 'url(#beamAlertRight)' : 'url(#beamGradRight)';
+                const beamLeftId = isAlerted ? 'url(#beamAlertLeft)' : 'url(#beamGradLeft)';
+
                 return (
                   <G key={g.id}>
+                    {/* Flashlight Beam */}
                     {g.dir === 1 ? (
                       <Polygon
-                        points={`${g.x + 8},${gy - 20} ${g.x + 85},${gy - 38} ${g.x + 85},${gy - 2}`}
-                        fill="url(#beamGradRight)"
+                        points={`${g.x + 8},${gy - 18} ${g.x + FLASHLIGHT_LEN},${gy - 32} ${g.x + FLASHLIGHT_LEN},${gy - 2}`}
+                        fill={beamRightId}
                       />
                     ) : (
                       <Polygon
-                        points={`${g.x - 8},${gy - 20} ${g.x - 85},${gy - 38} ${g.x - 85},${gy - 2}`}
-                        fill="url(#beamGradLeft)"
+                        points={`${g.x - 8},${gy - 18} ${g.x - FLASHLIGHT_LEN},${gy - 32} ${g.x - FLASHLIGHT_LEN},${gy - 2}`}
+                        fill={beamLeftId}
                       />
                     )}
 
-                    <Rect x={g.x - 6} y={gy - 26} width={12} height={24} rx={3} fill="#0A0E24" stroke="#FFE600" strokeWidth={1.4} />
+                    {/* Alert Question Mark Bubble when distracted by stone */}
+                    {isAlerted && (
+                      <G>
+                        <Circle cx={g.x} cy={gy - 38} r={8} fill="#FF9900" stroke="#FFFFFF" strokeWidth={1.5} />
+                        <Line x1={g.x} y1={gy - 42} x2={g.x} y2={gy - 38} stroke="#05060E" strokeWidth={2.2} />
+                        <Circle cx={g.x} cy={gy - 34} r={1.2} fill="#05060E" />
+                      </G>
+                    )}
+
+                    <Rect x={g.x - 6} y={gy - 26} width={12} height={24} rx={3} fill="#0A0E24" stroke={isAlerted ? '#FF9900' : '#FFE600'} strokeWidth={1.4} />
                     <Circle cx={g.x} cy={gy - 28} r={5} fill="#0A0E24" />
-                    <Line x1={g.x - 4} y1={gy - 28} x2={g.x + g.dir * 6} y2={gy - 28} stroke="#FFE600" strokeWidth={2} />
+                    <Line x1={g.x - 4} y1={gy - 28} x2={g.x + g.dir * 6} y2={gy - 28} stroke={isAlerted ? '#FF9900' : '#FFE600'} strokeWidth={2} />
                   </G>
                 );
               })}
+
+              {/* Thrown Distractor Stones in Flight */}
+              {thrownStones.map((st) => (
+                <G key={st.id}>
+                  <Circle cx={st.x} cy={st.y} r={3.5} fill="#FFE600" stroke="#FFFFFF" strokeWidth={1} />
+                  <Circle cx={st.x - st.vx * 1.5} cy={st.y - st.vy * 1.5} r={2} fill="rgba(255, 230, 0, 0.4)" />
+                </G>
+              ))}
 
               {/* Rival Thief */}
               {levelConfig.hasRival && rival.isAlive && (
@@ -745,38 +1021,75 @@ export default function ThiefEscapeGame({
                 </G>
               )}
 
-              {/* Player Stealth Thief Operative */}
-              <G>
-                <Rect
-                  x={player.x - 7}
-                  y={getFloorY(player.floor) - (player.isHiding ? 14 : 26)}
-                  width={14}
-                  height={player.isHiding ? 12 : 24}
-                  rx={3}
-                  fill={player.isHiding ? 'rgba(0, 245, 255, 0.25)' : '#080C1E'}
-                  stroke="#00F5FF"
-                  strokeWidth={1.8}
-                />
-                <Circle cx={player.x} cy={getFloorY(player.floor) - (player.isHiding ? 16 : 28)} r={5} fill="#00F5FF" />
-                <Line
-                  x1={player.x - 4}
-                  y1={getFloorY(player.floor) - (player.isHiding ? 16 : 28)}
-                  x2={player.x + player.facing * 5}
-                  y2={getFloorY(player.floor) - (player.isHiding ? 16 : 28)}
-                  stroke="#FFFFFF"
-                  strokeWidth={2}
-                />
-                {player.hasDiamond && (
-                  <Circle cx={player.x} cy={getFloorY(player.floor) - 36} r={5} fill="#00F5FF" stroke="#FFFFFF" strokeWidth={1.5} />
-                )}
-              </G>
+              {/* Player Stealth Thief Operative (Renders smooth climbing vs on-floor walking) */}
+              {player.isClimbing ? (
+                <G>
+                  {/* Gripping Hands on Ladder Rails */}
+                  <Line x1={player.x - 11} y1={activePlayerY - 18} x2={player.x - 5} y2={activePlayerY - 14} stroke="#00F5FF" strokeWidth={2.2} />
+                  <Line x1={player.x + 5} y1={activePlayerY - 14} x2={player.x + 11} y2={activePlayerY - 18} stroke="#00F5FF" strokeWidth={2.2} />
+
+                  {/* Body climbing back silhouette */}
+                  <Rect
+                    x={player.x - 6}
+                    y={activePlayerY - 24}
+                    width={12}
+                    height={20}
+                    rx={3}
+                    fill="#080C1E"
+                    stroke="#00F5FF"
+                    strokeWidth={1.8}
+                  />
+
+                  {/* Head */}
+                  <Circle cx={player.x} cy={activePlayerY - 26} r={5} fill="#00F5FF" />
+
+                  {/* Gripping Feet on Ladder Rungs */}
+                  <Line x1={player.x - 10} y1={activePlayerY - 4} x2={player.x - 4} y2={activePlayerY - 2} stroke="#00F5FF" strokeWidth={2.2} />
+                  <Line x1={player.x + 4} y1={activePlayerY - 2} x2={player.x + 10} y2={activePlayerY - 4} stroke="#00F5FF" strokeWidth={2.2} />
+
+                  {/* Diamond on operative's back */}
+                  {player.hasDiamond && (
+                    <Polygon
+                      points={`${player.x},${activePlayerY - 33} ${player.x + 5},${activePlayerY - 28} ${player.x},${activePlayerY - 23} ${player.x - 5},${activePlayerY - 28}`}
+                      fill="#00F5FF"
+                      stroke="#FFFFFF"
+                      strokeWidth={1.2}
+                    />
+                  )}
+                </G>
+              ) : (
+                <G>
+                  <Rect
+                    x={player.x - 7}
+                    y={activePlayerY - (player.isHiding ? 14 : 26)}
+                    width={14}
+                    height={player.isHiding ? 12 : 24}
+                    rx={3}
+                    fill={player.isHiding ? 'rgba(0, 245, 255, 0.25)' : '#080C1E'}
+                    stroke="#00F5FF"
+                    strokeWidth={1.8}
+                  />
+                  <Circle cx={player.x} cy={activePlayerY - (player.isHiding ? 16 : 28)} r={5} fill="#00F5FF" />
+                  <Line
+                    x1={player.x - 4}
+                    y1={activePlayerY - (player.isHiding ? 16 : 28)}
+                    x2={player.x + player.facing * 5}
+                    y2={activePlayerY - (player.isHiding ? 16 : 28)}
+                    stroke="#FFFFFF"
+                    strokeWidth={2}
+                  />
+                  {player.hasDiamond && (
+                    <Circle cx={player.x} cy={activePlayerY - 36} r={5} fill="#00F5FF" stroke="#FFFFFF" strokeWidth={1.5} />
+                  )}
+                </G>
+              )}
             </Svg>
           </View>
         </View>
 
-        {/* Tactical Control Bar */}
+        {/* Tactical Control Bar: Horizontal Walk, Smooth Ladder Climb, Stone Distractor & Hide */}
         <View style={styles.controlsRow}>
-          {/* Horizontal Movement Buttons (Left & Right) */}
+          {/* Movement D-Pad (Left & Right) */}
           <View style={styles.dirGroup}>
             <Pressable
               style={({ pressed }) => [styles.ctrlBtn, pressed && styles.ctrlBtnPressed]}
@@ -795,19 +1108,41 @@ export default function ThiefEscapeGame({
             </Pressable>
           </View>
 
-          {/* Vertical Stair Climbing Buttons */}
+          {/* Smooth Ladder Climbing: Hold to climb, release to stand in the middle */}
           <View style={styles.dirGroup}>
-            <Pressable style={({ pressed }) => [styles.ctrlBtn, pressed && styles.ctrlBtnPressed]} onPress={handleClimbUp}>
-              <Text style={[styles.ctrlText, { color: '#FFE600' }]}>▲ STAIRS</Text>
+            <Pressable
+              style={({ pressed }) => [styles.climbBtn, pressed && styles.climbBtnPressed]}
+              onPressIn={() => (climbDirRef.current = -1)}
+              onPressOut={() => (climbDirRef.current = 0)}
+            >
+              <Text style={styles.climbText}>▲</Text>
+              <Text style={styles.climbSub}>CLIMB</Text>
             </Pressable>
 
-            <Pressable style={({ pressed }) => [styles.ctrlBtn, pressed && styles.ctrlBtnPressed]} onPress={handleClimbDown}>
-              <Text style={[styles.ctrlText, { color: '#FFE600' }]}>▼ STAIRS</Text>
+            <Pressable
+              style={({ pressed }) => [styles.climbBtn, pressed && styles.climbBtnPressed]}
+              onPressIn={() => (climbDirRef.current = 1)}
+              onPressOut={() => (climbDirRef.current = 0)}
+            >
+              <Text style={styles.climbText}>▼</Text>
+              <Text style={styles.climbSub}>CLIMB</Text>
             </Pressable>
           </View>
 
-          {/* Sneak / Hide in Shadow Button */}
+          {/* Actions: Distractor Stone Throw & Shadow Hide */}
           <View style={styles.actionGroup}>
+            <Pressable
+              style={({ pressed }) => [
+                styles.stoneBtn,
+                pressed && styles.stoneBtnPressed,
+                stones <= 0 && styles.btnDisabled,
+              ]}
+              onPress={handleThrowStone}
+            >
+              <Text style={styles.stoneIcon}>🪨</Text>
+              <Text style={styles.stoneCount}>{stones}</Text>
+            </Pressable>
+
             <Pressable
               style={({ pressed }) => [
                 styles.sneakBtn,
@@ -828,7 +1163,7 @@ export default function ThiefEscapeGame({
         visible={victoryModal}
         type="VICTORY"
         title="HEIST COMPLETE!"
-        subtitle={`Diamond secured! Escaped from Sector ${level}.`}
+        subtitle={`Escaped successfully in the getaway car! Sector ${level} cleared.`}
         score={score}
         bestScore={highScore}
         accentColor="#00F5FF"
@@ -863,7 +1198,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingVertical: 8,
     backgroundColor: 'rgba(8, 10, 24, 0.85)',
     borderBottomWidth: 1,
@@ -876,11 +1211,11 @@ const styles = StyleSheet.create({
     fontFamily: monoFont,
     fontSize: 9,
     color: 'rgba(255, 255, 255, 0.45)',
-    letterSpacing: 1,
+    letterSpacing: 0.8,
   },
   statusVal: {
     fontFamily: monoFont,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '800',
     color: '#FFFFFF',
   },
@@ -909,19 +1244,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
     backgroundColor: 'rgba(8, 10, 24, 0.95)',
     borderTopWidth: 1,
     borderTopColor: 'rgba(0, 245, 255, 0.15)',
   },
   dirGroup: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 6,
   },
   ctrlBtn: {
+    width: 44,
     height: 48,
-    paddingHorizontal: 14,
     borderRadius: 12,
     backgroundColor: '#12162A',
     borderWidth: 1.5,
@@ -935,15 +1270,72 @@ const styles = StyleSheet.create({
   },
   ctrlText: {
     fontFamily: monoFont,
-    fontSize: 13,
+    fontSize: 16,
     fontWeight: '900',
     color: '#00F5FF',
   },
+  climbBtn: {
+    width: 46,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: '#1B1810',
+    borderWidth: 1.5,
+    borderColor: '#FFE600',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 2,
+  },
+  climbBtnPressed: {
+    backgroundColor: 'rgba(255, 230, 0, 0.35)',
+    transform: [{ scale: 0.94 }],
+  },
+  climbText: {
+    fontFamily: monoFont,
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#FFE600',
+  },
+  climbSub: {
+    fontFamily: monoFont,
+    fontSize: 7.5,
+    fontWeight: '900',
+    color: '#FFE600',
+    letterSpacing: 0.5,
+  },
   actionGroup: {
+    flexDirection: 'row',
+    gap: 6,
     alignItems: 'center',
   },
+  stoneBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: '#1E1912',
+    borderWidth: 1.5,
+    borderColor: '#FFE600',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stoneBtnPressed: {
+    backgroundColor: 'rgba(255, 230, 0, 0.3)',
+    transform: [{ scale: 0.94 }],
+  },
+  stoneIcon: {
+    fontSize: 15,
+  },
+  stoneCount: {
+    fontFamily: monoFont,
+    fontSize: 9.5,
+    fontWeight: '900',
+    color: '#FFE600',
+  },
+  btnDisabled: {
+    opacity: 0.4,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
   sneakBtn: {
-    width: 68,
+    width: 48,
     height: 48,
     borderRadius: 12,
     backgroundColor: '#1C122C',
@@ -958,13 +1350,13 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.94 }],
   },
   sneakIcon: {
-    fontSize: 16,
+    fontSize: 15,
   },
   sneakText: {
     fontFamily: monoFont,
-    fontSize: 9,
+    fontSize: 8,
     fontWeight: '900',
     color: '#FFFFFF',
-    letterSpacing: 1,
+    letterSpacing: 0.5,
   },
 });
