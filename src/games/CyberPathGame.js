@@ -1,21 +1,18 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   View,
   Text,
   Pressable,
   StyleSheet,
   Platform,
-  useWindowDimensions,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Svg, {
   Rect,
   Circle,
   Path,
-  Defs,
-  LinearGradient as SvgLinearGradient,
-  Stop,
   G,
+  Polygon,
 } from 'react-native-svg';
 import { COLORS } from '../../styles';
 import MiniGameHeader from '../components/MiniGameHeader';
@@ -25,13 +22,13 @@ import {
   triggerLightHaptic,
   triggerMediumHaptic,
   triggerPerfectHaptic,
-  triggerGameOverHaptic,
+  triggerSelectionHaptic,
 } from '../utils/haptics';
 import {
   playTapSound,
   playPerfectSound,
   playSliceSound,
-  playGameOverSound,
+  playSnapTickSound,
 } from '../utils/sound';
 
 const STORAGE_KEY = '@game_tower:best_pathfinder_v1';
@@ -42,1418 +39,1130 @@ const monoFont = Platform.select({
   default: 'monospace',
 });
 
+// Grid Dimensions: Exactly 24 Boxes (4 columns x 6 rows)
+const GRID_COLS = 4;
+const GRID_ROWS = 6;
+const TILE_SIZE = 50;
+const TILE_GAP = 3;
+
 /**
- * Tile Types & Connection Port Definitions
- * Ports: [TOP, RIGHT, BOTTOM, LEFT]
+ * Tile Path Definitions matching the Forest / Cyber Tileset reference image
+ * Ports define available exits: { top, right, bottom, left }
  */
-export const TILE_TYPES = {
-  STRAIGHT_H: { id: 'STRAIGHT_H', label: 'STRAIGHT H', ports: [0, 1, 0, 1] },
-  STRAIGHT_V: { id: 'STRAIGHT_V', label: 'STRAIGHT V', ports: [1, 0, 1, 0] },
-  CURVE_TR: { id: 'CURVE_TR', label: 'CURVE TR', ports: [1, 1, 0, 0] },
-  CURVE_RB: { id: 'CURVE_RB', label: 'CURVE RB', ports: [0, 1, 1, 0] },
-  CURVE_BL: { id: 'CURVE_BL', label: 'CURVE BL', ports: [0, 0, 1, 1] },
-  CURVE_LT: { id: 'CURVE_LT', label: 'CURVE LT', ports: [1, 0, 0, 1] },
-  CROSS: { id: 'CROSS', label: 'CROSS 4-WAY', ports: [1, 1, 1, 1] },
-};
-
-export const ROTATION_MAP = {
-  STRAIGHT_H: 'STRAIGHT_V',
-  STRAIGHT_V: 'STRAIGHT_H',
-  CURVE_TR: 'CURVE_RB',
-  CURVE_RB: 'CURVE_BL',
-  CURVE_BL: 'CURVE_LT',
-  CURVE_LT: 'CURVE_TR',
-  CROSS: 'CROSS',
+const TILE_DEFS = {
+  STRAIGHT_H: {
+    id: 'STRAIGHT_H',
+    name: 'HORIZONTAL',
+    ports: { left: true, right: true },
+  },
+  STRAIGHT_V: {
+    id: 'STRAIGHT_V',
+    name: 'VERTICAL',
+    ports: { top: true, bottom: true },
+  },
+  CURVE_TR: {
+    id: 'CURVE_TR',
+    name: 'TOP-RIGHT',
+    ports: { top: true, right: true },
+  },
+  CURVE_RB: {
+    id: 'CURVE_RB',
+    name: 'RIGHT-DOWN',
+    ports: { right: true, bottom: true },
+  },
+  CURVE_BL: {
+    id: 'CURVE_BL',
+    name: 'DOWN-LEFT',
+    ports: { bottom: true, left: true },
+  },
+  CURVE_LT: {
+    id: 'CURVE_LT',
+    name: 'LEFT-TOP',
+    ports: { left: true, top: true },
+  },
+  CROSS: {
+    id: 'CROSS',
+    name: 'CROSSWAY',
+    ports: { top: true, right: true, bottom: true, left: true },
+  },
 };
 
 /**
- * Hand-crafted levels escalating in grid size, obstacles, and conduit challenges.
+ * 10 Curated Escalating Levels of 24-box Puzzles
+ * With pre-placed scenery (Pond, Trees, Rocks), Start, and Exit
+ * Left and Right trays hold available tiles to place!
  */
 const CURATED_LEVELS = [
-  // Level 1: 3x3 Tutorial (Straight & simple turn)
+  // Level 1: Tutorial Direct Route (Row 1)
   {
-    name: 'INITIAL CIRCUIT',
-    cols: 3,
-    rows: 3,
-    entry: { col: -1, row: 1, dir: 'RIGHT' }, // Enters at (0, 1) from left
-    exit: { col: 3, row: 1, dir: 'RIGHT' },   // Exits at (2, 1) to right
-    obstacles: [],
-    fixedTiles: {},
-    tray: [
-      { type: 'STRAIGHT_H', count: 3 },
+    name: 'MEADOW OVERVIEW',
+    start: { col: 0, row: 1, dir: 'right' },
+    exit: { col: 3, row: 1, dir: 'right' },
+    scenery: [
+      { col: 1, row: 3, type: 'POND' },
+      { col: 2, row: 4, type: 'TREES' },
     ],
-    parMoves: 3,
+    leftTray: [
+      { id: 'lt_0', type: 'STRAIGHT_H' },
+      { id: 'lt_1', type: 'STRAIGHT_H' },
+      { id: 'lt_2', type: 'CURVE_RB' },
+    ],
+    rightTray: [
+      { id: 'rt_0', type: 'STRAIGHT_H' },
+      { id: 'rt_1', type: 'CURVE_BL' },
+      { id: 'rt_2', type: 'STRAIGHT_V' },
+    ],
   },
-  // Level 2: 3x3 U-turn detour around central pillar
+
+  // Level 2: Gentle Detour around Pond
   {
-    name: 'CORE DETOUR',
-    cols: 3,
-    rows: 3,
-    entry: { col: -1, row: 0, dir: 'RIGHT' },
-    exit: { col: 3, row: 2, dir: 'RIGHT' },
-    obstacles: [{ col: 1, row: 1 }],
-    fixedTiles: {},
-    tray: [
-      { type: 'CURVE_TR', count: 1 },
-      { type: 'CURVE_RB', count: 1 },
-      { type: 'CURVE_BL', count: 1 },
-      { type: 'CURVE_LT', count: 1 },
-      { type: 'STRAIGHT_H', count: 1 },
+    name: 'POND DETOUR',
+    start: { col: 0, row: 0, dir: 'right' },
+    exit: { col: 3, row: 2, dir: 'right' },
+    scenery: [
+      { col: 1, row: 0, type: 'ROCKS' },
+      { col: 1, row: 1, type: 'POND' },
+      { col: 2, row: 3, type: 'TREES' },
     ],
-    parMoves: 5,
+    leftTray: [
+      { id: 'lt_0', type: 'CURVE_RB' },
+      { id: 'lt_1', type: 'STRAIGHT_H' },
+      { id: 'lt_2', type: 'CURVE_TR' },
+    ],
+    rightTray: [
+      { id: 'rt_0', type: 'CURVE_LT' },
+      { id: 'rt_1', type: 'STRAIGHT_V' },
+      { id: 'rt_2', type: 'CURVE_BL' },
+    ],
   },
-  // Level 3: 4x4 S-Curve Pathway
+
+  // Level 3: Serpentine Brook
   {
-    name: 'SERPENTINE BUS',
-    cols: 4,
-    rows: 4,
-    entry: { col: -1, row: 0, dir: 'RIGHT' },
-    exit: { col: 4, row: 3, dir: 'RIGHT' },
-    obstacles: [
-      { col: 1, row: 1 },
-      { col: 2, row: 2 },
+    name: 'SERPENTINE BROOK',
+    start: { col: 0, row: 0, dir: 'right' },
+    exit: { col: 3, row: 4, dir: 'right' },
+    scenery: [
+      { col: 1, row: 1, type: 'POND' },
+      { col: 2, row: 2, type: 'TREES' },
+      { col: 1, row: 3, type: 'ROCKS' },
     ],
-    fixedTiles: {},
-    tray: [
-      { type: 'STRAIGHT_H', count: 3 },
-      { type: 'STRAIGHT_V', count: 2 },
-      { type: 'CURVE_RB', count: 2 },
-      { type: 'CURVE_LT', count: 2 },
+    leftTray: [
+      { id: 'lt_0', type: 'CURVE_RB' },
+      { id: 'lt_1', type: 'STRAIGHT_H' },
+      { id: 'lt_2', type: 'CURVE_BL' },
+      { id: 'lt_3', type: 'CURVE_TR' },
     ],
-    parMoves: 7,
+    rightTray: [
+      { id: 'rt_0', type: 'CURVE_LT' },
+      { id: 'rt_1', type: 'STRAIGHT_V' },
+      { id: 'rt_2', type: 'CURVE_RB' },
+      { id: 'rt_3', type: 'STRAIGHT_H' },
+    ],
   },
-  // Level 4: 4x4 Crossover Junction
+
+  // Level 4: Twin Groves
   {
-    name: 'CROSSOVER NODE',
-    cols: 4,
-    rows: 4,
-    entry: { col: -1, row: 1, dir: 'RIGHT' },
-    exit: { col: 4, row: 2, dir: 'RIGHT' },
-    obstacles: [
-      { col: 0, row: 3 },
-      { col: 3, row: 0 },
+    name: 'TWIN GROVES',
+    start: { col: 0, row: 5, dir: 'right' },
+    exit: { col: 3, row: 1, dir: 'right' },
+    scenery: [
+      { col: 1, row: 2, type: 'TREES' },
+      { col: 2, row: 2, type: 'TREES' },
+      { col: 1, row: 4, type: 'POND' },
     ],
-    fixedTiles: {},
-    tray: [
-      { type: 'CROSS', count: 1 },
-      { type: 'STRAIGHT_H', count: 2 },
-      { type: 'CURVE_TR', count: 2 },
-      { type: 'CURVE_BL', count: 2 },
-      { type: 'STRAIGHT_V', count: 1 },
+    leftTray: [
+      { id: 'lt_0', type: 'CURVE_TR' },
+      { id: 'lt_1', type: 'STRAIGHT_V' },
+      { id: 'lt_2', type: 'CURVE_RB' },
+      { id: 'lt_3', type: 'STRAIGHT_H' },
     ],
-    parMoves: 8,
+    rightTray: [
+      { id: 'rt_0', type: 'CURVE_BL' },
+      { id: 'rt_1', type: 'STRAIGHT_V' },
+      { id: 'rt_2', type: 'CURVE_LT' },
+      { id: 'rt_3', type: 'CURVE_TR' },
+    ],
   },
-  // Level 5: 4x4 Precision Weave
+
+  // Level 5: Boulder Canyon
   {
-    name: 'PRECISION WEAVE',
-    cols: 4,
-    rows: 4,
-    entry: { col: -1, row: 2, dir: 'RIGHT' },
-    exit: { col: 4, row: 0, dir: 'RIGHT' },
-    obstacles: [
-      { col: 1, row: 2 },
-      { col: 2, row: 1 },
+    name: 'BOULDER CANYON',
+    start: { col: 1, row: 0, dir: 'bottom' },
+    exit: { col: 2, row: 5, dir: 'bottom' },
+    scenery: [
+      { col: 1, row: 2, type: 'ROCKS' },
+      { col: 2, row: 3, type: 'ROCKS' },
+      { col: 0, row: 4, type: 'POND' },
     ],
-    fixedTiles: {
-      '0_2': 'CURVE_LT',
-    },
-    tray: [
-      { type: 'STRAIGHT_V', count: 2 },
-      { type: 'STRAIGHT_H', count: 2 },
-      { type: 'CURVE_TR', count: 2 },
-      { type: 'CURVE_RB', count: 1 },
+    leftTray: [
+      { id: 'lt_0', type: 'CURVE_BL' },
+      { id: 'lt_1', type: 'CURVE_TR' },
+      { id: 'lt_2', type: 'STRAIGHT_V' },
+      { id: 'lt_3', type: 'CURVE_RB' },
     ],
-    parMoves: 8,
+    rightTray: [
+      { id: 'rt_0', type: 'STRAIGHT_H' },
+      { id: 'rt_1', type: 'CURVE_LT' },
+      { id: 'rt_2', type: 'STRAIGHT_V' },
+      { id: 'rt_3', type: 'CURVE_BL' },
+    ],
   },
-  // Level 6: 5x5 Plasma Chamber
+
+  // Level 6: Emerald Crossroads
   {
-    name: 'PLASMA ARTERY',
-    cols: 5,
-    rows: 5,
-    entry: { col: -1, row: 0, dir: 'RIGHT' },
-    exit: { col: 5, row: 4, dir: 'RIGHT' },
-    obstacles: [
-      { col: 2, row: 1 },
-      { col: 1, row: 3 },
-      { col: 3, row: 3 },
+    name: 'EMERALD CROSSROADS',
+    start: { col: 0, row: 2, dir: 'right' },
+    exit: { col: 3, row: 3, dir: 'right' },
+    scenery: [
+      { col: 1, row: 1, type: 'TREES' },
+      { col: 2, row: 4, type: 'POND' },
+      { col: 0, row: 5, type: 'ROCKS' },
     ],
-    fixedTiles: {},
-    tray: [
-      { type: 'STRAIGHT_H', count: 4 },
-      { type: 'STRAIGHT_V', count: 3 },
-      { type: 'CURVE_RB', count: 2 },
-      { type: 'CURVE_BL', count: 2 },
-      { type: 'CURVE_TR', count: 1 },
+    leftTray: [
+      { id: 'lt_0', type: 'CROSS' },
+      { id: 'lt_1', type: 'STRAIGHT_H' },
+      { id: 'lt_2', type: 'CURVE_RB' },
+      { id: 'lt_3', type: 'CURVE_BL' },
     ],
-    parMoves: 10,
+    rightTray: [
+      { id: 'rt_0', type: 'CURVE_TR' },
+      { id: 'rt_1', type: 'STRAIGHT_V' },
+      { id: 'rt_2', type: 'CURVE_LT' },
+      { id: 'rt_3', type: 'STRAIGHT_H' },
+    ],
   },
-  // Level 7: 5x5 Quantum Crossroads
+
+  // Level 7: Enchanted Glade
   {
-    name: 'QUANTUM CROSSROADS',
-    cols: 5,
-    rows: 5,
-    entry: { col: -1, row: 2, dir: 'RIGHT' },
-    exit: { col: 5, row: 2, dir: 'RIGHT' },
-    obstacles: [
-      { col: 2, row: 2 },
-      { col: 1, row: 1 },
-      { col: 3, row: 3 },
+    name: 'ENCHANTED GLADE',
+    start: { col: 0, row: 1, dir: 'right' },
+    exit: { col: 3, row: 5, dir: 'right' },
+    scenery: [
+      { col: 2, row: 1, type: 'POND' },
+      { col: 1, row: 3, type: 'TREES' },
+      { col: 2, row: 3, type: 'ROCKS' },
     ],
-    fixedTiles: {},
-    tray: [
-      { type: 'CROSS', count: 1 },
-      { type: 'CURVE_TR', count: 2 },
-      { type: 'CURVE_RB', count: 2 },
-      { type: 'CURVE_BL', count: 2 },
-      { type: 'CURVE_LT', count: 2 },
-      { type: 'STRAIGHT_H', count: 2 },
+    leftTray: [
+      { id: 'lt_0', type: 'CURVE_RB' },
+      { id: 'lt_1', type: 'STRAIGHT_V' },
+      { id: 'lt_2', type: 'CURVE_BL' },
+      { id: 'lt_3', type: 'CURVE_TR' },
     ],
-    parMoves: 12,
+    rightTray: [
+      { id: 'rt_0', type: 'STRAIGHT_H' },
+      { id: 'rt_1', type: 'CURVE_LT' },
+      { id: 'rt_2', type: 'STRAIGHT_V' },
+      { id: 'rt_3', type: 'CURVE_RB' },
+    ],
   },
-  // Level 8: 5x5 Deep Transit
+
+  // Level 8: Apex Valley
   {
-    name: 'SUB-SECTOR TRANSIT',
-    cols: 5,
-    rows: 5,
-    entry: { col: -1, row: 4, dir: 'RIGHT' },
-    exit: { col: 5, row: 0, dir: 'RIGHT' },
-    obstacles: [
-      { col: 1, row: 4 },
-      { col: 3, row: 2 },
-      { col: 2, row: 0 },
+    name: 'APEX VALLEY',
+    start: { col: 0, row: 0, dir: 'right' },
+    exit: { col: 3, row: 5, dir: 'right' },
+    scenery: [
+      { col: 1, row: 1, type: 'TREES' },
+      { col: 2, row: 2, type: 'POND' },
+      { col: 1, row: 4, type: 'ROCKS' },
     ],
-    fixedTiles: {},
-    tray: [
-      { type: 'STRAIGHT_V', count: 4 },
-      { type: 'STRAIGHT_H', count: 3 },
-      { type: 'CURVE_TR', count: 2 },
-      { type: 'CURVE_RB', count: 2 },
-      { type: 'CURVE_LT', count: 1 },
+    leftTray: [
+      { id: 'lt_0', type: 'CURVE_RB' },
+      { id: 'lt_1', type: 'STRAIGHT_H' },
+      { id: 'lt_2', type: 'CURVE_BL' },
+      { id: 'lt_3', type: 'CURVE_TR' },
     ],
-    parMoves: 12,
-  },
-  // Level 9: 6x6 Apex Nexus
-  {
-    name: 'APEX NEXUS',
-    cols: 6,
-    rows: 6,
-    entry: { col: -1, row: 1, dir: 'RIGHT' },
-    exit: { col: 6, row: 4, dir: 'RIGHT' },
-    obstacles: [
-      { col: 2, row: 1 },
-      { col: 3, row: 2 },
-      { col: 1, row: 4 },
-      { col: 4, row: 4 },
+    rightTray: [
+      { id: 'rt_0', type: 'STRAIGHT_V' },
+      { id: 'rt_1', type: 'CURVE_LT' },
+      { id: 'rt_2', type: 'CURVE_RB' },
+      { id: 'rt_3', type: 'STRAIGHT_H' },
     ],
-    fixedTiles: {},
-    tray: [
-      { type: 'STRAIGHT_H', count: 5 },
-      { type: 'STRAIGHT_V', count: 4 },
-      { type: 'CURVE_TR', count: 3 },
-      { type: 'CURVE_RB', count: 3 },
-      { type: 'CURVE_BL', count: 2 },
-      { type: 'CURVE_LT', count: 2 },
-    ],
-    parMoves: 15,
-  },
-  // Level 10: 6x6 Master Circuit Labyrinth
-  {
-    name: 'CHRONO LABYRINTH',
-    cols: 6,
-    rows: 6,
-    entry: { col: -1, row: 0, dir: 'RIGHT' },
-    exit: { col: 6, row: 5, dir: 'RIGHT' },
-    obstacles: [
-      { col: 1, row: 1 },
-      { col: 4, row: 1 },
-      { col: 2, row: 3 },
-      { col: 3, row: 4 },
-    ],
-    fixedTiles: {},
-    tray: [
-      { type: 'STRAIGHT_H', count: 6 },
-      { type: 'STRAIGHT_V', count: 5 },
-      { type: 'CURVE_TR', count: 3 },
-      { type: 'CURVE_RB', count: 3 },
-      { type: 'CURVE_BL', count: 3 },
-      { type: 'CURVE_LT', count: 3 },
-      { type: 'CROSS', count: 1 },
-    ],
-    parMoves: 18,
   },
 ];
 
 /**
- * Procedural level generator for infinite levels (11+)
+ * Procedural Endless Level Generator (for Level 9+)
  */
-function generateProceduralLevel(levelNum) {
-  const size = Math.min(6, 4 + Math.floor((levelNum - 10) / 4));
-  const entryRow = 1 + (levelNum % (size - 2));
-  const exitRow = (size - 2) - (levelNum % (size - 2));
-
-  const obstacles = [];
-  const obstacleCount = Math.min(5, 2 + Math.floor((levelNum - 10) / 3));
-  for (let i = 0; i < obstacleCount; i++) {
-    const oc = 1 + (i * 2 + 1) % (size - 2);
-    const or = 1 + (i * 2) % (size - 2);
-    if (!(oc === 0 && or === entryRow) && !(oc === size - 1 && or === exitRow)) {
-      obstacles.push({ col: oc, row: or });
-    }
-  }
-
+function generateProceduralLevel(lvl) {
   return {
-    name: `CIRCUIT MATRIX - ${levelNum}`,
-    cols: size,
-    rows: size,
-    entry: { col: -1, row: entryRow, dir: 'RIGHT' },
-    exit: { col: size, row: exitRow, dir: 'RIGHT' },
-    obstacles,
-    fixedTiles: {},
-    tray: [
-      { type: 'STRAIGHT_H', count: size },
-      { type: 'STRAIGHT_V', count: size - 1 },
-      { type: 'CURVE_TR', count: 3 },
-      { type: 'CURVE_RB', count: 3 },
-      { type: 'CURVE_BL', count: 3 },
-      { type: 'CURVE_LT', count: 3 },
-      { type: 'CROSS', count: 1 },
+    name: `ENDLESS GLADE // LVL ${lvl}`,
+    start: { col: 0, row: (lvl % 4), dir: 'right' },
+    exit: { col: 3, row: 5 - (lvl % 4), dir: 'right' },
+    scenery: [
+      { col: 1, row: 2, type: 'POND' },
+      { col: 2, row: 3, type: 'TREES' },
     ],
-    parMoves: 14 + levelNum * 2,
+    leftTray: [
+      { id: 'lt_0', type: 'CURVE_RB' },
+      { id: 'lt_1', type: 'STRAIGHT_H' },
+      { id: 'lt_2', type: 'CURVE_BL' },
+      { id: 'lt_3', type: 'CURVE_TR' },
+    ],
+    rightTray: [
+      { id: 'rt_0', type: 'STRAIGHT_V' },
+      { id: 'rt_1', type: 'CURVE_LT' },
+      { id: 'rt_2', type: 'STRAIGHT_H' },
+      { id: 'rt_3', type: 'CURVE_RB' },
+    ],
   };
 }
 
 /**
- * Traces if there is a valid connected conduit from Entry to Exit.
- * Returns { valid: boolean, pathNodes: Array<{col, row}>, failurePoint: {col, row} | null }
+ * Pathfinding Validator:
+ * Traces if a valid continuous path connects Start to Exit!
  */
-function tracePath(level, grid) {
-  const { cols, rows, entry, exit } = level;
-
-  let curCol = 0;
-  let curRow = entry.row;
-  let fromDir = 'LEFT'; // Entered from left side
-
-  const pathNodes = [];
+function validatePath(grid, start, exit) {
   const visited = new Set();
+  const pathSteps = [];
 
-  while (curCol >= 0 && curCol < cols && curRow >= 0 && curRow < rows) {
+  let curCol = start.col;
+  let curRow = start.row;
+  let inDir = start.dir; // direction moving into next tile ('right', 'left', 'top', 'bottom')
+
+  pathSteps.push({ col: curCol, row: curRow });
+
+  // Trace step by step through connected tiles
+  for (let step = 0; step < 30; step++) {
+    // If reached exit
+    if (curCol === exit.col && curRow === exit.row) {
+      return { isValid: true, steps: pathSteps };
+    }
+
     const key = `${curCol}_${curRow}`;
-    if (visited.has(key)) {
-      // Loop detected
-      return { valid: false, pathNodes, failurePoint: { col: curCol, row: curRow } };
-    }
-    visited.add(key);
-
     const tileType = grid[key];
-    if (!tileType) {
-      // Disconnected: Empty socket
-      return { valid: false, pathNodes, failurePoint: { col: curCol, row: curRow } };
+    if (!tileType) break;
+
+    const def = TILE_DEFS[tileType];
+    if (!def) break;
+
+    // Check entry port
+    // If moving 'right', we enter from 'left'
+    const entryPort = inDir === 'right' ? 'left' : inDir === 'left' ? 'right' : inDir === 'bottom' ? 'top' : 'bottom';
+    if (!def.ports[entryPort]) {
+      break; // Tile does not connect to incoming path!
     }
 
-    const tileDef = TILE_TYPES[tileType];
-    if (!tileDef) {
-      return { valid: false, pathNodes, failurePoint: { col: curCol, row: curRow } };
-    }
-
-    // Port index mapping: [TOP: 0, RIGHT: 1, BOTTOM: 2, LEFT: 3]
-    const inPortIdx =
-      fromDir === 'TOP'
-        ? 0
-        : fromDir === 'RIGHT'
-          ? 1
-          : fromDir === 'BOTTOM'
-            ? 2
-            : 3;
-
-    if (tileDef.ports[inPortIdx] !== 1) {
-      // The incoming edge doesn't connect to this tile!
-      return { valid: false, pathNodes, failurePoint: { col: curCol, row: curRow } };
-    }
-
-    pathNodes.push({ col: curCol, row: curRow });
-
-    // Determine outgoing direction
+    // Determine exit port
     let outDir = null;
-    if (tileType === 'STRAIGHT_H') {
-      outDir = fromDir === 'LEFT' ? 'RIGHT' : 'LEFT';
-    } else if (tileType === 'STRAIGHT_V') {
-      outDir = fromDir === 'TOP' ? 'BOTTOM' : 'TOP';
-    } else if (tileType === 'CURVE_TR') {
-      outDir = fromDir === 'TOP' ? 'RIGHT' : 'TOP';
-    } else if (tileType === 'CURVE_RB') {
-      outDir = fromDir === 'RIGHT' ? 'BOTTOM' : 'RIGHT';
-    } else if (tileType === 'CURVE_BL') {
-      outDir = fromDir === 'BOTTOM' ? 'LEFT' : 'BOTTOM';
-    } else if (tileType === 'CURVE_LT') {
-      outDir = fromDir === 'LEFT' ? 'TOP' : 'LEFT';
-    } else if (tileType === 'CROSS') {
-      outDir =
-        fromDir === 'LEFT'
-          ? 'RIGHT'
-          : fromDir === 'RIGHT'
-            ? 'LEFT'
-            : fromDir === 'TOP'
-              ? 'BOTTOM'
-              : 'TOP';
-    }
+    const availableExits = Object.keys(def.ports).filter((p) => p !== entryPort && def.ports[p]);
+    if (availableExits.length === 0) break;
+    outDir = availableExits[0];
 
-    if (!outDir) {
-      return { valid: false, pathNodes, failurePoint: { col: curCol, row: curRow } };
-    }
-
-    // Step into next neighbor
+    // Next coordinates
     let nextCol = curCol;
     let nextRow = curRow;
-    let nextFromDir = '';
+    if (outDir === 'right') nextCol += 1;
+    else if (outDir === 'left') nextCol -= 1;
+    else if (outDir === 'bottom') nextRow += 1;
+    else if (outDir === 'top') nextRow -= 1;
 
-    if (outDir === 'RIGHT') {
-      nextCol = curCol + 1;
-      nextFromDir = 'LEFT';
-    } else if (outDir === 'LEFT') {
-      nextCol = curCol - 1;
-      nextFromDir = 'RIGHT';
-    } else if (outDir === 'TOP') {
-      nextRow = curRow - 1;
-      nextFromDir = 'BOTTOM';
-    } else if (outDir === 'BOTTOM') {
-      nextRow = curRow + 1;
-      nextFromDir = 'TOP';
+    // Boundary check
+    if (nextCol < 0 || nextCol >= GRID_COLS || nextRow < 0 || nextRow >= GRID_ROWS) {
+      break;
     }
 
-    // Did we reach the Exit Gate?
-    if (nextCol === exit.col && nextRow === exit.row) {
-      return { valid: true, pathNodes, failurePoint: null };
-    }
+    const nextKey = `${nextCol}_${nextRow}`;
+    if (visited.has(nextKey)) break; // Loop
+    visited.add(nextKey);
 
     curCol = nextCol;
     curRow = nextRow;
-    fromDir = nextFromDir;
+    inDir = outDir;
+    pathSteps.push({ col: curCol, row: curRow });
   }
 
-  return { valid: false, pathNodes, failurePoint: null };
+  // Check if final step reached exit
+  if (curCol === exit.col && curRow === exit.row) {
+    return { isValid: true, steps: pathSteps };
+  }
+
+  return { isValid: false, steps: [] };
+}
+
+/**
+ * Beautiful SVG Tile Graphic Renderer
+ * Faithfully matches the Forest Tileset cartoon reference image!
+ */
+function TileGraphic({ type, size = TILE_SIZE, isGhost = false }) {
+  const half = size / 2;
+
+  // Render Scenery
+  if (type === 'POND') {
+    return (
+      <Svg width={size} height={size}>
+        {/* Grass Base */}
+        <Rect x={1} y={1} width={size - 2} height={size - 2} rx={9} fill="#2E7D32" stroke="#1B4D20" strokeWidth={1.5} />
+        {/* Water Pond */}
+        <Path
+          d={`M ${half - 14} ${half - 6} Q ${half} ${half - 16} ${half + 14} ${half - 8} Q ${half + 18} ${half + 8} ${half + 10} ${half + 14} Q ${half - 6} ${half + 16} ${half - 14} ${half + 6} Z`}
+          fill="#4FC3F7"
+          stroke="#0288D1"
+          strokeWidth={1.5}
+        />
+        {/* White water ripple */}
+        <Path d={`M ${half - 6} ${half - 4} Q ${half} ${half - 8} ${half + 6} ${half - 4}`} stroke="#FFFFFF" strokeWidth={1.2} fill="none" opacity={0.7} />
+        {/* Shore pebbles */}
+        <Circle cx={half - 12} cy={half + 12} r={2.5} fill="#B0BEC5" />
+        <Circle cx={half + 12} cy={half + 12} r={3} fill="#90A4AE" />
+      </Svg>
+    );
+  }
+
+  if (type === 'TREES') {
+    return (
+      <Svg width={size} height={size}>
+        <Rect x={1} y={1} width={size - 2} height={size - 2} rx={9} fill="#2E7D32" stroke="#1B4D20" strokeWidth={1.5} />
+        {/* Left Tree */}
+        <Rect x={half - 14} y={half + 2} width={5} height={10} fill="#5D4037" rx={1} />
+        <Polygon points={`${half - 12},${half - 14} ${half - 3},${half + 4} ${half - 21},${half + 4}`} fill="#1B5E20" />
+        <Polygon points={`${half - 12},${half - 10} ${half - 5},${half + 4} ${half - 19},${half + 4}`} fill="#388E3C" />
+        {/* Right Tree */}
+        <Rect x={half + 8} y={half + 4} width={5} height={10} fill="#5D4037" rx={1} />
+        <Polygon points={`${half + 10},${half - 12} ${half + 19},${half + 6} ${half + 1},${half + 6}`} fill="#1B5E20" />
+        <Polygon points={`${half + 10},${half - 8} ${half + 17},${half + 6} ${half + 3},${half + 6}`} fill="#43A047" />
+      </Svg>
+    );
+  }
+
+  if (type === 'ROCKS') {
+    return (
+      <Svg width={size} height={size}>
+        <Rect x={1} y={1} width={size - 2} height={size - 2} rx={9} fill="#2E7D32" stroke="#1B4D20" strokeWidth={1.5} />
+        {/* Boulder 1 */}
+        <Circle cx={half - 4} cy={half + 2} r={11} fill="#78909C" stroke="#37474F" strokeWidth={1.5} />
+        <Circle cx={half - 6} cy={half - 1} r={8} fill="#90A4AE" />
+        {/* Small Stone */}
+        <Circle cx={half + 11} cy={half + 8} r={6} fill="#B0BEC5" stroke="#37474F" strokeWidth={1.2} />
+      </Svg>
+    );
+  }
+
+  // Render Path Tiles (Grass + Sand Pathway)
+  const pathW = 24;
+  const pathHalf = pathW / 2;
+
+  let pathD = '';
+  if (type === 'STRAIGHT_H') {
+    pathD = `M 0 ${half - pathHalf} L ${size} ${half - pathHalf} L ${size} ${half + pathHalf} L 0 ${half + pathHalf} Z`;
+  } else if (type === 'STRAIGHT_V') {
+    pathD = `M ${half - pathHalf} 0 L ${half + pathHalf} 0 L ${half + pathHalf} ${size} L ${half - pathHalf} ${size} Z`;
+  } else if (type === 'CURVE_TR') {
+    pathD = `M ${half - pathHalf} 0 L ${half + pathHalf} 0 A ${half - pathHalf} ${half - pathHalf} 0 0 1 ${size} ${half + pathHalf} L ${size} ${half - pathHalf} A ${half + pathHalf} ${half + pathHalf} 0 0 0 ${half - pathHalf} 0 Z`;
+  } else if (type === 'CURVE_RB') {
+    pathD = `M ${size} ${half - pathHalf} L ${size} ${half + pathHalf} A ${half - pathHalf} ${half - pathHalf} 0 0 1 ${half - pathHalf} ${size} L ${half + pathHalf} ${size} A ${half + pathHalf} ${half + pathHalf} 0 0 0 ${size} ${half - pathHalf} Z`;
+  } else if (type === 'CURVE_BL') {
+    pathD = `M ${half + pathHalf} ${size} L ${half - pathHalf} ${size} A ${half - pathHalf} ${half - pathHalf} 0 0 1 0 ${half - pathHalf} L 0 ${half + pathHalf} A ${half + pathHalf} ${half + pathHalf} 0 0 0 ${half + pathHalf} ${size} Z`;
+  } else if (type === 'CURVE_LT') {
+    pathD = `M 0 ${half + pathHalf} L 0 ${half - pathHalf} A ${half - pathHalf} ${half - pathHalf} 0 0 1 ${half + pathHalf} 0 L ${half - pathHalf} 0 A ${half + pathHalf} ${half + pathHalf} 0 0 0 0 ${half + pathHalf} Z`;
+  } else if (type === 'CROSS') {
+    pathD = `
+      M 0 ${half - pathHalf} L ${half - pathHalf} ${half - pathHalf} L ${half - pathHalf} 0 L ${half + pathHalf} 0 L ${half + pathHalf} ${half - pathHalf} L ${size} ${half - pathHalf}
+      L ${size} ${half + pathHalf} L ${half + pathHalf} ${half + pathHalf} L ${half + pathHalf} ${size} L ${half - pathHalf} ${size} L ${half - pathHalf} ${half + pathHalf} L 0 ${half + pathHalf} Z
+    `;
+  }
+
+  return (
+    <Svg width={size} height={size} opacity={isGhost ? 0.45 : 1}>
+      {/* Grass Base Background */}
+      <Rect
+        x={1}
+        y={1}
+        width={size - 2}
+        height={size - 2}
+        rx={9}
+        fill="#2E7D32"
+        stroke="#1B4D20"
+        strokeWidth={1.5}
+      />
+
+      {/* Dirt Pathway */}
+      {Boolean(pathD) && (
+        <G>
+          <Path d={pathD} fill="#D7A15C" stroke="#8D6E63" strokeWidth={1.8} />
+          {/* Subtle Ground Specks */}
+          <Circle cx={half - 4} cy={half - 2} r={1.5} fill="#B07D3E" />
+          <Circle cx={half + 5} cy={half + 3} r={1.2} fill="#B07D3E" />
+        </G>
+      )}
+
+      {/* Grass Edge Tuft Detailing */}
+      <Circle cx={4} cy={4} r={3} fill="#4CAF50" />
+      <Circle cx={size - 4} cy={size - 4} r={3} fill="#4CAF50" />
+    </Svg>
+  );
 }
 
 export default function CyberPathGame({
+  isPaused = false,
   onBackToHub,
   onScoreUpdate,
-  isPaused = false,
 }) {
-  const { width } = useWindowDimensions();
   const juiceRef = useRef(null);
 
-  const [currentLevel, setCurrentLevel] = useState(1);
+  const [level, setLevel] = useState(1);
+  const [score, setScore] = useState(0);
   const [highScore, setHighScore] = useState(0);
-  const [totalScore, setTotalScore] = useState(0);
 
-  // Level configuration
-  const [levelConfig, setLevelConfig] = useState(() => CURATED_LEVELS[0]);
-  const [grid, setGrid] = useState(() => ({ ...CURATED_LEVELS[0].fixedTiles }));
-  const [trayPieces, setTrayPieces] = useState(() =>
-    CURATED_LEVELS[0].tray.map((t) => ({ ...t }))
-  );
-  const [selectedTrayIndex, setSelectedTrayIndex] = useState(0);
+  // Active level config
+  const levelIdx = Math.min(level - 1, CURATED_LEVELS.length - 1);
+  const levelConfig = useMemo(() => {
+    return level <= CURATED_LEVELS.length
+      ? CURATED_LEVELS[levelIdx]
+      : generateProceduralLevel(level);
+  }, [level, levelIdx]);
 
-  // Playback / testing state
-  const [isSimulating, setIsSimulating] = useState(false);
-  const [runnerIndex, setRunnerIndex] = useState(-1);
-  const [activePathKeys, setActivePathKeys] = useState([]);
-  const [movesCount, setMovesCount] = useState(0);
-  const [modalVisible, setModalVisible] = useState(false);
+  // Placed tiles on 24-box grid: { "col_row": "STRAIGHT_H" }
+  const [gridTiles, setGridTiles] = useState({});
 
-  // Load high score
+  // Inventory Trays (Left and Right docks)
+  const [leftTray, setLeftTray] = useState(() => levelConfig.leftTray.map((t) => ({ ...t })));
+  const [rightTray, setRightTray] = useState(() => levelConfig.rightTray.map((t) => ({ ...t })));
+
+  // Selected tile from trays: { id, type, source: 'left' | 'right' | 'grid', col?: number, row?: number }
+  const [selectedTile, setSelectedTile] = useState(null);
+
+  // Walking hero state: { isWalking: boolean, stepIdx: number, playerPos: { x, y } }
+  const [walkerState, setWalkerState] = useState({
+    isWalking: false,
+    stepIdx: 0,
+    col: levelConfig.start.col,
+    row: levelConfig.start.row,
+  });
+
+  const [victoryModal, setVictoryModal] = useState(false);
+
+  // Load High Score
   useEffect(() => {
-    (async () => {
-      try {
-        const saved = await AsyncStorage.getItem(STORAGE_KEY);
-        if (saved !== null) {
-          const val = parseInt(saved, 10);
-          if (!isNaN(val)) setHighScore(val);
-        }
-      } catch {}
-    })();
+    AsyncStorage.getItem(STORAGE_KEY)
+      .then((val) => {
+        if (val) setHighScore(parseInt(val, 10) || 0);
+      })
+      .catch(() => {});
   }, []);
 
-  // Initialize Level setup
-  const initLevel = useCallback((lvlNum) => {
-    setCurrentLevel(lvlNum);
-    const cfg =
-      lvlNum <= CURATED_LEVELS.length
-        ? CURATED_LEVELS[lvlNum - 1]
-        : generateProceduralLevel(lvlNum);
+  // Initialize level
+  const initLevel = useCallback((lvl) => {
+    const cfg = lvl <= CURATED_LEVELS.length
+      ? CURATED_LEVELS[Math.min(lvl - 1, CURATED_LEVELS.length - 1)]
+      : generateProceduralLevel(lvl);
 
-    setLevelConfig(cfg);
-
-    // Initial grid with fixed tiles
-    const initialGrid = { ...cfg.fixedTiles };
-    setGrid(initialGrid);
-
-    // Deep clone tray inventory
-    const initialTray = cfg.tray.map((t) => ({ ...t }));
-    setTrayPieces(initialTray);
-    setSelectedTrayIndex(0);
-
-    setMovesCount(0);
-    setIsSimulating(false);
-    setRunnerIndex(-1);
-    setActivePathKeys([]);
+    setGridTiles({});
+    setLeftTray(cfg.leftTray.map((t) => ({ ...t })));
+    setRightTray(cfg.rightTray.map((t) => ({ ...t })));
+    setSelectedTile(null);
+    setWalkerState({
+      isWalking: false,
+      stepIdx: 0,
+      col: cfg.start.col,
+      row: cfg.start.row,
+    });
+    setVictoryModal(false);
   }, []);
 
-  // Handle tap on grid cell
-  const handleCellPress = useCallback(
-    (col, row) => {
-      if (isSimulating || isPaused) return;
+  // Scenery Map: { "col_row": "POND" | "TREES" | "ROCKS" }
+  const sceneryMap = useMemo(() => {
+    const map = {};
+    levelConfig.scenery.forEach((sc) => {
+      map[`${sc.col}_${sc.row}`] = sc.type;
+    });
+    return map;
+  }, [levelConfig.scenery]);
 
-      const key = `${col}_${row}`;
+  // Validate path on grid changes
+  const pathResult = useMemo(() => {
+    return validatePath(gridTiles, levelConfig.start, levelConfig.exit);
+  }, [gridTiles, levelConfig.start, levelConfig.exit]);
 
-      // Check if this cell is an obstacle
-      if (levelConfig.obstacles.some((o) => o.col === col && o.row === row)) {
-        triggerLightHaptic();
-        juiceRef.current?.flash('#FF0055');
-        return;
-      }
+  // Handle Tray Tile Selection
+  const handleSelectTrayTile = (tile, source) => {
+    if (walkerState.isWalking || isPaused || victoryModal) return;
 
-      // Check if it's a permanent fixed tile
-      if (levelConfig.fixedTiles[key]) {
-        triggerLightHaptic();
-        return;
-      }
-
-      const existingTile = grid[key];
-
-      if (existingTile) {
-        // Tile already placed: Tap to ROTATE 90° clockwise!
-        const nextRotated = ROTATION_MAP[existingTile];
-        setGrid((prev) => ({ ...prev, [key]: nextRotated }));
-        setMovesCount((m) => m + 1);
-        playSliceSound();
-        triggerMediumHaptic();
-      } else {
-        // Empty cell: Place selected piece from tray!
-        const selItem = trayPieces[selectedTrayIndex];
-        if (!selItem || selItem.count <= 0) {
-          triggerLightHaptic();
-          return;
-        }
-
-        // Place on grid
-        setGrid((prev) => ({ ...prev, [key]: selItem.type }));
-
-        // Deduct from tray inventory
-        setTrayPieces((prev) => {
-          const next = [...prev];
-          next[selectedTrayIndex] = {
-            ...next[selectedTrayIndex],
-            count: next[selectedTrayIndex].count - 1,
-          };
-          return next;
-        });
-
-        setMovesCount((m) => m + 1);
-        playTapSound();
-        triggerLightHaptic();
-      }
-    },
-    [
-      isSimulating,
-      isPaused,
-      levelConfig,
-      grid,
-      trayPieces,
-      selectedTrayIndex,
-    ]
-  );
-
-  // Retract a placed tile back into tray inventory
-  const handleRetractCell = useCallback(
-    (col, row) => {
-      if (isSimulating || isPaused) return;
-
-      const key = `${col}_${row}`;
-      if (levelConfig.fixedTiles[key]) return;
-
-      const existingTile = grid[key];
-      if (!existingTile) return;
-
-      // Find matching base type in tray
-      let baseType = existingTile;
-      if (existingTile.startsWith('STRAIGHT_')) baseType = 'STRAIGHT_H';
-
-      // Remove from grid
-      setGrid((prev) => {
-        const next = { ...prev };
-        delete next[key];
-        return next;
-      });
-
-      // Return count to tray
-      setTrayPieces((prev) => {
-        const next = [...prev];
-        const matchIdx = next.findIndex(
-          (t) => t.type === existingTile || t.type === baseType
-        );
-        if (matchIdx !== -1) {
-          next[matchIdx] = { ...next[matchIdx], count: next[matchIdx].count + 1 };
-        } else {
-          next.push({ type: existingTile, count: 1 });
-        }
-        return next;
-      });
-
-      playTapSound();
+    if (selectedTile && selectedTile.id === tile.id) {
+      // Deselect
+      setSelectedTile(null);
+      playSnapTickSound();
       triggerLightHaptic();
-    },
-    [isSimulating, isPaused, levelConfig, grid]
-  );
+    } else {
+      setSelectedTile({ ...tile, source });
+      playSliceSound();
+      triggerSelectionHaptic();
+    }
+  };
 
-  // Test Run: Simulates the drone navigating the conduit path!
-  const handleTestRun = useCallback(() => {
-    if (isSimulating || isPaused) return;
+  // Handle Box Tap on the 24-box Grid
+  const handleGridBoxPress = (col, row) => {
+    if (walkerState.isWalking || isPaused || victoryModal) return;
 
-    triggerMediumHaptic();
-    playTapSound();
+    const key = `${col}_${row}`;
 
-    const result = tracePath(levelConfig, grid);
-    setIsSimulating(true);
-
-    if (result.pathNodes.length === 0) {
-      // Immediate block at entry
-      setTimeout(() => {
-        setIsSimulating(false);
-        triggerGameOverHaptic();
-        playGameOverSound();
-        juiceRef.current?.flash('#FF0055');
-        juiceRef.current?.popup(
-          'PATH DISCONNECTED',
-          'Align a conduit with the Entry Gate!',
-          '#FF0055'
-        );
-      }, 400);
+    // Disallow placing on scenery
+    if (sceneryMap[key]) {
+      triggerLightHaptic();
+      juiceRef.current?.popup('OBSTACLE', 'Cannot build over nature', '#FF0055');
       return;
     }
 
-    // Step-by-step animated transit
-    let step = 0;
-    const pathKeys = [];
+    const currentTileOnBox = gridTiles[key];
 
-    const interval = setInterval(() => {
-      if (step < result.pathNodes.length) {
-        const node = result.pathNodes[step];
-        pathKeys.push(`${node.col}_${node.row}`);
-        setActivePathKeys([...pathKeys]);
-        setRunnerIndex(step);
+    if (selectedTile) {
+      // Placing the selected tile onto this box!
+      const nextGrid = { ...gridTiles };
+      nextGrid[key] = selectedTile.type;
+      setGridTiles(nextGrid);
+
+      // Remove tile from source tray
+      if (selectedTile.source === 'left') {
+        setLeftTray((prev) => prev.filter((t) => t.id !== selectedTile.id));
+      } else if (selectedTile.source === 'right') {
+        setRightTray((prev) => prev.filter((t) => t.id !== selectedTile.id));
+      }
+
+      // If there was already a tile on this box, return it to the left tray
+      if (currentTileOnBox) {
+        setLeftTray((prev) => [
+          ...prev,
+          { id: `returned_${Date.now()}`, type: currentTileOnBox },
+        ]);
+      }
+
+      setSelectedTile(null);
+      playTapSound();
+      triggerMediumHaptic();
+
+      // Check if newly placed tile completed the entire route!
+      const nextVal = validatePath(nextGrid, levelConfig.start, levelConfig.exit);
+      if (nextVal.isValid) {
+        triggerPerfectHaptic();
+        playPerfectSound();
+        juiceRef.current?.celebrate('⚡ PATH COMPLETE!', 'Ready to walk to exit!', COLORS.matrixMint);
+      }
+    } else {
+      // No tile selected: if tapping an existing placed tile, pick it back up to Left Tray
+      if (currentTileOnBox) {
+        const nextGrid = { ...gridTiles };
+        delete nextGrid[key];
+        setGridTiles(nextGrid);
+
+        setLeftTray((prev) => [
+          ...prev,
+          { id: `tray_${Date.now()}`, type: currentTileOnBox },
+        ]);
 
         playSliceSound();
         triggerLightHaptic();
-        step += 1;
+        juiceRef.current?.popup('RETURNED', 'Tile moved to rack', '#FFE600');
+      }
+    }
+  };
+
+  // Start walking along the completed path!
+  const handleWalkPath = useCallback(() => {
+    if (!pathResult.isValid || walkerState.isWalking || isPaused) return;
+
+    triggerPerfectHaptic();
+    playPerfectSound();
+
+    setWalkerState({
+      isWalking: true,
+      stepIdx: 0,
+      col: pathResult.steps[0].col,
+      row: pathResult.steps[0].row,
+    });
+  }, [pathResult, walkerState.isWalking, isPaused]);
+
+  // Walking Loop: steps tile by tile along the validated route
+  useEffect(() => {
+    if (!walkerState.isWalking) return;
+
+    const timer = setTimeout(() => {
+      const nextStep = walkerState.stepIdx + 1;
+
+      if (nextStep < pathResult.steps.length) {
+        // Step to next tile
+        const nextPos = pathResult.steps[nextStep];
+        setWalkerState({
+          isWalking: true,
+          stepIdx: nextStep,
+          col: nextPos.col,
+          row: nextPos.row,
+        });
+
+        playSnapTickSound();
+        triggerLightHaptic();
       } else {
-        clearInterval(interval);
+        // Reached exit! VICTORY!
+        setWalkerState((w) => ({ ...w, isWalking: false }));
+        triggerPerfectHaptic();
+        playPerfectSound();
 
-        if (result.valid) {
-          // SUCCESS! Reached Exit Portal!
-          playPerfectSound();
-          triggerPerfectHaptic();
-
-          const earned = Math.max(
-            120,
-            currentLevel * 180 - Math.max(0, movesCount - levelConfig.parMoves) * 12
-          );
-          const nextScore = totalScore + earned;
-          setTotalScore(nextScore);
-
+        const earned = 300 + level * 150;
+        setScore((s) => {
+          const nextScore = s + earned;
           if (nextScore > highScore) {
             setHighScore(nextScore);
             AsyncStorage.setItem(STORAGE_KEY, String(nextScore)).catch(() => {});
           }
           onScoreUpdate?.(nextScore);
+          return nextScore;
+        });
 
-          juiceRef.current?.flash(COLORS.matrixMint);
-          juiceRef.current?.burst(width / 2, 280, COLORS.matrixMint, 32);
-          juiceRef.current?.popup(
-            '⚡ CIRCUIT ONLINE!',
-            `Level ${currentLevel} escaped in ${movesCount} moves!`,
-            COLORS.matrixMint
-          );
+        juiceRef.current?.celebrate('🏆 ESCAPE SUCCESSFUL!', `Level ${level} Cleared! +${earned} PTS`, COLORS.matrixMint);
 
-          setTimeout(() => {
-            if (currentLevel < CURATED_LEVELS.length + 5) {
-              initLevel(currentLevel + 1);
-            } else {
-              setModalVisible(true);
-            }
-          }, 1400);
-        } else {
-          // FAILURE: Blocked or disconnected inside circuit
-          setIsSimulating(false);
-          triggerGameOverHaptic();
-          playGameOverSound();
-
-          if (result.failurePoint) {
-            juiceRef.current?.flash('#FF0055');
-            juiceRef.current?.popup(
-              '⚠️ CIRCUIT FAULT',
-              'Conduit disconnected before reaching Exit!',
-              '#FF0055'
-            );
-          }
-        }
+        setTimeout(() => {
+          setVictoryModal(true);
+        }, 800);
       }
-    }, 280);
-  }, [
-    isSimulating,
-    isPaused,
-    levelConfig,
-    grid,
-    currentLevel,
-    movesCount,
-    totalScore,
-    highScore,
-    width,
-    onScoreUpdate,
-    initLevel,
-  ]);
+    }, 250);
 
-  // Reset current level
-  const handleReset = useCallback(() => {
-    triggerMediumHaptic();
+    return () => clearTimeout(timer);
+  }, [walkerState, pathResult.steps, level, highScore, onScoreUpdate]);
+
+  // Next level handler
+  const handleNextLevel = () => {
+    const nextLvl = level + 1;
+    setLevel(nextLvl);
+    initLevel(nextLvl);
+  };
+
+  // Restart level
+  const handleRestart = () => {
+    initLevel(level);
     playTapSound();
-    initLevel(currentLevel);
-  }, [initLevel, currentLevel]);
-
-  // Calculate cell sizing to dynamically fit arena perfectly
-  const arenaPadding = 28;
-  const availableWidth = width - arenaPadding * 2;
-  const cellSize = Math.min(54, Math.floor(availableWidth / levelConfig.cols));
-  const gridWidth = cellSize * levelConfig.cols;
-  const gridHeight = cellSize * levelConfig.rows;
+    triggerLightHaptic();
+  };
 
   return (
-    <JuiceEngine ref={juiceRef}>
-      <View style={styles.container}>
-        <MiniGameHeader
-          title="CYBER PATHFINDER"
-          score={totalScore}
-          bestScore={highScore}
-          onBackToHub={onBackToHub}
-        />
+    <View style={styles.container}>
+      <MiniGameHeader
+        title="CYBER PATHFINDER"
+        floorLabel="FLOOR 18"
+        category="STRATEGY"
+        score={score}
+        bestScore={highScore}
+        accentColor="#00F5FF"
+        onBackToHub={onBackToHub}
+        onReset={handleRestart}
+        disabled={isPaused}
+      />
 
-      {/* Level Info Bar */}
-      <View style={styles.telemetryBar}>
-        <View style={styles.telemetryPill}>
-          <Text style={styles.telemetryLabel}>CIRCUIT</Text>
-          <Text style={[styles.telemetryVal, { color: COLORS.cyan }]}>
-            {String(currentLevel).padStart(2, '0')}
-          </Text>
-        </View>
-
-        <View style={styles.centerNameWrap}>
-          <Text style={styles.levelTitle}>{levelConfig.name}</Text>
-          <Text style={styles.levelSubtitle}>
-            TAP CELL TO PLACE • TAP TO ROTATE • CONNECT EXIT
-          </Text>
-        </View>
-
-        <View style={styles.telemetryPill}>
-          <Text style={styles.telemetryLabel}>MOVES</Text>
-          <Text style={[styles.telemetryVal, { color: COLORS.solarGold }]}>
-            {movesCount}
-          </Text>
-        </View>
-      </View>
-
-      {/* Main Grid Chamber with Entry & Exit Terminals */}
-      <View style={styles.gridOuterFrame}>
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          {/* ENTRY PORTAL ON LEFT */}
-          <View
-            style={[
-              styles.gateMarker,
-              styles.gateEntry,
-              { top: levelConfig.entry.row * cellSize + cellSize / 2 - 16 },
-            ]}
-          >
-            <Text style={styles.gateIcon}>▶</Text>
-            <Text style={styles.gateLabel}>ENTRY</Text>
+      <JuiceEngine ref={juiceRef}>
+        {/* Subheader Status Strip */}
+        <View style={styles.statusStrip}>
+          <View style={styles.statusBox}>
+            <Text style={styles.statusDim}>LEVEL</Text>
+            <Text style={[styles.statusVal, { color: '#FFE600' }]}>{levelConfig.name}</Text>
           </View>
 
-          {/* PUZZLE MATRIX SVG */}
-          <View
-            style={[
-              styles.matrixBox,
-              { width: gridWidth + 4, height: gridHeight + 4 },
-            ]}
-          >
-            <Svg width={gridWidth} height={gridHeight}>
-              <Defs>
-                <SvgLinearGradient id="neonLaser" x1="0" y1="0" x2="1" y2="1">
-                  <Stop offset="0%" stopColor="#00F5FF" stopOpacity="1" />
-                  <Stop offset="100%" stopColor="#7928CA" stopOpacity="0.9" />
-                </SvgLinearGradient>
-
-                <SvgLinearGradient id="activeLaser" x1="0" y1="0" x2="1" y2="1">
-                  <Stop offset="0%" stopColor="#39FF14" stopOpacity="1" />
-                  <Stop offset="100%" stopColor="#00F5D4" stopOpacity="0.95" />
-                </SvgLinearGradient>
-
-                <SvgLinearGradient id="exitGlow" x1="0" y1="0" x2="1" y2="1">
-                  <Stop offset="0%" stopColor="#FFE600" stopOpacity="1" />
-                  <Stop offset="100%" stopColor="#FF0055" stopOpacity="0.9" />
-                </SvgLinearGradient>
-              </Defs>
-
-              {/* Grid Background Plates */}
-              {Array.from({ length: levelConfig.rows }).map((_, r) =>
-                Array.from({ length: levelConfig.cols }).map((__, c) => {
-                  const key = `${c}_${r}`;
-                  const isObstacle = levelConfig.obstacles.some(
-                    (o) => o.col === c && o.row === r
-                  );
-
-                  return (
-                    <G key={`bg_${key}`}>
-                      <Rect
-                        x={c * cellSize + 1}
-                        y={r * cellSize + 1}
-                        width={cellSize - 2}
-                        height={cellSize - 2}
-                        rx={6}
-                        fill={isObstacle ? '#140618' : '#0B091E'}
-                        stroke={
-                          isObstacle
-                            ? 'rgba(255, 0, 85, 0.45)'
-                            : 'rgba(0, 245, 255, 0.12)'
-                        }
-                        strokeWidth={1}
-                      />
-
-                      {/* Obstacle Icon */}
-                      {isObstacle && (
-                        <G>
-                          <Circle
-                            cx={c * cellSize + cellSize / 2}
-                            cy={r * cellSize + cellSize / 2}
-                            r={cellSize / 3.5}
-                            fill="#FF0055"
-                            opacity={0.35}
-                          />
-                          <Rect
-                            x={c * cellSize + cellSize / 2 - 7}
-                            y={r * cellSize + cellSize / 2 - 7}
-                            width={14}
-                            height={14}
-                            rx={3}
-                            fill="#FF0055"
-                          />
-                        </G>
-                      )}
-
-                      {/* Empty Socket Crosshair */}
-                      {!isObstacle && !grid[key] && (
-                        <G opacity={0.35}>
-                          <Circle
-                            cx={c * cellSize + cellSize / 2}
-                            cy={r * cellSize + cellSize / 2}
-                            r={3}
-                            fill="#00F5FF"
-                          />
-                        </G>
-                      )}
-                    </G>
-                  );
-                })
-              )}
-
-              {/* Render Placed Conduit Pieces */}
-              {Object.entries(grid).map(([key, tileType]) => {
-                const [cStr, rStr] = key.split('_');
-                const c = parseInt(cStr, 10);
-                const r = parseInt(rStr, 10);
-                const isActive = activePathKeys.includes(key);
-
-                const cx = c * cellSize + cellSize / 2;
-                const cy = r * cellSize + cellSize / 2;
-                const half = cellSize / 2;
-
-                const conduitColor = isActive ? '#39FF14' : '#00F5FF';
-
-                return (
-                  <G key={`tile_${key}`}>
-                    {/* Render conduit geometry based on type */}
-                    {tileType === 'STRAIGHT_H' && (
-                      <G>
-                        <Path
-                          d={`M ${cx - half} ${cy} L ${cx + half} ${cy}`}
-                          stroke="#150E35"
-                          strokeWidth={14}
-                          strokeLinecap="round"
-                        />
-                        <Path
-                          d={`M ${cx - half} ${cy} L ${cx + half} ${cy}`}
-                          stroke={conduitColor}
-                          strokeWidth={6}
-                        />
-                        <Path
-                          d={`M ${cx - half} ${cy} L ${cx + half} ${cy}`}
-                          stroke="#FFFFFF"
-                          strokeWidth={2}
-                        />
-                      </G>
-                    )}
-
-                    {tileType === 'STRAIGHT_V' && (
-                      <G>
-                        <Path
-                          d={`M ${cx} ${cy - half} L ${cx} ${cy + half}`}
-                          stroke="#150E35"
-                          strokeWidth={14}
-                          strokeLinecap="round"
-                        />
-                        <Path
-                          d={`M ${cx} ${cy - half} L ${cx} ${cy + half}`}
-                          stroke={conduitColor}
-                          strokeWidth={6}
-                        />
-                        <Path
-                          d={`M ${cx} ${cy - half} L ${cx} ${cy + half}`}
-                          stroke="#FFFFFF"
-                          strokeWidth={2}
-                        />
-                      </G>
-                    )}
-
-                    {tileType === 'CURVE_TR' && (
-                      <G>
-                        <Path
-                          d={`M ${cx} ${cy - half} Q ${cx} ${cy} ${cx + half} ${cy}`}
-                          stroke="#150E35"
-                          strokeWidth={14}
-                          strokeLinecap="round"
-                          fill="none"
-                        />
-                        <Path
-                          d={`M ${cx} ${cy - half} Q ${cx} ${cy} ${cx + half} ${cy}`}
-                          stroke={conduitColor}
-                          strokeWidth={6}
-                          fill="none"
-                        />
-                        <Path
-                          d={`M ${cx} ${cy - half} Q ${cx} ${cy} ${cx + half} ${cy}`}
-                          stroke="#FFFFFF"
-                          strokeWidth={2}
-                          fill="none"
-                        />
-                      </G>
-                    )}
-
-                    {tileType === 'CURVE_RB' && (
-                      <G>
-                        <Path
-                          d={`M ${cx + half} ${cy} Q ${cx} ${cy} ${cx} ${cy + half}`}
-                          stroke="#150E35"
-                          strokeWidth={14}
-                          strokeLinecap="round"
-                          fill="none"
-                        />
-                        <Path
-                          d={`M ${cx + half} ${cy} Q ${cx} ${cy} ${cx} ${cy + half}`}
-                          stroke={conduitColor}
-                          strokeWidth={6}
-                          fill="none"
-                        />
-                        <Path
-                          d={`M ${cx + half} ${cy} Q ${cx} ${cy} ${cx} ${cy + half}`}
-                          stroke="#FFFFFF"
-                          strokeWidth={2}
-                          fill="none"
-                        />
-                      </G>
-                    )}
-
-                    {tileType === 'CURVE_BL' && (
-                      <G>
-                        <Path
-                          d={`M ${cx} ${cy + half} Q ${cx} ${cy} ${cx - half} ${cy}`}
-                          stroke="#150E35"
-                          strokeWidth={14}
-                          strokeLinecap="round"
-                          fill="none"
-                        />
-                        <Path
-                          d={`M ${cx} ${cy + half} Q ${cx} ${cy} ${cx - half} ${cy}`}
-                          stroke={conduitColor}
-                          strokeWidth={6}
-                          fill="none"
-                        />
-                        <Path
-                          d={`M ${cx} ${cy + half} Q ${cx} ${cy} ${cx - half} ${cy}`}
-                          stroke="#FFFFFF"
-                          strokeWidth={2}
-                          fill="none"
-                        />
-                      </G>
-                    )}
-
-                    {tileType === 'CURVE_LT' && (
-                      <G>
-                        <Path
-                          d={`M ${cx - half} ${cy} Q ${cx} ${cy} ${cx} ${cy - half}`}
-                          stroke="#150E35"
-                          strokeWidth={14}
-                          strokeLinecap="round"
-                          fill="none"
-                        />
-                        <Path
-                          d={`M ${cx - half} ${cy} Q ${cx} ${cy} ${cx} ${cy - half}`}
-                          stroke={conduitColor}
-                          strokeWidth={6}
-                          fill="none"
-                        />
-                        <Path
-                          d={`M ${cx - half} ${cy} Q ${cx} ${cy} ${cx} ${cy - half}`}
-                          stroke="#FFFFFF"
-                          strokeWidth={2}
-                          fill="none"
-                        />
-                      </G>
-                    )}
-
-                    {tileType === 'CROSS' && (
-                      <G>
-                        {/* 4-way Crossroad */}
-                        <Path
-                          d={`M ${cx - half} ${cy} L ${cx + half} ${cy}`}
-                          stroke="#150E35"
-                          strokeWidth={14}
-                        />
-                        <Path
-                          d={`M ${cx} ${cy - half} L ${cx} ${cy + half}`}
-                          stroke="#150E35"
-                          strokeWidth={14}
-                        />
-                        <Path
-                          d={`M ${cx - half} ${cy} L ${cx + half} ${cy}`}
-                          stroke={conduitColor}
-                          strokeWidth={6}
-                        />
-                        <Path
-                          d={`M ${cx} ${cy - half} L ${cx} ${cy + half}`}
-                          stroke={conduitColor}
-                          strokeWidth={6}
-                        />
-                        <Circle cx={cx} cy={cy} r={3.5} fill="#FFFFFF" />
-                      </G>
-                    )}
-
-                    {/* Central Junction Hub Indicator */}
-                    <Circle
-                      cx={cx}
-                      cy={cy}
-                      r={4}
-                      fill={isActive ? '#39FF14' : '#FFE600'}
-                    />
-                  </G>
-                );
-              })}
-
-              {/* Animated Drone Runner while simulating path */}
-              {isSimulating && runnerIndex >= 0 && activePathKeys[runnerIndex] && (
-                (() => {
-                  const [cStr, rStr] = activePathKeys[runnerIndex].split('_');
-                  const rc = parseInt(cStr, 10);
-                  const rr = parseInt(rStr, 10);
-                  const rx = rc * cellSize + cellSize / 2;
-                  const ry = rr * cellSize + cellSize / 2;
-
-                  return (
-                    <G>
-                      <Circle cx={rx} cy={ry} r={14} fill="rgba(57, 255, 20, 0.35)" />
-                      <Circle cx={rx} cy={ry} r={8} fill="#39FF14" stroke="#FFFFFF" strokeWidth={2} />
-                      <Circle cx={rx} cy={ry} r={3} fill="#030208" />
-                    </G>
-                  );
-                })()
-              )}
-            </Svg>
-
-            {/* Clickable Overlay Matrix for Touch Interaction */}
-            <View
+          <View style={styles.statusBox}>
+            <Text style={styles.statusDim}>STATUS</Text>
+            <Text
               style={[
-                StyleSheet.absoluteFillObject,
-                { flexDirection: 'column' },
+                styles.statusVal,
+                { color: pathResult.isValid ? COLORS.matrixMint : '#FF0055' },
               ]}
             >
-              {Array.from({ length: levelConfig.rows }).map((_, r) => (
-                <View
-                  key={`row_${r}`}
-                  style={{ flexDirection: 'row', height: cellSize }}
-                >
-                  {Array.from({ length: levelConfig.cols }).map((__, c) => (
-                    <Pressable
-                      key={`touch_${c}_${r}`}
-                      onPress={() => handleCellPress(c, r)}
-                      onLongPress={() => handleRetractCell(c, r)}
-                      style={{
-                        width: cellSize,
-                        height: cellSize,
-                      }}
-                    />
-                  ))}
-                </View>
-              ))}
+              {pathResult.isValid ? 'ROUTE READY! ➔' : 'INCOMPLETE ⚠️'}
+            </Text>
+          </View>
+        </View>
+
+        {/* Main Arena: Left Tray, 24-Box Center Grid (4x6), Right Tray */}
+        <View style={styles.arenaRow}>
+          {/* Left Tile Selection Dock */}
+          <View style={styles.sideDock}>
+            <Text style={styles.dockTitle}>LEFT TILES</Text>
+            <View style={styles.dockSlots}>
+              {leftTray.map((tile) => {
+                const isSelected = selectedTile?.id === tile.id;
+                return (
+                  <Pressable
+                    key={tile.id}
+                    style={[
+                      styles.dockCard,
+                      isSelected && styles.dockCardSelected,
+                    ]}
+                    onPress={() => handleSelectTrayTile(tile, 'left')}
+                  >
+                    <TileGraphic type={tile.type} size={44} />
+                    {isSelected && (
+                      <View style={styles.pickedBadge}>
+                        <Text style={styles.pickedText}>PICKED</Text>
+                      </View>
+                    )}
+                  </Pressable>
+                );
+              })}
             </View>
           </View>
 
-          {/* EXIT RECEPTOR GATE ON RIGHT */}
-          <View
-            style={[
-              styles.gateMarker,
-              styles.gateExit,
-              { top: levelConfig.exit.row * cellSize + cellSize / 2 - 16 },
-            ]}
-          >
-            <Text style={styles.gateIcon}>🚪</Text>
-            <Text style={styles.gateLabel}>EXIT</Text>
+          {/* Center 24-Box Grid (4 Columns x 6 Rows = 24 Boxes) */}
+          <View style={styles.gridBoard}>
+            {Array.from({ length: GRID_ROWS }).map((_, r) => (
+              <View key={`row_${r}`} style={styles.gridRow}>
+                {Array.from({ length: GRID_COLS }).map((__, c) => {
+                  const key = `${c}_${r}`;
+                  const placedTileType = gridTiles[key];
+                  const sceneryType = sceneryMap[key];
+                  const isStart = levelConfig.start.col === c && levelConfig.start.row === r;
+                  const isExit = levelConfig.exit.col === c && levelConfig.exit.row === r;
+                  const isPlayerHere = walkerState.col === c && walkerState.row === r;
+
+                  return (
+                    <Pressable
+                      key={key}
+                      style={[
+                        styles.gridBox,
+                        isStart && styles.gridBoxStart,
+                        isExit && styles.gridBoxExit,
+                      ]}
+                      onPress={() => handleGridBoxPress(c, r)}
+                    >
+                      {/* Empty Box Recess Outline */}
+                      <View style={styles.boxRecess} />
+
+                      {/* Scenery Tile (Pond, Trees, Rocks) */}
+                      {Boolean(sceneryType) && (
+                        <TileGraphic type={sceneryType} size={TILE_SIZE} />
+                      )}
+
+                      {/* Placed Path Tile */}
+                      {Boolean(placedTileType) && (
+                        <TileGraphic type={placedTileType} size={TILE_SIZE} />
+                      )}
+
+                      {/* Start Arch & Player Indicator */}
+                      {isStart && !placedTileType && (
+                        <View style={styles.markerBadge}>
+                          <Text style={styles.markerIcon}>🚩</Text>
+                          <Text style={styles.markerText}>START</Text>
+                        </View>
+                      )}
+
+                      {/* Exit Golden Chest Indicator */}
+                      {isExit && (
+                        <View style={styles.exitBadge}>
+                          <Text style={styles.exitIcon}>🏆</Text>
+                          <Text style={styles.exitText}>EXIT</Text>
+                        </View>
+                      )}
+
+                      {/* Walking Player Character Silhouette */}
+                      {isPlayerHere && (
+                        <View style={styles.playerSprite}>
+                          <Svg width={28} height={28} viewBox="0 0 28 28">
+                            <Circle cx={14} cy={14} r={12} fill="#00F5FF" stroke="#FFFFFF" strokeWidth={2} />
+                            <Circle cx={14} cy={11} r={4.5} fill="#050814" />
+                            <Path d="M 9 19 Q 14 15 19 19" stroke="#050814" strokeWidth={3} fill="none" strokeLinecap="round" />
+                          </Svg>
+                        </View>
+                      )}
+                    </Pressable>
+                  );
+                })}
+              </View>
+            ))}
+          </View>
+
+          {/* Right Tile Selection Dock */}
+          <View style={styles.sideDock}>
+            <Text style={styles.dockTitle}>RIGHT TILES</Text>
+            <View style={styles.dockSlots}>
+              {rightTray.map((tile) => {
+                const isSelected = selectedTile?.id === tile.id;
+                return (
+                  <Pressable
+                    key={tile.id}
+                    style={[
+                      styles.dockCard,
+                      isSelected && styles.dockCardSelected,
+                    ]}
+                    onPress={() => handleSelectTrayTile(tile, 'right')}
+                  >
+                    <TileGraphic type={tile.type} size={44} />
+                    {isSelected && (
+                      <View style={styles.pickedBadge}>
+                        <Text style={styles.pickedText}>PICKED</Text>
+                      </View>
+                    )}
+                  </Pressable>
+                );
+              })}
+            </View>
           </View>
         </View>
-      </View>
 
-      {/* Blueprint Conduit Tray & Action Dashboard */}
-      <View style={styles.dashboardContainer}>
-        <Text style={styles.trayHeader}>SELECT CONDUIT BLUEPRINT (TAP CELL TO PLACE/ROTATE)</Text>
-
-        {/* Conduit Inventory Tray */}
-        <View style={styles.trayScroll}>
-          {trayPieces.map((item, idx) => {
-            const isSelected = selectedTrayIndex === idx;
-            const isExhausted = item.count <= 0;
-
-            return (
-              <Pressable
-                key={item.type}
-                onPress={() => {
-                  setSelectedTrayIndex(idx);
-                  triggerLightHaptic();
-                  playTapSound();
-                }}
-                style={[
-                  styles.trayCard,
-                  isSelected && styles.trayCardSelected,
-                  isExhausted && styles.trayCardExhausted,
-                ]}
-              >
-                {/* Count Badge */}
-                <View
-                  style={[
-                    styles.countPill,
-                    isSelected && { backgroundColor: COLORS.cyan },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.countText,
-                      isSelected && { color: '#030208' },
-                    ]}
-                  >
-                    ×{item.count}
-                  </Text>
-                </View>
-
-                {/* Mini SVG Preview */}
-                <Svg width={36} height={36}>
-                  <Rect
-                    x={2}
-                    y={2}
-                    width={32}
-                    height={32}
-                    rx={6}
-                    fill="#100C2A"
-                    stroke={isSelected ? '#00F5FF' : 'rgba(255, 255, 255, 0.2)'}
-                    strokeWidth={1}
-                  />
-                  {item.type.includes('STRAIGHT_H') && (
-                    <Path
-                      d="M 4 18 L 32 18"
-                      stroke={isSelected ? '#00F5FF' : '#CBD5E1'}
-                      strokeWidth={4}
-                    />
-                  )}
-                  {item.type.includes('STRAIGHT_V') && (
-                    <Path
-                      d="M 18 4 L 18 32"
-                      stroke={isSelected ? '#00F5FF' : '#CBD5E1'}
-                      strokeWidth={4}
-                    />
-                  )}
-                  {item.type.includes('CURVE') && (
-                    <Path
-                      d="M 8 18 Q 18 18 18 8"
-                      stroke={isSelected ? '#00F5FF' : '#CBD5E1'}
-                      strokeWidth={4}
-                      fill="none"
-                    />
-                  )}
-                  {item.type.includes('CROSS') && (
-                    <G>
-                      <Path
-                        d="M 4 18 L 32 18"
-                        stroke={isSelected ? '#00F5FF' : '#CBD5E1'}
-                        strokeWidth={3}
-                      />
-                      <Path
-                        d="M 18 4 L 18 32"
-                        stroke={isSelected ? '#00F5FF' : '#CBD5E1'}
-                        strokeWidth={3}
-                      />
-                    </G>
-                  )}
-                </Svg>
-              </Pressable>
-            );
-          })}
-        </View>
-
-        {/* Master Control Buttons */}
-        <View style={styles.actionRow}>
+        {/* Action Controls Bar: Walk Path, Undo & Clear */}
+        <View style={styles.controlsBar}>
           <Pressable
-            onPress={handleReset}
-            disabled={isSimulating}
-            style={({ pressed }) => [
-              styles.resetBtn,
-              pressed && { transform: [{ scale: 0.95 }] },
+            style={[
+              styles.walkBtn,
+              !pathResult.isValid && styles.btnDisabled,
+              pathResult.isValid && styles.walkBtnReady,
             ]}
+            onPress={handleWalkPath}
+            disabled={!pathResult.isValid || walkerState.isWalking}
           >
-            <Text style={styles.resetBtnText}>↺ RESET</Text>
-          </Pressable>
-
-          <Pressable
-            onPress={handleTestRun}
-            disabled={isSimulating}
-            style={({ pressed }) => [
-              styles.launchBtn,
-              isSimulating && { opacity: 0.6 },
-              pressed && { transform: [{ scale: 0.96 }] },
-            ]}
-          >
-            <Text style={styles.launchBtnText}>
-              {isSimulating ? 'TRANSMITTING...' : '⚡ LAUNCH OPERATIVE ▶'}
+            <Text style={styles.walkBtnText}>
+              {pathResult.isValid ? '▶ WALK TO EXIT!' : 'BUILD CONNECTED ROUTE'}
             </Text>
           </Pressable>
-        </View>
-      </View>
 
-        <GameResultModal
-          visible={modalVisible}
-          type="victory"
-          score={totalScore}
-          level={currentLevel}
-          onRetry={() => initLevel(1)}
-          onBackToHub={onBackToHub}
-          buttonText="RE-RUN CIRCUITS"
-          subtitle={`ALL ${CURATED_LEVELS.length} PATHFINDER SECTORS CLEARED!`}
-        />
-      </View>
-    </JuiceEngine>
+          <Pressable style={styles.actionBtn} onPress={handleRestart} disabled={walkerState.isWalking}>
+            <Text style={styles.actionIcon}>⚡</Text>
+            <Text style={styles.actionText}>RESET</Text>
+          </Pressable>
+        </View>
+      </JuiceEngine>
+
+      {/* Victory / Next Level Modal */}
+      <GameResultModal
+        visible={victoryModal}
+        type="VICTORY"
+        title="ROUTE COMPLETE!"
+        subtitle={`Player walked through the 24-box map and escaped safely!`}
+        score={score}
+        bestScore={highScore}
+        accentColor="#00F5FF"
+        buttonText="NEXT SECTOR ▶"
+        onRetry={handleNextLevel}
+        onBackToHub={onBackToHub}
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#030208',
+    backgroundColor: '#05070E',
   },
-  telemetryBar: {
+  statusStrip: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 8,
-    backgroundColor: 'rgba(12, 10, 28, 0.92)',
-    borderBottomWidth: 1.5,
-    borderBottomColor: 'rgba(0, 245, 255, 0.3)',
+    backgroundColor: 'rgba(8, 10, 24, 0.85)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0, 245, 255, 0.15)',
   },
-  telemetryPill: {
+  statusBox: {
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 245, 255, 0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(0, 245, 255, 0.25)',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    minWidth: 54,
   },
-  telemetryLabel: {
-    fontSize: 8,
+  statusDim: {
     fontFamily: monoFont,
-    color: COLORS.textSecondary,
+    fontSize: 9,
+    color: 'rgba(255, 255, 255, 0.45)',
     letterSpacing: 0.8,
   },
-  telemetryVal: {
-    fontSize: 14,
+  statusVal: {
     fontFamily: monoFont,
-    fontWeight: '900',
-  },
-  centerNameWrap: {
-    flex: 1,
-    alignItems: 'center',
-    marginHorizontal: 8,
-  },
-  levelTitle: {
-    fontSize: 12,
-    fontFamily: monoFont,
-    fontWeight: '900',
-    color: '#FFFFFF',
-    letterSpacing: 1.2,
-  },
-  levelSubtitle: {
-    fontSize: 7.5,
-    fontFamily: monoFont,
-    color: COLORS.cyan,
-    letterSpacing: 0.6,
-    marginTop: 2,
-    textAlign: 'center',
-  },
-  gridOuterFrame: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-    position: 'relative',
-  },
-  matrixBox: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 14,
-    borderWidth: 2,
-    borderColor: '#00F5FF',
-    backgroundColor: 'rgba(6, 4, 18, 0.96)',
-    shadowColor: '#00F5FF',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.45,
-    shadowRadius: 16,
-    elevation: 8,
-    overflow: 'hidden',
-  },
-  gateMarker: {
-    position: 'absolute',
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 15,
-  },
-  gateEntry: {
-    left: -22,
-  },
-  gateExit: {
-    right: -22,
-  },
-  gateIcon: {
-    fontSize: 16,
-    color: '#39FF14',
-  },
-  gateLabel: {
-    fontSize: 7,
-    fontFamily: monoFont,
-    fontWeight: '900',
-    color: '#39FF14',
-    letterSpacing: 0.5,
-  },
-  dashboardContainer: {
-    paddingHorizontal: 16,
-    paddingBottom: 20,
-    backgroundColor: 'rgba(8, 6, 22, 0.95)',
-    borderTopWidth: 1.5,
-    borderTopColor: 'rgba(0, 245, 255, 0.25)',
-  },
-  trayHeader: {
-    fontSize: 8.5,
-    fontFamily: monoFont,
-    fontWeight: '900',
-    color: COLORS.textSecondary,
-    letterSpacing: 0.8,
-    marginVertical: 8,
-    textAlign: 'center',
-  },
-  trayScroll: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 8,
-    marginBottom: 12,
-  },
-  trayCard: {
-    padding: 4,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
-    backgroundColor: 'rgba(16, 12, 36, 0.9)',
-    alignItems: 'center',
-  },
-  trayCardSelected: {
-    borderColor: '#00F5FF',
-    shadowColor: '#00F5FF',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.6,
-    shadowRadius: 8,
-    elevation: 6,
-    backgroundColor: 'rgba(0, 245, 255, 0.12)',
-  },
-  trayCardExhausted: {
-    opacity: 0.35,
-  },
-  countPill: {
-    position: 'absolute',
-    top: -5,
-    right: -5,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: 8,
-    paddingHorizontal: 4,
-    paddingVertical: 1,
-    zIndex: 2,
-  },
-  countText: {
-    fontSize: 8,
-    fontFamily: monoFont,
-    fontWeight: '900',
+    fontSize: 11,
+    fontWeight: '800',
     color: '#FFFFFF',
   },
-  actionRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  resetBtn: {
+  arenaRow: {
     flex: 1,
-    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+    paddingVertical: 6,
+    gap: 6,
+  },
+  sideDock: {
+    width: 52,
+    alignItems: 'center',
+    backgroundColor: 'rgba(10, 14, 28, 0.92)',
     borderRadius: 12,
     borderWidth: 1.2,
-    borderColor: 'rgba(255, 0, 85, 0.5)',
-    backgroundColor: 'rgba(255, 0, 85, 0.12)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderColor: 'rgba(0, 245, 255, 0.25)',
+    paddingVertical: 6,
+    paddingHorizontal: 2,
   },
-  resetBtnText: {
-    fontSize: 11,
+  dockTitle: {
     fontFamily: monoFont,
+    fontSize: 7.5,
     fontWeight: '900',
-    color: '#FF0055',
-    letterSpacing: 1,
+    color: '#00F5FF',
+    marginBottom: 4,
+    letterSpacing: 0.4,
   },
-  launchBtn: {
-    flex: 2.5,
-    paddingVertical: 12,
-    borderRadius: 12,
+  dockSlots: {
+    gap: 6,
+    alignItems: 'center',
+  },
+  dockCard: {
+    width: 46,
+    height: 46,
+    borderRadius: 10,
+    backgroundColor: '#070A14',
     borderWidth: 1.5,
-    borderColor: '#00F5D4',
-    backgroundColor: '#00F5D4',
+    borderColor: 'rgba(255, 255, 255, 0.15)',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#00F5D4',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.45,
-    shadowRadius: 8,
-    elevation: 6,
+    position: 'relative',
+    overflow: 'hidden',
   },
-  launchBtnText: {
-    fontSize: 12,
+  dockCardSelected: {
+    borderColor: '#FFE600',
+    transform: [{ scale: 1.06 }],
+    shadowColor: '#FFE600',
+    shadowOpacity: 0.8,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  pickedBadge: {
+    position: 'absolute',
+    bottom: 1,
+    backgroundColor: 'rgba(255, 230, 0, 0.85)',
+    paddingHorizontal: 3,
+    borderRadius: 3,
+  },
+  pickedText: {
     fontFamily: monoFont,
+    fontSize: 6,
     fontWeight: '900',
-    color: '#030208',
-    letterSpacing: 1.2,
+    color: '#05060D',
+  },
+  gridBoard: {
+    backgroundColor: '#070914',
+    padding: 6,
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: 'rgba(0, 245, 255, 0.35)',
+    shadowColor: '#00F5FF',
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  gridRow: {
+    flexDirection: 'row',
+    gap: TILE_GAP,
+    marginBottom: TILE_GAP,
+  },
+  gridBox: {
+    width: TILE_SIZE,
+    height: TILE_SIZE,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  gridBoxStart: {
+    borderWidth: 1.5,
+    borderColor: COLORS.matrixMint,
+  },
+  gridBoxExit: {
+    borderWidth: 1.5,
+    borderColor: '#FFE600',
+  },
+  boxRecess: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 10,
+    backgroundColor: '#0F1322',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  markerBadge: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  markerIcon: {
+    fontSize: 16,
+  },
+  markerText: {
+    fontFamily: monoFont,
+    fontSize: 7.5,
+    fontWeight: '900',
+    color: COLORS.matrixMint,
+  },
+  exitBadge: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(10, 14, 28, 0.85)',
+    paddingHorizontal: 3,
+    borderRadius: 4,
+  },
+  exitIcon: {
+    fontSize: 12,
+  },
+  exitText: {
+    fontFamily: monoFont,
+    fontSize: 6,
+    fontWeight: '900',
+    color: '#FFE600',
+  },
+  playerSprite: {
+    position: 'absolute',
+    zIndex: 99,
+    shadowColor: '#00F5FF',
+    shadowOpacity: 0.9,
+    shadowRadius: 8,
+    elevation: 12,
+  },
+  controlsBar: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    backgroundColor: 'rgba(8, 10, 24, 0.95)',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0, 245, 255, 0.15)',
+  },
+  walkBtn: {
+    flex: 1,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#141829',
+    borderWidth: 1.5,
+    borderColor: 'rgba(0, 245, 255, 0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  walkBtnReady: {
+    backgroundColor: '#00F5D4',
+    borderColor: '#FFFFFF',
+    shadowColor: '#00F5D4',
+    shadowOpacity: 0.6,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  walkBtnText: {
+    fontFamily: monoFont,
+    fontSize: 11.5,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    letterSpacing: 0.8,
+  },
+  actionBtn: {
+    height: 44,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    backgroundColor: '#1A1624',
+    borderWidth: 1.5,
+    borderColor: '#FFE600',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  actionIcon: {
+    fontSize: 14,
+  },
+  actionText: {
+    fontFamily: monoFont,
+    fontSize: 10.5,
+    fontWeight: '900',
+    color: '#FFE600',
+    letterSpacing: 0.5,
+  },
+  btnDisabled: {
+    opacity: 0.45,
   },
 });
