@@ -754,7 +754,7 @@ export default function CyberBomberGame({
   return (
     <View style={styles.container}>
       <MiniGameHeader
-        title="CYBER BOMBER"
+        title="BOMBERMAN"
         floorLabel="FLOOR 33"
         category="ARCADE"
         score={score}
@@ -1162,7 +1162,7 @@ export default function CyberBomberGame({
         visible={gameOver}
         type="GAME_OVER"
         title="OPERATIVE DOWN"
-        subtitle="Cyber Bot Overrun. Systems Terminated."
+        subtitle="Defeated by Enemy Patrol. Try again!"
         score={score}
         bestScore={highScore}
         accentColor="#FF0055"

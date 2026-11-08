@@ -26,12 +26,14 @@ import {
   triggerMediumHaptic,
   triggerPerfectHaptic,
   triggerSelectionHaptic,
+  triggerGameOverHaptic,
 } from '../utils/haptics';
 import {
   playTapSound,
   playPerfectSound,
   playSliceSound,
   playSnapTickSound,
+  playGameOverSound,
 } from '../utils/sound';
 
 const STORAGE_KEY = '@game_tower:best_screw_v1';
@@ -61,6 +63,7 @@ const CURATED_LEVELS = [
   {
     name: 'INITIAL OVERRIDE',
     parMoves: 4,
+    maxMoves: 6,
     holes: [
       { id: 'h0', x: 90, y: 160 },
       { id: 'h1', x: 250, y: 160 },
@@ -81,6 +84,7 @@ const CURATED_LEVELS = [
   {
     name: 'CROSSFIRE MATRIX',
     parMoves: 6,
+    maxMoves: 9,
     holes: [
       { id: 'h0', x: 80, y: 140 },
       { id: 'h1', x: 260, y: 140 },
@@ -105,6 +109,7 @@ const CURATED_LEVELS = [
   {
     name: 'TRIAD NEXUS',
     parMoves: 7,
+    maxMoves: 10,
     holes: [
       { id: 'h0', x: 90, y: 135 },
       { id: 'h1', x: 250, y: 135 },
@@ -123,10 +128,11 @@ const CURATED_LEVELS = [
     },
   },
 
-  // Level 4: Cyber Z-Link
+  // Level 4: Z-Link Matrix
   {
-    name: 'CYBER Z-LINK',
+    name: 'Z-LINK MATRIX',
     parMoves: 8,
+    maxMoves: 12,
     holes: [
       { id: 'h0', x: 80, y: 130 },
       { id: 'h1', x: 260, y: 130 },
@@ -152,6 +158,7 @@ const CURATED_LEVELS = [
   {
     name: 'PENTAPLEX CORE',
     parMoves: 9,
+    maxMoves: 14,
     holes: [
       { id: 'h0', x: 80, y: 130 },
       { id: 'h1', x: 260, y: 130 },
@@ -177,6 +184,7 @@ const CURATED_LEVELS = [
   {
     name: 'DOUBLE CHEVRON',
     parMoves: 10,
+    maxMoves: 15,
     holes: [
       { id: 'h0', x: 80, y: 120 },
       { id: 'h1', x: 260, y: 120 },
@@ -203,6 +211,7 @@ const CURATED_LEVELS = [
   {
     name: 'HEXA LATTICE',
     parMoves: 11,
+    maxMoves: 16,
     holes: [
       { id: 'h0', x: 80, y: 120 },
       { id: 'h1', x: 260, y: 120 },
@@ -232,6 +241,7 @@ const CURATED_LEVELS = [
   {
     name: 'TITANIUM CAGE',
     parMoves: 13,
+    maxMoves: 18,
     holes: [
       { id: 'h0', x: 80, y: 120 },
       { id: 'h1', x: 170, y: 120 },
@@ -296,7 +306,12 @@ export default function CyberScrewGame({
   // Undo history stack
   const [undoStack, setUndoStack] = useState([]);
   const [isWon, setIsWon] = useState(false);
+  const [isGameOver, setIsGameOver] = useState(false);
   const [showResultModal, setShowResultModal] = useState(false);
+
+  // Maximum moves allowed for current puzzle
+  const maxMoves = levelConfig.maxMoves || Math.max(levelConfig.parMoves + 3, Math.round(levelConfig.parMoves * 1.4));
+  const movesLeft = Math.max(0, maxMoves - movesCount);
 
   // Load high score
   useEffect(() => {
@@ -316,6 +331,7 @@ export default function CyberScrewGame({
     setUndoStack([]);
     setMovesCount(0);
     setIsWon(false);
+    setIsGameOver(false);
     setShowResultModal(false);
   }, []);
 
@@ -355,7 +371,7 @@ export default function CyberScrewGame({
   // Handle tap on a hole or socket
   const handleHolePress = useCallback(
     (holeId) => {
-      if (isPaused || isWon) return;
+      if (isPaused || isWon || isGameOver) return;
 
       const hasScrew = !!screws[holeId];
 
@@ -444,11 +460,22 @@ export default function CyberScrewGame({
             playPerfectSound();
             triggerPerfectHaptic();
             checkVictory(nextFallen, nextMoves);
+          } else {
+            // Check moves limit when no struts dropped
+            if (nextFallen.size < levelConfig.planks.length && nextMoves >= maxMoves) {
+              setIsGameOver(true);
+              playGameOverSound();
+              triggerGameOverHaptic();
+              juiceRef.current?.popup('NO MOVES LEFT', `Max ${maxMoves} reached!`, '#FF0055');
+              setTimeout(() => {
+                setShowResultModal(true);
+              }, 900);
+            }
           }
         }
       }
     },
-    [isPaused, isWon, screws, selectedHoleId, movesCount, fallenPlanks, holeMap, levelConfig.planks, checkVictory]
+    [isPaused, isWon, isGameOver, screws, selectedHoleId, movesCount, maxMoves, fallenPlanks, holeMap, levelConfig.planks, checkVictory]
   );
 
   // Undo move
@@ -462,6 +489,8 @@ export default function CyberScrewGame({
     setFallenPlanks(new Set(last.fallenSnapshot));
     setMovesCount(last.moves);
     setSelectedHoleId(null);
+    setIsGameOver(false);
+    setShowResultModal(false);
 
     playTapSound();
     triggerLightHaptic();
@@ -516,7 +545,7 @@ export default function CyberScrewGame({
   return (
     <View style={styles.container}>
       <MiniGameHeader
-        title="CYBER SCREW PIN"
+        title="SCREW PUZZLE"
         floorLabel="FLOOR 32"
         category="PUZZLE"
         score={totalScore}
@@ -537,8 +566,22 @@ export default function CyberScrewGame({
 
           <View style={styles.statsRow}>
             <View style={styles.statBox}>
-              <Text style={styles.statDim}>MOVES</Text>
-              <Text style={styles.statBright}>{movesCount}</Text>
+              <Text style={styles.statDim}>MOVES LEFT</Text>
+              <Text
+                style={[
+                  styles.statBright,
+                  {
+                    color:
+                      movesLeft <= 1
+                        ? '#FF0055'
+                        : movesLeft <= 3
+                          ? '#FFE600'
+                          : '#00F5FF',
+                  },
+                ]}
+              >
+                {movesLeft} / {maxMoves}
+              </Text>
             </View>
 
             <View style={styles.statBox}>
@@ -826,17 +869,21 @@ export default function CyberScrewGame({
         </View>
       </JuiceEngine>
 
-      {/* Victory / Next Level Modal */}
+      {/* Victory / Next Level / Game Over Modal */}
       <GameResultModal
         visible={showResultModal}
-        type="VICTORY"
-        title="CORE UNLOCKED!"
-        subtitle={`All struts cleared in ${movesCount} moves!`}
+        type={isWon ? 'VICTORY' : 'GAMEOVER'}
+        title={isWon ? 'ALL STRUTS FREED!' : 'OUT OF MOVES!'}
+        subtitle={
+          isWon
+            ? `Puzzle solved in ${movesCount} moves!`
+            : `Exceeded the ${maxMoves}-move limit. Try a different strategy!`
+        }
         score={totalScore}
         bestScore={highScore}
-        accentColor="#FFE600"
-        buttonText="NEXT LEVEL ▶"
-        onRetry={handleNextLevel}
+        accentColor={isWon ? '#FFE600' : '#FF0055'}
+        buttonText={isWon ? 'NEXT LEVEL ▶' : 'TRY AGAIN ↺'}
+        onRetry={isWon ? handleNextLevel : () => initLevel(currentLevel)}
         onBackToHub={onBackToHub}
       />
     </View>

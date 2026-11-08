@@ -101,7 +101,7 @@ export const UNLOCK_REQUIREMENTS = {
   cyber_bomber: {
     reqGame: 'cyber_tetris',
     targetScore: 100,
-    desc: 'Score 100+ in CYBER TETRIS',
+    desc: 'Score 100+ in TETRIS NEO',
     category: 'ARCADE',
   },
 
@@ -145,8 +145,8 @@ export const UNLOCK_REQUIREMENTS = {
   cyber_screw: {
     reqGame: 'cyber_pathfinder',
     targetScore: 1,
-    desc: 'Clear 1 level in CYBER PATHFINDER',
-    category: 'PUZZLES',
+    desc: 'Clear 1 level in PATHFINDER',
+    category: 'PUZZLE',
   },
 
   // BRAIN CATEGORY
