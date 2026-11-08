@@ -699,7 +699,7 @@ export default function IcyTowerClimberGame({ onBackToHub, onScoreUpdate, isPaus
     <View style={styles.container}>
       <MiniGameHeader
         floorNum={29}
-        gameTitle="CYBER SPIRE ASCENT"
+        gameTitle="SPIRE ASCENT"
         category="ENDLESS VERTICAL"
         accentColor="#00F5FF"
         score={score}

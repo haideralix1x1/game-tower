@@ -383,7 +383,7 @@ export default function CyberTetrisGame({ onBackToHub, onScoreUpdate, isPaused =
     <View style={styles.container}>
       <MiniGameHeader
         floorNum={26}
-        gameTitle="CYBER TETRIS NEO"
+        gameTitle="TETRIS NEO"
         category="ARCADE BLOCKS"
         accentColor="#00F5FF"
         score={score}

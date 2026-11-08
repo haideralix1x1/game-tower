@@ -334,7 +334,7 @@ export default function ColorSwitchGame({ onBackToHub, onScoreUpdate, isPaused =
     <View style={styles.container}>
       <MiniGameHeader
         floorNum={12}
-        gameTitle="CYBER COLOR SWITCH"
+        gameTitle="COLOR SWITCH"
         category="COLOR ARCADE"
         accentColor="#00F5FF"
         score={score}

@@ -257,7 +257,7 @@ export default function CyberSnakeGame({ onBackToHub, onScoreUpdate, isPaused = 
         />
 
         <MiniGameHeader
-          title="CYBER SNAKE"
+          title="SNAKE"
           floorLabel="FLOOR 11 // NEON SERPENT"
           score={score}
           bestScore={bestScore}

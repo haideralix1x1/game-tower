@@ -643,7 +643,7 @@ export default function Match3SagaGame({ onBackToHub, onScoreUpdate, isPaused = 
 
         <MiniGameHeader
           floorNum={27}
-          gameTitle="CYBER FRUIT MATCH 3"
+          gameTitle="MATCH 3 SAGA"
           category="JUICY SAGA"
           accentColor="#FF007F"
           score={score}

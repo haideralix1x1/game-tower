@@ -32,14 +32,8 @@ const DIRS = [
   { dr: 0, dc: -1, name: 'LEFT' },
 ];
 
-const NEON_PALETTE = [
-  '#00F5FF', // Neon Cyan
-  '#39FF14', // Electric Lime
-  '#FFD166', // Solar Gold
-  '#FF007F', // Neon Magenta
-  '#FF6D00', // Radiant Orange
-  '#9D4EDD', // Cyber Violet
-];
+// Unified signature Cyber Neon theme color for all arrows
+const THEME_NEON_COLOR = '#00F5FF';
 
 const STORAGE_LEVEL_KEY = '@game_tower:level_arrows_v1';
 const STORAGE_BEST_KEY = '@game_tower:best_arrows_v1';
@@ -164,7 +158,7 @@ function generatePatternArrows(lvl = 1) {
           headDir: dir.name,
           dr: dir.dr,
           dc: dir.dc,
-          color: NEON_PALETTE[id % NEON_PALETTE.length],
+          color: THEME_NEON_COLOR,
         };
 
         for (const pt of arrow.path) {
@@ -182,7 +176,9 @@ function generatePatternArrows(lvl = 1) {
 
 export default function TapAwayArrowsGame({ onBackToHub, onScoreUpdate, isPaused = false }) {
   const isPausedRef = useRef(isPaused);
-  isPausedRef.current = isPaused;
+  useEffect(() => {
+    isPausedRef.current = isPaused;
+  }, [isPaused]);
   const { width } = useWindowDimensions();
 
   // Maze board dimensions
@@ -220,7 +216,9 @@ export default function TapAwayArrowsGame({ onBackToHub, onScoreUpdate, isPaused
   // Escaping animated arrows
   const [escapingArrows, setEscapingArrows] = useState([]);
   const escapingRef = useRef([]);
-  escapingRef.current = escapingArrows;
+  useEffect(() => {
+    escapingRef.current = escapingArrows;
+  }, [escapingArrows]);
   const animFrameRef = useRef(null);
 
   // Result modal
@@ -569,7 +567,7 @@ export default function TapAwayArrowsGame({ onBackToHub, onScoreUpdate, isPaused
       <View style={styles.container}>
         <MiniGameHeader
           floorNum={28}
-          gameTitle="CYBER ARROWS MAZE"
+          gameTitle="ARROWS MAZE"
           category="LOGIC UNRAVEL"
           accentColor="#00F5FF"
           score={score}

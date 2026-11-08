@@ -467,7 +467,7 @@ export default function CyberSudokuGame({ onBackToHub, onScoreUpdate }) {
         />
 
         <MiniGameHeader
-          title={`CYBER SUDOKU // ${activeMode.id}`}
+          title={`SUDOKU // ${activeMode.id}`}
           floorLabel="FLOOR 21 // QUANTUM 9×9"
           score={score}
           bestScore={bestScore}
@@ -651,7 +651,7 @@ export default function CyberSudokuGame({ onBackToHub, onScoreUpdate }) {
               visible={gameState === 'WON'}
               type="VICTORY"
               title="QUANTUM SOLVED!"
-              subtitle={`CYBER SUDOKU SOLVED IN ${formatTime(timerSec)} // ${activeMode.label}`}
+              subtitle={`SUDOKU SOLVED IN ${formatTime(timerSec)} // ${activeMode.label}`}
               score={score}
               bestScore={bestScore}
               accentColor={activeMode.accent}

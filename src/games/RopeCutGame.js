@@ -646,7 +646,7 @@ export default function RopeCutGame({ onBackToHub, onScoreUpdate, isPaused = fal
     <View style={styles.container}>
       <MiniGameHeader
         floorNum={22}
-        gameTitle="CYBER ROPE DROP"
+        gameTitle="ROPE DROP"
         category="PHYSICS PUZZLE"
         accentColor="#00F5D4"
         score={score}

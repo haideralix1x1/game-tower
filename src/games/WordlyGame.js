@@ -12,7 +12,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS } from '../../styles';
 import MiniGameHeader from '../components/MiniGameHeader';
-import { VALID_5_LETTER_WORDS } from '../data/wordleDictionary';
+import { VALID_5_LETTER_WORDS, COMMON_SECRET_WORDS } from '../data/wordleDictionary';
 import JuiceEngine from '../components/JuiceEngine';
 import GameResultModal from '../components/GameResultModal';
 import {
@@ -30,19 +30,7 @@ import {
 
 const STORAGE_KEY = '@game_tower:best_wordly_v1';
 
-const WORD_BANK = [
-  'CYBER', 'LASER', 'NEONS', 'PULSE', 'TOWER', 'BLOCK', 'STACK', 'PIXEL',
-  'HYPER', 'NEXUS', 'ORBIT', 'PRISM', 'SPARK', 'FLASH', 'SOLAR', 'LUNAR',
-  'SYNTH', 'LOGIC', 'QUEST', 'POWER', 'SPEED', 'GHOST', 'BLAZE', 'CROWN',
-  'DRIFT', 'FLAME', 'FORCE', 'GLIDE', 'HEART', 'LIGHT', 'MAGIC', 'METAL',
-  'NIGHT', 'OCEAN', 'PEARL', 'PHASE', 'PRIME', 'RADAR', 'REALM', 'ROBOT',
-  'SCORE', 'SHARP', 'SHIFT', 'SHOCK', 'SIGHT', 'SKILL', 'SLICE', 'SMART',
-  'SONIC', 'SPACE', 'STAGE', 'START', 'STEAM', 'STEEL', 'STORM', 'SURGE',
-  'SWIFT', 'SWORD', 'TIGER', 'TITAN', 'TRACK', 'TRAIL', 'TURBO', 'ULTRA',
-  'UNITY', 'VALOR', 'VAULT', 'VIPER', 'VITAL', 'VOICE', 'WATCH', 'WATER',
-  'WAVES', 'WORLD', 'YOUTH', 'ZEBRA', 'AGENT', 'ALPHA', 'AMBER', 'ANGEL',
-  'ARENA', 'ARMOR', 'ARROW', 'ATLAS', 'AUDIO', 'BADGE', 'BEAST', 'BLADE',
-];
+const WORD_BANK = COMMON_SECRET_WORDS;
 
 const KEYBOARD_ROWS = [
   ['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'],

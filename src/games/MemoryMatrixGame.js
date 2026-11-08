@@ -8,7 +8,6 @@ import {
   useWindowDimensions,
   Animated,
   Easing,
-  ScrollView,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -27,7 +26,12 @@ import {
   playPerfectSound,
 } from '../utils/sound';
 
-const STORAGE_KEY_PREFIX = '@game_tower:best_memory_mode_';
+const STORAGE_KEY = '@game_tower:best_memory_matrix';
+const TOTAL_PAIRS = 12; // 24 cards total (4 columns x 6 rows)
+const COLS = 4;
+const ROWS = 6;
+const PTS_PER_MATCH = 60;
+const CLEAR_BONUS = 500;
 
 const ALL_SYMBOLS = [
   { glyph: '◈', color: '#00F5FF', name: 'PRISM' },
@@ -52,54 +56,28 @@ const ALL_SYMBOLS = [
   { glyph: '✵', color: '#FFAA00', name: 'FLARE' },
 ];
 
-const MODES = {
-  EASY: {
-    key: 'EASY',
-    label: 'EASY (16)',
-    cols: 4,
-    rows: 4,
-    pairs: 8,
-    isSmall: false,
-    clearBonus: 200,
-    ptsPerMatch: 40,
-  },
-  MEDIUM: {
-    key: 'MEDIUM',
-    label: 'MED (24)',
-    cols: 4,
-    rows: 6,
-    pairs: 12,
-    isSmall: false,
-    clearBonus: 400,
-    ptsPerMatch: 60,
-  },
-  HARD: {
-    key: 'HARD',
-    label: 'HARD (40)',
-    cols: 5,
-    rows: 8,
-    pairs: 20,
-    isSmall: true,
-    clearBonus: 800,
-    ptsPerMatch: 80,
-  },
-};
-
 const monoFont = Platform.select({
   ios: 'Menlo',
   android: 'monospace',
   default: 'monospace',
 });
 
-const createDeck = (modeKey) => {
-  const mode = MODES[modeKey] || MODES.EASY;
-  const pool = ALL_SYMBOLS.slice(0, mode.pairs);
-  const pairs = [...pool, ...pool].map((item, idx) => ({
-    id: `card_${modeKey}_${idx}_${Math.random()}`,
+/**
+ * Creates a shuffled 24-card deck (12 pairs)
+ */
+const createDeck = () => {
+  // Shuffle symbols pool to ensure variety every game
+  const shuffledSymbols = [...ALL_SYMBOLS].sort(() => Math.random() - 0.5);
+  const selectedPool = shuffledSymbols.slice(0, TOTAL_PAIRS);
+
+  const pairs = [...selectedPool, ...selectedPool].map((item, idx) => ({
+    id: `card_${idx}_${Math.random().toString(36).substring(2, 8)}`,
     ...item,
     flipped: false,
     matched: false,
   }));
+
+  // Fisher-Yates shuffle
   for (let i = pairs.length - 1; i > 0; i -= 1) {
     const j = Math.floor(Math.random() * (i + 1));
     [pairs[i], pairs[j]] = [pairs[j], pairs[i]];
@@ -110,7 +88,7 @@ const createDeck = (modeKey) => {
 /**
  * 3D Flip Card Component with realistic perspective and bounce
  */
-function FlipCard({ card, cardW, cardH, isSmall, onPress }) {
+function FlipCard({ card, cardSize, onPress }) {
   const isRevealed = card.flipped || card.matched;
   const flipAnim = useRef(new Animated.Value(isRevealed ? 180 : 0)).current;
   const scaleAnim = useRef(new Animated.Value(1)).current;
@@ -141,7 +119,7 @@ function FlipCard({ card, cardW, cardH, isSmall, onPress }) {
     }
   }, [isRevealed, card.matched, flipAnim, scaleAnim]);
 
-  // Front side of the card (Unrevealed, with cyber diamond symbol)
+  // Front side of card (Hidden / Face Down)
   const frontInterpolate = flipAnim.interpolate({
     inputRange: [0, 180],
     outputRange: ['0deg', '180deg'],
@@ -151,7 +129,7 @@ function FlipCard({ card, cardW, cardH, isSmall, onPress }) {
     outputRange: [1, 1, 0, 0],
   });
 
-  // Back side of the card (Revealed, with glyph, label, and neon border)
+  // Back side of card (Revealed / Face Up)
   const backInterpolate = flipAnim.interpolate({
     inputRange: [0, 180],
     outputRange: ['180deg', '360deg'],
@@ -161,13 +139,16 @@ function FlipCard({ card, cardW, cardH, isSmall, onPress }) {
     outputRange: [0, 0, 1, 1],
   });
 
+  const glyphFontSize = Math.max(18, Math.round(cardSize * 0.40));
+  const labelFontSize = Math.max(7, Math.round(cardSize * 0.13));
+  const backIconSize = Math.max(16, Math.round(cardSize * 0.32));
+
   return (
     <Pressable
       onPress={onPress}
       style={{
-        width: cardW,
-        height: cardH,
-        margin: 2.5,
+        width: cardSize,
+        height: cardSize,
       }}
     >
       {/* Front Face (Hidden / Face Down) */}
@@ -176,8 +157,8 @@ function FlipCard({ card, cardW, cardH, isSmall, onPress }) {
         style={[
           localStyles.cardCommon,
           {
-            width: cardW,
-            height: cardH,
+            width: cardSize,
+            height: cardSize,
             transform: [
               { perspective: 1000 },
               { scale: scaleAnim },
@@ -190,7 +171,7 @@ function FlipCard({ card, cardW, cardH, isSmall, onPress }) {
           },
         ]}
       >
-        <Text style={[localStyles.cardBackIcon, isSmall && { fontSize: 13 }]}>◈</Text>
+        <Text style={[localStyles.cardBackIcon, { fontSize: backIconSize }]}>◈</Text>
       </Animated.View>
 
       {/* Back Face (Revealed / Face Up) */}
@@ -199,8 +180,8 @@ function FlipCard({ card, cardW, cardH, isSmall, onPress }) {
         style={[
           localStyles.cardCommon,
           {
-            width: cardW,
-            height: cardH,
+            width: cardSize,
+            height: cardSize,
             transform: [
               { perspective: 1000 },
               { scale: scaleAnim },
@@ -220,20 +201,20 @@ function FlipCard({ card, cardW, cardH, isSmall, onPress }) {
         <Text
           style={[
             localStyles.glyph,
-            { color: card.color },
-            isSmall && { fontSize: 16 },
+            { color: card.color, fontSize: glyphFontSize },
           ]}
         >
           {card.glyph}
         </Text>
-        {!isSmall && (
-          <Text
-            numberOfLines={1}
-            style={[localStyles.cardLabel, { color: card.color }]}
-          >
-            {card.name}
-          </Text>
-        )}
+        <Text
+          numberOfLines={1}
+          style={[
+            localStyles.cardLabel,
+            { color: card.color, fontSize: labelFontSize },
+          ]}
+        >
+          {card.name}
+        </Text>
       </Animated.View>
     </Pressable>
   );
@@ -241,12 +222,10 @@ function FlipCard({ card, cardW, cardH, isSmall, onPress }) {
 
 export default function MemoryMatrixGame({ onBackToHub, onScoreUpdate }) {
   const { width, height } = useWindowDimensions();
-  const [modeKey, setModeKey] = useState('EASY');
-  const activeMode = MODES[modeKey] || MODES.EASY;
 
   const juiceRef = useRef(null);
 
-  const [cards, setCards] = useState(() => createDeck('EASY'));
+  const [cards, setCards] = useState(() => createDeck());
   const [selectedIds, setSelectedIds] = useState([]);
   const [moves, setMoves] = useState(0);
   const [combo, setCombo] = useState(0);
@@ -254,29 +233,21 @@ export default function MemoryMatrixGame({ onBackToHub, onScoreUpdate }) {
   const [bestScore, setBestScore] = useState(0);
   const lockRef = useRef(false);
 
-  // Load saved difficulty mode
+  // Load best score on mount
   useEffect(() => {
     (async () => {
       try {
-        const savedMode = await AsyncStorage.getItem('@game_tower:saved_memory_mode');
-        if (savedMode && MODES[savedMode]) {
-          setModeKey(savedMode);
-          setCards(createDeck(savedMode));
+        const saved = await AsyncStorage.getItem(STORAGE_KEY);
+        if (saved) {
+          setBestScore(parseInt(saved, 10) || 0);
+        } else {
+          // Fallback to legacy medium key if exists
+          const legacy = await AsyncStorage.getItem('@game_tower:best_memory_mode_MEDIUM');
+          if (legacy) setBestScore(parseInt(legacy, 10) || 0);
         }
       } catch {}
     })();
   }, []);
-
-  // Load best score for current difficulty mode
-  useEffect(() => {
-    (async () => {
-      try {
-        const saved = await AsyncStorage.getItem(`${STORAGE_KEY_PREFIX}${modeKey}`);
-        if (saved) setBestScore(parseInt(saved, 10) || 0);
-        else setBestScore(0);
-      } catch {}
-    })();
-  }, [modeKey]);
 
   const updateBest = useCallback(
     async (nextScore) => {
@@ -284,35 +255,22 @@ export default function MemoryMatrixGame({ onBackToHub, onScoreUpdate }) {
       if (nextScore > bestScore) {
         setBestScore(nextScore);
         try {
-          await AsyncStorage.setItem(`${STORAGE_KEY_PREFIX}${modeKey}`, String(nextScore));
+          await AsyncStorage.setItem(STORAGE_KEY, String(nextScore));
         } catch {}
       }
     },
-    [bestScore, modeKey, onScoreUpdate]
+    [bestScore, onScoreUpdate]
   );
 
-  const resetDeck = useCallback(
-    (newModeKey = modeKey) => {
-      lockRef.current = false;
-      setCards(createDeck(newModeKey));
-      setSelectedIds([]);
-      setMoves(0);
-      setCombo(0);
-      if (juiceRef.current) juiceRef.current.flash('#C77DFF');
-    },
-    [modeKey]
-  );
-
-  const handleSelectMode = (newKey) => {
-    if (newKey === modeKey) return;
-    try {
-      triggerLightHaptic();
-      playTapSound();
-    } catch {}
-    setModeKey(newKey);
-    resetDeck(newKey);
-    AsyncStorage.setItem('@game_tower:saved_memory_mode', newKey).catch(() => {});
-  };
+  const resetDeck = useCallback(() => {
+    lockRef.current = false;
+    setCards(createDeck());
+    setSelectedIds([]);
+    setMoves(0);
+    setCombo(0);
+    setScore(0);
+    if (juiceRef.current) juiceRef.current.flash('#C77DFF');
+  }, []);
 
   const handleCardTap = useCallback(
     (card) => {
@@ -337,12 +295,12 @@ export default function MemoryMatrixGame({ onBackToHub, onScoreUpdate }) {
 
         if (firstCard && secondCard && firstCard.name === secondCard.name) {
           const nextCombo = combo + 1;
-          const gained = activeMode.ptsPerMatch * nextCombo;
+          const gained = PTS_PER_MATCH * nextCombo;
           const matchedDeck = updated.map((c) =>
             c.id === firstId || c.id === secondId ? { ...c, matched: true } : c
           );
           const allCleared = matchedDeck.every((c) => c.matched);
-          const clearBonus = allCleared ? activeMode.clearBonus : 0;
+          const clearBonus = allCleared ? CLEAR_BONUS : 0;
           const nextScore = score + gained + clearBonus;
 
           setCards(matchedDeck);
@@ -355,7 +313,7 @@ export default function MemoryMatrixGame({ onBackToHub, onScoreUpdate }) {
 
           if (juiceRef.current) {
             juiceRef.current.celebrate(
-              allCleared ? `${activeMode.key} MATRIX CLEARED!` : `${firstCard.name} MATCH!`,
+              allCleared ? 'MATRIX CLEARED!' : `${firstCard.name} MATCH!`,
               `+${gained + clearBonus} PTS // x${nextCombo}`,
               firstCard.color
             );
@@ -380,25 +338,32 @@ export default function MemoryMatrixGame({ onBackToHub, onScoreUpdate }) {
         }
       }
     },
-    [activeMode.clearBonus, activeMode.key, activeMode.ptsPerMatch, cards, combo, score, selectedIds, updateBest]
+    [cards, combo, score, selectedIds, updateBest]
   );
 
   const matchedCount = cards.filter((c) => c.matched).length / 2;
 
-  // Non-Scrollable Responsive Grid Geometry (Proportional Small Boxes)
-  const colCount = activeMode.cols;
-  const rowCount = activeMode.rows;
-  const maxBoardW = Math.min(360, width - 20);
-  const maxBoardH = Math.max(220, height - 175);
-  const gap = rowCount >= 8 ? 3.5 : 5;
+  // Responsive Grid Geometry: 4 cols x 6 rows = 24 cards
+  const boxPadding = 8;
+  const gap = 5;
 
-  const cellW = Math.floor((maxBoardW - (colCount + 1) * gap) / colCount);
-  const cellH = Math.floor((maxBoardH - (rowCount + 1) * gap) / rowCount);
-  // Exact fit: no minimum floor so 40 cards scale down seamlessly to fit on screen
-  const cardSize = Math.min(cellW, cellH);
+  const usableWidth = Math.min(width - 24, 380);
+  const usableHeight = Math.max(340, height - 170);
 
-  const gridWidth = colCount * (cardSize + gap) + gap;
-  const gridHeight = rowCount * (cardSize + gap) + gap;
+  const maxCardW = Math.floor((usableWidth - 2 * boxPadding - (COLS - 1) * gap) / COLS);
+  const maxCardH = Math.floor((usableHeight - 2 * boxPadding - (ROWS - 1) * gap) / ROWS);
+
+  // Exact square card size fitting fully within both width and height
+  const cardSize = Math.max(36, Math.min(maxCardW, maxCardH, 68));
+
+  const boxWidth = COLS * cardSize + (COLS - 1) * gap + 2 * boxPadding;
+  const boxHeight = ROWS * cardSize + (ROWS - 1) * gap + 2 * boxPadding;
+
+  // Chunk cards into 6 rows of 4 cards
+  const rows = [];
+  for (let r = 0; r < ROWS; r += 1) {
+    rows.push(cards.slice(r * COLS, (r + 1) * COLS));
+  }
 
   return (
     <JuiceEngine ref={juiceRef}>
@@ -410,86 +375,75 @@ export default function MemoryMatrixGame({ onBackToHub, onScoreUpdate }) {
 
         <MiniGameHeader
           title="MEMORY MATRIX"
-          floorLabel="FLOOR 05 // NEURAL MATCH"
+          floorLabel="FLOOR 05 // 24 TILES MATCH"
           score={score}
           bestScore={bestScore}
           accentColor="#C77DFF"
           onBack={onBackToHub}
-          onReset={() => resetDeck(modeKey)}
+          onReset={resetDeck}
         />
 
         <View style={localStyles.body}>
-          {/* Difficulty Mode Selector */}
-          <View style={[localStyles.modeSelector, { width: maxBoardW }]}>
-            {Object.values(MODES).map((m) => {
-              const isSelected = m.key === modeKey;
-              return (
-                <Pressable
-                  key={m.key}
-                  onPress={() => handleSelectMode(m.key)}
-                  style={[
-                    localStyles.modeBtn,
-                    isSelected && localStyles.modeBtnActive,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      localStyles.modeBtnText,
-                      isSelected && localStyles.modeBtnTextActive,
-                    ]}
-                  >
-                    {m.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-
           {/* Status Metrics Row */}
-          <View style={[localStyles.statusRow, { width: maxBoardW }]}>
+          <View style={[localStyles.statusRow, { width: boxWidth }]}>
             <Text style={localStyles.statPill}>
-              {`PAIRS: ${matchedCount}/${activeMode.pairs} // MOVES: ${moves}`}
+              {`PAIRS: ${matchedCount}/${TOTAL_PAIRS} // MOVES: ${moves}`}
             </Text>
             <Text style={[localStyles.statPill, { color: COLORS.solarGold }]}>
               {`STREAK x${combo + 1}`}
             </Text>
           </View>
 
-          {/* Non-Scrollable Matrix Card Arena */}
-          <View style={localStyles.gridWrapper}>
-            <View
-              style={[
-                localStyles.grid,
-                {
-                  width: gridWidth,
-                  height: gridHeight,
-                },
-              ]}
-            >
-              {cards.map((card) => (
-                <FlipCard
-                  key={card.id}
-                  card={card}
-                  cardW={cardSize}
-                  cardH={cardSize}
-                  isSmall={activeMode.isSmall}
-                  onPress={() => handleCardTap(card)}
-                />
-              ))}
-            </View>
+          {/* Matrix Arena Box: Exact structured row layout (cannot overflow or wrap) */}
+          <View
+            style={[
+              localStyles.matrixBox,
+              {
+                width: boxWidth,
+                height: boxHeight,
+                padding: boxPadding,
+              },
+            ]}
+          >
+            {rows.map((rowCards, rowIndex) => (
+              <View
+                key={`row_${rowIndex}`}
+                style={[
+                  localStyles.row,
+                  {
+                    marginBottom: rowIndex < ROWS - 1 ? gap : 0,
+                  },
+                ]}
+              >
+                {rowCards.map((card, colIndex) => (
+                  <View
+                    key={card.id}
+                    style={{
+                      marginRight: colIndex < COLS - 1 ? gap : 0,
+                    }}
+                  >
+                    <FlipCard
+                      card={card}
+                      cardSize={cardSize}
+                      onPress={() => handleCardTap(card)}
+                    />
+                  </View>
+                ))}
+              </View>
+            ))}
           </View>
 
           {/* Victory Modal */}
           <GameResultModal
-            visible={matchedCount === activeMode.pairs}
+            visible={matchedCount === TOTAL_PAIRS}
             type="VICTORY"
             title="NEURAL MATRIX SYNCED!"
-            subtitle={`ALL ${activeMode.pairs} PAIRS MATCHED IN ${moves} MOVES [${activeMode.key} MODE]`}
+            subtitle={`ALL 12 PAIRS MATCHED IN ${moves} MOVES!`}
             score={score}
             bestScore={bestScore}
             accentColor="#C77DFF"
-            onRetry={() => resetDeck(modeKey)}
-            retryLabel={`PLAY AGAIN (+${activeMode.clearBonus})`}
+            onRetry={resetDeck}
+            retryLabel={`PLAY AGAIN (+${CLEAR_BONUS})`}
             onBackToHub={onBackToHub}
           />
         </View>
@@ -499,54 +453,14 @@ export default function MemoryMatrixGame({ onBackToHub, onScoreUpdate }) {
 }
 
 const localStyles = StyleSheet.create({
-  container: { flex: 1 },
+  container: {
+    flex: 1,
+  },
   body: {
     flex: 1,
     alignItems: 'center',
-    paddingBottom: 16,
-  },
-  modeSelector: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    backgroundColor: 'rgba(10, 8, 25, 0.85)',
-    borderRadius: 14,
-    borderWidth: 1.2,
-    borderColor: 'rgba(199, 125, 255, 0.28)',
-    padding: 4,
-    marginTop: 6,
-    marginBottom: 8,
-  },
-  modeBtn: {
-    flex: 1,
-    paddingVertical: 7,
-    alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 10,
-    marginHorizontal: 2,
-  },
-  modeBtnActive: {
-    backgroundColor: 'rgba(199, 125, 255, 0.22)',
-    borderWidth: 1,
-    borderColor: '#C77DFF',
-    shadowColor: '#C77DFF',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.6,
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  modeBtnText: {
-    fontFamily: monoFont,
-    fontSize: 10.5,
-    fontWeight: '800',
-    color: '#A09FB1',
-    letterSpacing: 0.8,
-  },
-  modeBtnTextActive: {
-    color: '#00F5FF',
-    fontWeight: '900',
-    textShadowColor: 'rgba(0, 245, 255, 0.6)',
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 6,
+    paddingBottom: 16,
   },
   statusRow: {
     flexDirection: 'row',
@@ -561,22 +475,23 @@ const localStyles = StyleSheet.create({
     color: '#E0AAFF',
     letterSpacing: 0.8,
   },
-  gridWrapper: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingBottom: 8,
-  },
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    alignContent: 'center',
-    backgroundColor: 'rgba(8, 8, 22, 0.92)',
+  matrixBox: {
+    backgroundColor: 'rgba(8, 8, 22, 0.94)',
     borderRadius: 18,
     borderWidth: 1.5,
     borderColor: 'rgba(199, 125, 255, 0.35)',
-    padding: 3,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#C77DFF',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   cardCommon: {
     borderRadius: 10,
@@ -585,18 +500,15 @@ const localStyles = StyleSheet.create({
     justifyContent: 'center',
   },
   glyph: {
-    fontSize: 24,
     fontWeight: '900',
   },
   cardLabel: {
-    fontSize: 7.5,
     fontFamily: monoFont,
     fontWeight: '800',
     marginTop: 2,
-    letterSpacing: 0.6,
+    letterSpacing: 0.4,
   },
   cardBackIcon: {
-    fontSize: 18,
     color: 'rgba(199, 125, 255, 0.45)',
   },
 });

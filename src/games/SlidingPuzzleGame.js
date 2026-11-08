@@ -155,7 +155,7 @@ export default function SlidingPuzzleGame({ onBackToHub, onScoreUpdate }) {
         />
 
         <MiniGameHeader
-          title="CYBER SLIDE 15"
+          title="SLIDE 15"
           floorLabel="FLOOR 07 // SPATIAL LOGIC"
           score={score}
           bestScore={bestScore}

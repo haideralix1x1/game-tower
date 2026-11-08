@@ -36,6 +36,9 @@ const monoFont = Platform.select({
   default: 'monospace',
 });
 
+const STORAGE_LEVEL_KEY = '@game_tower:level_dog_v1';
+const STORAGE_BEST_KEY = '@game_tower:best_dog_v1';
+
 const DOG_RADIUS = 26;
 const BEE_RADIUS = 9;
 const SURVIVE_TIME = 6;
@@ -62,7 +65,9 @@ function linesIntersect(x1, y1, x2, y2, x3, y3, x4, y4) {
 
 export default function SaveTheDogGame({ onBackToHub, onScoreUpdate, isPaused = false }) {
   const isPausedRef = useRef(isPaused);
-  isPausedRef.current = isPaused;
+  useEffect(() => {
+    isPausedRef.current = isPaused;
+  }, [isPaused]);
 
   const { width, height } = useWindowDimensions();
 
@@ -90,23 +95,6 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate, isPaused = 
   platformRef.current = platform;
 
   const [level, setLevel] = useState(1);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const savedLvl = await AsyncStorage.getItem(STORAGE_LEVEL_KEY);
-        const savedScore = await AsyncStorage.getItem(STORAGE_BEST_KEY);
-        if (savedLvl !== null) {
-          const pLvl = parseInt(savedLvl, 10);
-          if (!isNaN(pLvl) && pLvl >= 1) setLevel(pLvl);
-        }
-        if (savedScore !== null) {
-          const pScore = parseInt(savedScore, 10);
-          if (!isNaN(pScore)) setScore(pScore);
-        }
-      } catch {}
-    })();
-  }, []);
   const [score, setScore] = useState(0);
   const [gameState, setGameState] = useState('DRAWING'); // 'DRAWING' | 'SWARMING' | 'OVER'
   const [timeLeft, setTimeLeft] = useState(SURVIVE_TIME);
@@ -120,6 +108,7 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate, isPaused = 
   const [dog, setDog] = useState({
     x: arenaWidth * 0.5,
     y: platformY - DOG_RADIUS,
+    vx: 0,
     vy: 0,
   });
 
@@ -143,9 +132,30 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate, isPaused = 
   gameStateRef.current = gameState;
   const timeLeftRef = useRef(timeLeft);
   timeLeftRef.current = timeLeft;
+  const inkLeftRef = useRef(100);
+  inkLeftRef.current = inkLeft;
 
+  const juiceRef = useRef(null);
   const animFrameRef = useRef(null);
   const timerRef = useRef(null);
+
+  // Load saved progress
+  useEffect(() => {
+    (async () => {
+      try {
+        const savedLvl = await AsyncStorage.getItem(STORAGE_LEVEL_KEY);
+        const savedScore = await AsyncStorage.getItem(STORAGE_BEST_KEY);
+        if (savedLvl !== null) {
+          const pLvl = parseInt(savedLvl, 10);
+          if (!isNaN(pLvl) && pLvl >= 1) setLevel(pLvl);
+        }
+        if (savedScore !== null) {
+          const pScore = parseInt(savedScore, 10);
+          if (!isNaN(pScore)) setScore(pScore);
+        }
+      } catch {}
+    })();
+  }, []);
 
   // Initialize Level
   const initLevel = useCallback(
@@ -158,6 +168,7 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate, isPaused = 
       savedLinesRef.current = [];
       linesVelocityRef.current = { vx: 0, vy: 0 };
       setInkLeft(100);
+      inkLeftRef.current = 100;
       setTimeLeft(SURVIVE_TIME);
       timeLeftRef.current = SURVIVE_TIME;
       setGameState('DRAWING');
@@ -178,7 +189,7 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate, isPaused = 
 
       const dX = newPlat.x + newPlat.width / 2;
       const dY = newPlat.y - DOG_RADIUS;
-      const newDog = { x: dX, y: dY, vy: 0 };
+      const newDog = { x: dX, y: dY, vx: 0, vy: 0 };
       setDog(newDog);
       dogRef.current = newDog;
 
@@ -203,7 +214,7 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate, isPaused = 
           y: h.y + (Math.random() - 0.5) * 16,
           vx: (Math.random() - 0.5) * 2,
           vy: 1 + Math.random() * 2,
-          flankBias: i % 3 === 0 ? 1 : i % 3 === 1 ? -1 : 0, // 1 = right flanker, -1 = left flanker, 0 = direct
+          flankBias: i % 3 === 0 ? 1 : i % 3 === 1 ? -1 : 0,
           buzzOffset: Math.random() * Math.PI * 2,
         });
       }
@@ -221,7 +232,7 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate, isPaused = 
     };
   }, [level, initLevel]);
 
-  // Launch Swarm IMMEDIATELY with fast line gravity activation
+  // Launch Swarm IMMEDIATELY with line & dog physics activation
   const activateSwarmImmediately = useCallback((finalLine) => {
     let allLines = savedLinesRef.current;
     if (finalLine && finalLine.length > 2) {
@@ -240,7 +251,7 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate, isPaused = 
     timeLeftRef.current = SURVIVE_TIME;
 
     // Fast initial downward velocity for the line
-    linesVelocityRef.current = { vx: 0, vy: 1.2 };
+    linesVelocityRef.current = { vx: 0, vy: 1.0 };
 
     playSliceSound();
     triggerMediumHaptic();
@@ -259,18 +270,21 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate, isPaused = 
     }, 1000);
   }, []);
 
-  // PanResponder to draw lines (Lifting finger IMMEDIATELY launches swarm and drops lines!)
+  // PanResponder to draw lines
+  // Automatically finishes drawing when ink is finished OR finger is released!
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => !isPausedRef.current && gameStateRef.current === 'DRAWING',
       onMoveShouldSetPanResponder: () => !isPausedRef.current && gameStateRef.current === 'DRAWING',
       onPanResponderGrant: (evt) => {
         if (gameStateRef.current !== 'DRAWING') return;
+        if (inkLeftRef.current <= 0) return;
         const { locationX, locationY } = evt.nativeEvent;
         setCurrentLine([{ x: locationX, y: locationY }]);
       },
       onPanResponderMove: (evt) => {
         if (gameStateRef.current !== 'DRAWING') return;
+        if (inkLeftRef.current <= 0) return;
         const { locationX, locationY } = evt.nativeEvent;
 
         setCurrentLine((prev) => {
@@ -282,16 +296,28 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate, isPaused = 
           if (deltaY > 80 || deltaX > 80) return prev;
 
           const dist = Math.hypot(deltaX, deltaY);
-          if (dist > 5) {
-            setInkLeft((ink) => Math.max(0, ink - dist * 0.08));
-            return [...prev, { x: locationX, y: locationY }];
+          if (dist > 4) {
+            const inkCost = dist * 0.12;
+            const newInk = Math.max(0, inkLeftRef.current - inkCost);
+            inkLeftRef.current = newInk;
+            setInkLeft(newInk);
+
+            const updatedLine = [...prev, { x: locationX, y: locationY }];
+
+            // INK FINISHED: Automatically complete the line & start the swarm!
+            if (newInk <= 0) {
+              setTimeout(() => {
+                activateSwarmImmediately(updatedLine);
+              }, 10);
+              return [];
+            }
+            return updatedLine;
           }
           return prev;
         });
       },
-      onPanResponderRelease: (evt) => {
+      onPanResponderRelease: () => {
         if (gameStateRef.current !== 'DRAWING') return;
-        // As soon as user releases finger: immediately activate swarm and gravity!
         setCurrentLine((line) => {
           if (line.length > 2) {
             activateSwarmImmediately(line);
@@ -302,7 +328,7 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate, isPaused = 
     })
   ).current;
 
-  // 60 FPS Swarm, Dog & Fast Line Gravity Physics Loop
+  // 60 FPS Swarm, Dog Gravity & Rigid Line Physics Loop
   useEffect(() => {
     if (gameState !== 'SWARMING') return;
 
@@ -331,26 +357,20 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate, isPaused = 
           const startPt = line[0];
           const endPt = line[line.length - 1];
 
-          // Waypoint extended outward from start tip
           const sDx = line[0].x - line[1].x;
           const sDy = line[0].y - line[1].y;
           const sLen = Math.hypot(sDx, sDy) || 1;
           lineTips.push({
             x: startPt.x + (sDx / sLen) * 20,
             y: startPt.y + (sDy / sLen) * 20,
-            rawX: startPt.x,
-            rawY: startPt.y,
           });
 
-          // Waypoint extended outward from end tip
           const eDx = line[line.length - 1].x - line[line.length - 2].x;
           const eDy = line[line.length - 1].y - line[line.length - 2].y;
           const eLen = Math.hypot(eDx, eDy) || 1;
           lineTips.push({
             x: endPt.x + (eDx / eLen) * 20,
             y: endPt.y + (eDy / eLen) * 20,
-            rawX: endPt.x,
-            rawY: endPt.y,
           });
         }
       }
@@ -391,7 +411,7 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate, isPaused = 
           }
         }
 
-        // Intelligent Pathfinding: If blocked, navigate around obstacle tips to find a way to the dog!
+        // Intelligent Pathfinding: If blocked, navigate around obstacle tips
         let targetX = currentDog.x;
         let targetY = currentDog.y;
 
@@ -403,7 +423,6 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate, isPaused = 
             const distToTip = Math.hypot(tip.x - b.x, tip.y - b.y);
             const distTipToDog = Math.hypot(currentDog.x - tip.x, currentDog.y - tip.y);
 
-            // Flank personality: left flankers favor open ends on the left, right flankers favor open ends on the right
             let biasBonus = 0;
             if (b.flankBias === -1 && tip.x < currentDog.x) biasBonus = -40;
             if (b.flankBias === 1 && tip.x > currentDog.x) biasBonus = -40;
@@ -432,7 +451,7 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate, isPaused = 
         let vx = dirX * baseSpeed + buzz * (-dirY);
         let vy = dirY * baseSpeed + buzz * dirX;
 
-        // Swarm separation: bees repel each other slightly so they spread out and probe all sides
+        // Swarm separation: bees repel each other slightly
         for (let j = 0; j < currentBees.length; j++) {
           if (j === beeIdx) continue;
           const other = currentBees[j];
@@ -448,7 +467,7 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate, isPaused = 
         let nextBeeX = b.x + vx;
         let nextBeeY = b.y + vy;
 
-        // Continuous collision detection and firm safe-area boundary containment
+        // Continuous collision detection: Bees push against the barrier from outside
         for (const line of lines) {
           for (let i = 0; i < line.length - 1; i++) {
             const p1 = line[i];
@@ -461,7 +480,6 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate, isPaused = 
               pushForceX += (dxToDog / (distToDog || 1)) * 0.95;
               pushForceY += (dyToDog / (distToDog || 1)) * 0.95;
 
-              // Calculate closest point on the line to bee's prior position
               const segDx = p2.x - p1.x;
               const segDy = p2.y - p1.y;
               const segLenSq = segDx * segDx + segDy * segDy || 1;
@@ -469,25 +487,23 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate, isPaused = 
               const closeX = p1.x + t * segDx;
               const closeY = p1.y + t * segDy;
 
-              // Normal vector pointing strictly AWAY from the line towards the bee's origin
               const fromWallX = b.x - closeX;
               const fromWallY = b.y - closeY;
               const fromDist = Math.hypot(fromWallX, fromWallY) || 1;
               const awayNormX = fromWallX / fromDist;
               const awayNormY = fromWallY / fromDist;
 
-              // Firmly clamp bee outside the barrier so it NEVER penetrates the safe area
+              // Firmly clamp bee outside the barrier
               nextBeeX = closeX + awayNormX * (BEE_RADIUS + 5);
               nextBeeY = closeY + awayNormY * (BEE_RADIUS + 5);
 
-              // Slide along line tangent towards the open ends
+              // Slide along line tangent towards open ends
               const len = Math.hypot(segDx, segDy) || 1;
               const dotTangent = (vx * segDx + vy * segDy) / len;
               const slideDir = dotTangent >= 0 ? 1 : -1;
               nextBeeX += (segDx / len) * baseSpeed * 0.85 * slideDir;
               nextBeeY += (segDy / len) * baseSpeed * 0.85 * slideDir;
 
-              // Double check: if still in safe area / crossed line, revert to b.x, b.y
               if (linesIntersect(b.x, b.y, nextBeeX, nextBeeY, p1.x, p1.y, p2.x, p2.y)) {
                 nextBeeX = b.x;
                 nextBeeY = b.y;
@@ -514,7 +530,7 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate, isPaused = 
         return;
       }
 
-      // 2. FAST DRAWN LINE GRAVITY & SOLID PHYSICS
+      // 2. DRAWN LINE GRAVITY & SOLID PHYSICS
       let totalPts = 0;
       let lowestY = -Infinity;
       let minX = Infinity;
@@ -534,21 +550,21 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate, isPaused = 
         lVel.vx += pushForceX / mass;
         lVel.vy += pushForceY / mass;
 
-        // FAST GRAVITY: Line drops quickly and snappy!
-        lVel.vy += 0.95;
+        // Snappy Line Gravity
+        lVel.vy += 0.75;
 
         // Air drag
         lVel.vx *= 0.91;
         lVel.vy *= 0.94;
 
-        // Platform & Acid surface collision check
+        // Platform & Acid surface collision check for line
         const plat = platformRef.current;
         let restsOnPlatform = false;
         for (const line of lines) {
           for (const pt of line) {
             if (
-              pt.x >= plat.x - 4 &&
-              pt.x <= plat.x + plat.width + 4 &&
+              pt.x >= plat.x - 6 &&
+              pt.x <= plat.x + plat.width + 6 &&
               Math.abs(pt.y - (plat.y - 2)) < 8
             ) {
               restsOnPlatform = true;
@@ -560,30 +576,13 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate, isPaused = 
 
         const onGround = lowestY >= acidY - 4 || restsOnPlatform;
         if (onGround) {
-          lVel.vx *= 0.72; // Surface friction
-          if (lVel.vy > 0) lVel.vy = 0; // Settles firmly
+          lVel.vx *= 0.75;
+          if (lVel.vy > 0) lVel.vy = 0;
         }
 
         // Left / Right screen boundary
         if (minX + lVel.vx < 4 && lVel.vx < 0) lVel.vx = 0;
         if (maxX + lVel.vx > arenaWidth - 4 && lVel.vx > 0) lVel.vx = 0;
-
-        // Dog collision with line: line cannot crush into dog; gently rests around it
-        for (const line of lines) {
-          for (let i = 0; i < line.length - 1; i++) {
-            const p1 = line[i];
-            const p2 = line[i + 1];
-            const d = distPointToSegment(currentDog.x, currentDog.y, p1.x + lVel.vx, p1.y + lVel.vy, p2.x + lVel.vx, p2.y + lVel.vy);
-            if (d < DOG_RADIUS + 4) {
-              if (Math.abs(lVel.vx) > 0.1) {
-                currentDog.x += lVel.vx * 0.35;
-                lVel.vx = 0;
-              }
-              if (lVel.vy > 0) lVel.vy = 0;
-              break;
-            }
-          }
-        }
 
         // Apply physical movement delta to all points of the drawn lines
         const dx = lVel.vx;
@@ -594,8 +593,8 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate, isPaused = 
             line.map((pt) => {
               let ny = pt.y + dy;
               if (
-                pt.x >= plat.x - 4 &&
-                pt.x <= plat.x + plat.width + 4 &&
+                pt.x >= plat.x - 6 &&
+                pt.x <= plat.x + plat.width + 6 &&
                 pt.y <= plat.y &&
                 ny >= plat.y - 2
               ) {
@@ -612,43 +611,85 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate, isPaused = 
         }
       }
 
-      // 3. Fast Dog Gravity, Platform Landing & Acid Water Hazard
-      currentDog.vy += 0.75;
-      let nextDogY = currentDog.y + currentDog.vy;
+      // 3. DOG GRAVITY & TRUE 2D CONTAINER ENCLOSURE PHYSICS
+      // Apply gravity to the dog so it falls naturally
+      currentDog.vy += 0.65;
+      currentDog.vx *= 0.88;
+      currentDog.vy *= 0.96;
 
-      const plat = platformRef.current;
-      const isOverPlatform =
-        currentDog.x >= plat.x - 8 &&
-        currentDog.x <= plat.x + plat.width + 8;
+      // Transfer line motion to dog so the dog moves smoothly along with the line
+      if (Math.abs(lVel.vx) > 0.02) {
+        currentDog.x += lVel.vx;
+      }
+      if (Math.abs(lVel.vy) > 0.02) {
+        currentDog.y += lVel.vy;
+      }
+
+      currentDog.x += currentDog.vx;
+      currentDog.y += currentDog.vy;
 
       // Platform Landing
+      const plat = platformRef.current;
+      const isOverPlatform =
+        currentDog.x >= plat.x - 6 &&
+        currentDog.x <= plat.x + plat.width + 6;
+
       if (
         isOverPlatform &&
         currentDog.y <= plat.y - DOG_RADIUS + 6 &&
-        nextDogY >= plat.y - DOG_RADIUS
+        currentDog.y >= plat.y - DOG_RADIUS - 6
       ) {
-        nextDogY = plat.y - DOG_RADIUS;
-        currentDog.vy = 0;
+        currentDog.y = plat.y - DOG_RADIUS;
+        if (currentDog.vy > 0) currentDog.vy = 0;
       }
 
-      // Drawn line can catch the dog
-      for (const line of lines) {
-        for (let i = 0; i < line.length - 1; i++) {
-          const p1 = line[i];
-          const p2 = line[i + 1];
-          const d = distPointToSegment(currentDog.x, nextDogY, p1.x, p1.y, p2.x, p2.y);
-          if (d < DOG_RADIUS + 4) {
-            nextDogY = currentDog.y;
-            currentDog.vy = 0;
-            break;
+      // MULTI-PASS RIGID BARRIER CONTAINMENT:
+      // The dog is completely trapped inside the drawn circle/shield.
+      // Every line segment pushes the dog away from the wall along the normal.
+      // Bees pushing on the outside can NEVER force the dog through the drawn lines!
+      const targetDist = DOG_RADIUS + 2;
+      for (let pass = 0; pass < 3; pass++) {
+        for (const line of lines) {
+          for (let i = 0; i < line.length - 1; i++) {
+            const p1 = line[i];
+            const p2 = line[i + 1];
+
+            const segDx = p2.x - p1.x;
+            const segDy = p2.y - p1.y;
+            const segLenSq = segDx * segDx + segDy * segDy;
+            if (segLenSq === 0) continue;
+
+            let t = ((currentDog.x - p1.x) * segDx + (currentDog.y - p1.y) * segDy) / segLenSq;
+            t = Math.max(0, Math.min(1, t));
+
+            const closeX = p1.x + t * segDx;
+            const closeY = p1.y + t * segDy;
+
+            const toDogX = currentDog.x - closeX;
+            const toDogY = currentDog.y - closeY;
+            const dist = Math.hypot(toDogX, toDogY);
+
+            if (dist < targetDist) {
+              const overlap = targetDist - dist;
+              const nx = dist > 0.001 ? toDogX / dist : 0;
+              const ny = dist > 0.001 ? toDogY / dist : -1;
+
+              currentDog.x += nx * overlap;
+              currentDog.y += ny * overlap;
+
+              const dotV = currentDog.vx * nx + currentDog.vy * ny;
+              if (dotV < 0) {
+                currentDog.vx -= dotV * nx * 0.95;
+                currentDog.vy -= dotV * ny * 0.95;
+              }
+            }
           }
         }
       }
 
       // Acid Water Hazard
-      if (nextDogY >= acidY - DOG_RADIUS) {
-        nextDogY = acidY - DOG_RADIUS;
-        currentDog.y = nextDogY;
+      if (currentDog.y >= acidY - DOG_RADIUS) {
+        currentDog.y = acidY - DOG_RADIUS;
         dogRef.current = currentDog;
         setDog(currentDog);
         if (gameStateRef.current === 'SWARMING') {
@@ -657,8 +698,8 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate, isPaused = 
         return;
       }
 
+      // Screen boundary constraints
       currentDog.x = Math.max(DOG_RADIUS + 4, Math.min(arenaWidth - DOG_RADIUS - 4, currentDog.x));
-      currentDog.y = nextDogY;
       dogRef.current = currentDog;
       setDog(currentDog);
 
@@ -680,12 +721,14 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate, isPaused = 
     if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     if (timerRef.current) clearInterval(timerRef.current);
 
-    JuiceEngine.celebrate(dogRef.current.x, dogRef.current.y);
-    const winPoints = 300 + Math.floor(inkLeft * 2);
+    if (juiceRef.current) {
+      juiceRef.current.celebrate('DOGE RESCUED!', '+300 PTS // SAFE DEFENSE', '#FFD166');
+    }
+    const winPoints = 300 + Math.floor(inkLeftRef.current * 2);
     const nextScore = score + winPoints;
     setScore(nextScore);
     onScoreUpdate?.(nextScore);
-      AsyncStorage.setItem(STORAGE_BEST_KEY, String(nextScore)).catch(() => {});
+    AsyncStorage.setItem(STORAGE_BEST_KEY, String(nextScore)).catch(() => {});
 
     setModalMessage('SURVIVED THE SWARM! EXCELLENT DEFENSE!');
     setModalType('win');
@@ -728,309 +771,304 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate, isPaused = 
   };
 
   return (
-    <View style={styles.container}>
-      <MiniGameHeader
-        floorNum={21}
-        gameTitle="SAVE CYBER DOGE"
-        category="PHYSICS PUZZLE"
-        accentColor="#FFD166"
-        score={score}
-        onBack={onBackToHub}
-        onBackToHub={onBackToHub}
-        onReset={handleRetry}
-      />
+    <JuiceEngine ref={juiceRef}>
+      <View style={styles.container}>
+        <MiniGameHeader
+          floorNum={21}
+          gameTitle="SAVE THE DOG"
+          category="PHYSICS PUZZLE"
+          accentColor="#FFD166"
+          score={score}
+          onBack={onBackToHub}
+          onBackToHub={onBackToHub}
+          onReset={handleRetry}
+        />
 
-      {/* Top HUD: Level, Ink & Survival Countdown */}
-      <View style={styles.topBar}>
-        <View style={styles.badgeBox}>
-          <Text style={styles.badgeLabel}>LEVEL</Text>
-          <Text style={[styles.badgeVal, { color: '#FFD166' }]}>{level}</Text>
-        </View>
+        {/* Top HUD: Level, Ink & Survival Countdown */}
+        <View style={styles.topBar}>
+          <View style={styles.badgeBox}>
+            <Text style={styles.badgeLabel}>LEVEL</Text>
+            <Text style={[styles.badgeVal, { color: '#FFD166' }]}>{level}</Text>
+          </View>
 
-        <View style={styles.badgeBox}>
-          <Text style={styles.badgeLabel}>ENERGY INK</Text>
-          <View style={styles.inkTrack}>
-            <View
+          <View style={styles.badgeBox}>
+            <Text style={styles.badgeLabel}>ENERGY INK</Text>
+            <View style={styles.inkTrack}>
+              <View
+                style={[
+                  styles.inkFill,
+                  {
+                    width: `${inkLeft}%`,
+                    backgroundColor: inkLeft > 30 ? COLORS.cyan : '#FF0055',
+                  },
+                ]}
+              />
+            </View>
+          </View>
+
+          <View style={styles.badgeBox}>
+            <Text style={styles.badgeLabel}>STATUS</Text>
+            <Text
               style={[
-                styles.inkFill,
+                styles.badgeVal,
                 {
-                  width: `${inkLeft}%`,
-                  backgroundColor: inkLeft > 30 ? COLORS.cyan : '#FF0055',
+                  color:
+                    gameState === 'SWARMING'
+                      ? timeLeft <= 2
+                        ? '#FF0055'
+                        : COLORS.matrixMint
+                      : '#00F5FF',
                 },
               ]}
-            />
+            >
+              {gameState === 'SWARMING' ? `DEFEND: ${timeLeft}s` : 'DRAW SHIELD'}
+            </Text>
           </View>
         </View>
 
-        <View style={styles.badgeBox}>
-          <Text style={styles.badgeLabel}>STATUS</Text>
-          <Text
-            style={[
-              styles.badgeVal,
-              {
-                color:
-                  gameState === 'SWARMING'
-                    ? timeLeft <= 2
-                      ? '#FF0055'
-                      : COLORS.matrixMint
-                    : '#00F5FF',
-              },
-            ]}
-          >
-            {gameState === 'SWARMING' ? `DEFEND: ${timeLeft}s` : 'DRAW SHIELD'}
-          </Text>
-        </View>
-      </View>
-
-      {/* True Full-Screen Touch Arena with NO button overlays */}
-      <View
-        style={styles.arena}
-        onLayout={(e) => {
-          const { width: w, height: h } = e.nativeEvent.layout;
-          if (w > 0 && h > 0 && (w !== arenaLayout.width || h !== arenaLayout.height)) {
-            setArenaLayout({ width: w, height: h });
-          }
-        }}
-        {...panResponder.panHandlers}
-      >
-        <Svg
-          width={arenaWidth}
-          height={arenaHeight}
-          style={StyleSheet.absoluteFill}
-          pointerEvents="none"
+        {/* True Full-Screen Touch Arena with NO button overlays */}
+        <View
+          style={styles.arena}
+          onLayout={(e) => {
+            const { width: w, height: h } = e.nativeEvent.layout;
+            if (w > 0 && h > 0 && (w !== arenaLayout.width || h !== arenaLayout.height)) {
+              setArenaLayout({ width: w, height: h });
+            }
+          }}
+          {...panResponder.panHandlers}
         >
-          <Defs>
-            <LinearGradient id="shieldGrad" x1="0" y1="0" x2="1" y2="1">
-              <Stop offset="0%" stopColor="#00F5FF" stopOpacity="0.95" />
-              <Stop offset="100%" stopColor="#7928CA" stopOpacity="0.9" />
-            </LinearGradient>
-            <LinearGradient id="platGrad" x1="0" y1="0" x2="0" y2="1">
-              <Stop offset="0%" stopColor="#25184B" stopOpacity="0.98" />
-              <Stop offset="100%" stopColor="#0F0922" stopOpacity="0.98" />
-            </LinearGradient>
-            <LinearGradient id="acidGrad" x1="0" y1="0" x2="0" y2="1">
-              <Stop offset="0%" stopColor="#39FF14" stopOpacity="0.95" />
-              <Stop offset="22%" stopColor="#00E676" stopOpacity="0.9" />
-              <Stop offset="100%" stopColor="#064E3B" stopOpacity="0.98" />
-            </LinearGradient>
-          </Defs>
+          <Svg
+            width={arenaWidth}
+            height={arenaHeight}
+            style={StyleSheet.absoluteFill}
+            pointerEvents="none"
+          >
+            <Defs>
+              <LinearGradient id="shieldGrad" x1="0" y1="0" x2="1" y2="1">
+                <Stop offset="0%" stopColor="#00F5FF" stopOpacity="0.95" />
+                <Stop offset="100%" stopColor="#7928CA" stopOpacity="0.9" />
+              </LinearGradient>
+              <LinearGradient id="platGrad" x1="0" y1="0" x2="0" y2="1">
+                <Stop offset="0%" stopColor="#25184B" stopOpacity="0.98" />
+                <Stop offset="100%" stopColor="#0F0922" stopOpacity="0.98" />
+              </LinearGradient>
+              <LinearGradient id="acidGrad" x1="0" y1="0" x2="0" y2="1">
+                <Stop offset="0%" stopColor="#39FF14" stopOpacity="0.95" />
+                <Stop offset="22%" stopColor="#00E676" stopOpacity="0.9" />
+                <Stop offset="100%" stopColor="#064E3B" stopOpacity="0.98" />
+              </LinearGradient>
+            </Defs>
 
-          {/* Short Elevated Cyber Platform Under Dog */}
-          <G>
-            <Line
-              x1={platform.x + 18}
-              y1={platform.y + platform.height}
-              x2={platform.x + 30}
-              y2={platform.y + platform.height + 40}
-              stroke="#FF007F"
-              strokeWidth={3}
-            />
-            <Line
-              x1={platform.x + platform.width - 18}
-              y1={platform.y + platform.height}
-              x2={platform.x + platform.width - 30}
-              y2={platform.y + platform.height + 40}
-              stroke="#FF007F"
-              strokeWidth={3}
-            />
-            <Line
-              x1={platform.x + 28}
-              y1={platform.y + platform.height + 40}
-              x2={platform.x + platform.width - 28}
-              y2={platform.y + platform.height + 40}
-              stroke="#00F5FF"
-              strokeWidth={2}
-            />
-
-            {/* Platform Main Body */}
-            <Rect
-              x={platform.x}
-              y={platform.y}
-              width={platform.width}
-              height={platform.height}
-              rx={4}
-              fill="url(#platGrad)"
-              stroke="#00F5FF"
-              strokeWidth={2}
-            />
-            <Line
-              x1={platform.x}
-              y1={platform.y}
-              x2={platform.x + platform.width}
-              y2={platform.y}
-              stroke="#00F5FF"
-              strokeWidth={3.5}
-            />
-          </G>
-
-          {/* Toxic Acid Water Hazard Down Below */}
-          <G>
-            <Rect
-              x={0}
-              y={acidY}
-              width={arenaWidth}
-              height={arenaHeight - acidY}
-              fill="url(#acidGrad)"
-            />
-            <Line
-              x1={0}
-              y1={acidY}
-              x2={arenaWidth}
-              y2={acidY}
-              stroke="#39FF14"
-              strokeWidth={4}
-            />
-            <Line
-              x1={0}
-              y1={acidY + 4}
-              x2={arenaWidth}
-              y2={acidY + 4}
-              stroke="#FFFFFF"
-              strokeWidth={1.5}
-              strokeDasharray="8 6"
-              opacity={0.8}
-            />
-            <Circle cx={arenaWidth * 0.16} cy={acidY + 12} r={6} fill="#70FF00" opacity={0.7} />
-            <Circle cx={arenaWidth * 0.36} cy={acidY + 18} r={9} fill="#39FF14" opacity={0.8} />
-            <Circle cx={arenaWidth * 0.64} cy={acidY + 14} r={7} fill="#70FF00" opacity={0.75} />
-            <Circle cx={arenaWidth * 0.86} cy={acidY + 20} r={10} fill="#39FF14" opacity={0.85} />
-            <SvgText
-              x={arenaWidth * 0.5}
-              y={acidY + 28}
-              textAnchor="middle"
-              fill="#062F12"
-              fontSize={11}
-              fontFamily={monoFont}
-              fontWeight="900"
-            >
-              ☣ TOXIC ACID WATER - DO NOT FALL ☣
-            </SvgText>
-          </G>
-
-          {/* Bee Hives */}
-          {hives.map((hive) => (
-            <G key={hive.id}>
-              <Circle
-                cx={hive.x}
-                cy={hive.y}
-                r={22}
-                fill="#FF6D00"
-                stroke="#FFD166"
-                strokeWidth={2}
-              />
-              <Circle cx={hive.x} cy={hive.y + 4} r={7} fill="#261000" />
-            </G>
-          ))}
-
-          {/* Saved Drawn Lines (Physics Barriers with Fast Gravity) */}
-          {savedLines.map((line, idx) => (
-            <Path
-              key={`line_${idx}`}
-              d={buildSvgPath(line)}
-              stroke="url(#shieldGrad)"
-              strokeWidth={9}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              fill="none"
-            />
-          ))}
-
-          {/* Active Drawing Line */}
-          {currentLine.length > 1 && (
-            <Path
-              d={buildSvgPath(currentLine)}
-              stroke="#00F5FF"
-              strokeWidth={8}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              fill="none"
-            />
-          )}
-
-          {/* Cyber Dog sitting on mid-screen platform */}
-          <G>
-            <Circle
-              cx={dog.x}
-              cy={dog.y}
-              r={DOG_RADIUS}
-              fill="#FFD166"
-              stroke="#FF6D00"
-              strokeWidth={2.5}
-            />
-            {/* Dog Ears */}
-            <Circle cx={dog.x - 18} cy={dog.y - 18} r={9} fill="#FF6D00" />
-            <Circle cx={dog.x + 18} cy={dog.y - 18} r={9} fill="#FF6D00" />
-            {/* Dog Eyes */}
-            <Circle cx={dog.x - 8} cy={dog.y - 4} r={3.5} fill="#050212" />
-            <Circle cx={dog.x + 8} cy={dog.y - 4} r={3.5} fill="#050212" />
-            {/* Dog Nose & Smile */}
-            <Circle cx={dog.x} cy={dog.y + 4} r={4.5} fill="#FF0055" />
-          </G>
-
-          {/* Bees */}
-          {bees.map((bee) => (
-            <G key={bee.id}>
-              <Circle
-                cx={bee.x}
-                cy={bee.y}
-                r={BEE_RADIUS}
-                fill="#FFE600"
-                stroke="#000000"
-                strokeWidth={1.5}
+            {/* Short Elevated Cyber Platform Under Dog */}
+            <G>
+              <Line
+                x1={platform.x + 18}
+                y1={platform.y + platform.height}
+                x2={platform.x + 30}
+                y2={platform.y + platform.height + 40}
+                stroke="#FF007F"
+                strokeWidth={3}
               />
               <Line
-                x1={bee.x - 5}
-                y1={bee.y}
-                x2={bee.x + 5}
-                y2={bee.y}
-                stroke="#000000"
+                x1={platform.x + platform.width - 18}
+                y1={platform.y + platform.height}
+                x2={platform.x + platform.width - 30}
+                y2={platform.y + platform.height + 40}
+                stroke="#FF007F"
+                strokeWidth={3}
+              />
+              <Line
+                x1={platform.x + 28}
+                y1={platform.y + platform.height + 40}
+                x2={platform.x + platform.width - 28}
+                y2={platform.y + platform.height + 40}
+                stroke="#00F5FF"
                 strokeWidth={2}
               />
-              <Circle
-                cx={bee.x}
-                cy={bee.y - 7}
-                r={4}
-                fill="rgba(255, 255, 255, 0.7)"
+
+              {/* Platform Main Body */}
+              <Rect
+                x={platform.x}
+                y={platform.y}
+                width={platform.width}
+                height={platform.height}
+                rx={4}
+                fill="url(#platGrad)"
+                stroke="#00F5FF"
+                strokeWidth={2}
+              />
+              <Line
+                x1={platform.x}
+                y1={platform.y}
+                x2={platform.x + platform.width}
+                y2={platform.y}
+                stroke="#00F5FF"
+                strokeWidth={3.5}
               />
             </G>
-          ))}
-        </Svg>
 
-        {/* Helpful drawing guide when starting */}
-        {gameState === 'DRAWING' && currentLine.length === 0 && (
-          <View style={styles.hintContainer} pointerEvents="none">
-            <Text style={styles.hintText}>DRAW A SHIELD AROUND DOGE</Text>
-            <Text style={styles.hintSub}>RELEASE FINGER TO UNLEASH SWARM & GRAVITY</Text>
-          </View>
-        )}
+            {/* Toxic Acid Water Hazard Down Below */}
+            <G>
+              <Rect
+                x={0}
+                y={acidY}
+                width={arenaWidth}
+                height={arenaHeight - acidY}
+                fill="url(#acidGrad)"
+              />
+              <Line
+                x1={0}
+                y1={acidY}
+                x2={arenaWidth}
+                y2={acidY}
+                stroke="#39FF14"
+                strokeWidth={4}
+              />
+              <Line
+                x1={0}
+                y1={acidY + 4}
+                x2={arenaWidth}
+                y2={acidY + 4}
+                stroke="#FFFFFF"
+                strokeWidth={1.5}
+                strokeDasharray="8 6"
+                opacity={0.8}
+              />
+              <Circle cx={arenaWidth * 0.16} cy={acidY + 12} r={6} fill="#70FF00" opacity={0.7} />
+              <Circle cx={arenaWidth * 0.36} cy={acidY + 18} r={9} fill="#39FF14" opacity={0.8} />
+              <Circle cx={arenaWidth * 0.64} cy={acidY + 14} r={7} fill="#70FF00" opacity={0.75} />
+              <Circle cx={arenaWidth * 0.86} cy={acidY + 20} r={10} fill="#39FF14" opacity={0.85} />
+              <SvgText
+                x={arenaWidth * 0.5}
+                y={acidY + 28}
+                textAnchor="middle"
+                fill="#062F12"
+                fontSize={11}
+                fontFamily={monoFont}
+                fontWeight="900"
+              >
+                ☣ TOXIC ACID WATER - DO NOT FALL ☣
+              </SvgText>
+            </G>
+
+            {/* Bee Hives */}
+            {hives.map((hive) => (
+              <G key={hive.id}>
+                <Circle
+                  cx={hive.x}
+                  cy={hive.y}
+                  r={22}
+                  fill="#FF6D00"
+                  stroke="#FFD166"
+                  strokeWidth={2}
+                />
+                <Circle cx={hive.x} cy={hive.y + 4} r={7} fill="#261000" />
+              </G>
+            ))}
+
+            {/* Saved Drawn Lines (Physics Barriers with Gravity) */}
+            {savedLines.map((line, idx) => (
+              <Path
+                key={`line_${idx}`}
+                d={buildSvgPath(line)}
+                stroke="url(#shieldGrad)"
+                strokeWidth={9}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                fill="none"
+              />
+            ))}
+
+            {/* Active Drawing Line */}
+            {currentLine.length > 1 && (
+              <Path
+                d={buildSvgPath(currentLine)}
+                stroke="#00F5FF"
+                strokeWidth={8}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                fill="none"
+              />
+            )}
+
+            {/* Cyber Dog sitting on mid-screen platform */}
+            <G>
+              <Circle
+                cx={dog.x}
+                cy={dog.y}
+                r={DOG_RADIUS}
+                fill="#FFD166"
+                stroke="#FF6D00"
+                strokeWidth={2.5}
+              />
+              {/* Dog Ears */}
+              <Circle cx={dog.x - 18} cy={dog.y - 18} r={9} fill="#FF6D00" />
+              <Circle cx={dog.x + 18} cy={dog.y - 18} r={9} fill="#FF6D00" />
+              {/* Dog Eyes */}
+              <Circle cx={dog.x - 8} cy={dog.y - 4} r={3.5} fill="#050212" />
+              <Circle cx={dog.x + 8} cy={dog.y - 4} r={3.5} fill="#050212" />
+              {/* Dog Nose & Smile */}
+              <Circle cx={dog.x} cy={dog.y + 4} r={4.5} fill="#FF0055" />
+            </G>
+
+            {/* Bees */}
+            {bees.map((bee) => (
+              <G key={bee.id}>
+                <Circle
+                  cx={bee.x}
+                  cy={bee.y}
+                  r={BEE_RADIUS}
+                  fill="#FFE600"
+                  stroke="#000000"
+                  strokeWidth={1.5}
+                />
+                <Line
+                  x1={bee.x - 5}
+                  y1={bee.y}
+                  x2={bee.x + 5}
+                  y2={bee.y}
+                  stroke="#000000"
+                  strokeWidth={2}
+                />
+                <Circle
+                  cx={bee.x}
+                  cy={bee.y - 7}
+                  r={4.5}
+                  fill="rgba(255, 255, 255, 0.75)"
+                />
+              </G>
+            ))}
+          </Svg>
+        </View>
+
+        {/* Win/Lose Result Modal */}
+        <GameResultModal
+          visible={modalVisible}
+          type={modalType}
+          score={score}
+          level={level}
+          subtitle={modalMessage}
+          onRetry={handleRetry}
+          onNextLevel={handleNextLevel}
+          onBackToHub={onBackToHub}
+        />
       </View>
-
-      <GameResultModal
-        visible={modalVisible}
-        type={modalType}
-        score={score}
-        level={level}
-        onRetry={modalType === 'win' ? handleNextLevel : handleRetry}
-        onBackToHub={onBackToHub}
-        buttonText={modalType === 'win' ? 'NEXT LEVEL' : 'TRY AGAIN'}
-        message={modalMessage}
-      />
-    </View>
+    </JuiceEngine>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#040212',
+    backgroundColor: '#03030A',
   },
   topBar: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: 'rgba(10, 6, 26, 0.95)',
+    paddingVertical: 10,
+    backgroundColor: 'rgba(8, 8, 22, 0.95)',
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255, 209, 102, 0.25)',
   },
@@ -1038,25 +1076,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   badgeLabel: {
+    fontSize: 9.5,
     fontFamily: monoFont,
-    fontSize: 9,
-    color: 'rgba(255, 255, 255, 0.55)',
-    fontWeight: '700',
-    letterSpacing: 0.5,
+    color: '#8A8F9E',
+    fontWeight: '800',
+    letterSpacing: 0.8,
+    marginBottom: 3,
   },
   badgeVal: {
+    fontSize: 12.5,
     fontFamily: monoFont,
-    fontSize: 14,
     fontWeight: '900',
-    marginTop: 2,
+    letterSpacing: 0.8,
   },
   inkTrack: {
-    width: 85,
+    width: 90,
     height: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
     borderRadius: 4,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
     overflow: 'hidden',
-    marginTop: 4,
   },
   inkFill: {
     height: '100%',
@@ -1064,34 +1102,6 @@ const styles = StyleSheet.create({
   },
   arena: {
     flex: 1,
-    position: 'relative',
-  },
-  hintContainer: {
-    position: 'absolute',
-    top: 75,
-    left: 20,
-    right: 20,
-    alignItems: 'center',
-  },
-  hintText: {
-    fontFamily: monoFont,
-    fontSize: 14,
-    fontWeight: '900',
-    color: '#00F5FF',
-    letterSpacing: 1.5,
-    backgroundColor: 'rgba(4, 2, 18, 0.88)',
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 245, 255, 0.35)',
-  },
-  hintSub: {
-    fontFamily: monoFont,
-    fontSize: 9.5,
-    fontWeight: '700',
-    color: 'rgba(255, 255, 255, 0.75)',
-    marginTop: 6,
-    letterSpacing: 0.5,
+    backgroundColor: '#060411',
   },
 });

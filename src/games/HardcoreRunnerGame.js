@@ -39,38 +39,19 @@ const monoFont = Platform.select({
 
 const STORAGE_HIGH_SCORE_KEY = '@game_tower:best_dash_v1';
 
-
-function getGroundSurfaceAtX(worldX, platforms, baseFloorY) {
-  for (let i = 0; i < platforms.length; i++) {
-    const p = platforms[i];
-    if (worldX >= p.x && worldX <= p.x + p.w) {
-      if (p.type === 'RAMP_UP') {
-        const ratio = Math.max(0, Math.min(1, (worldX - p.x) / p.w));
-        return baseFloorY - ratio * p.h;
-      } else if (p.type === 'RAMP_DOWN') {
-        const ratio = Math.max(0, Math.min(1, (worldX - p.x) / p.w));
-        return baseFloorY - (1 - ratio) * p.h;
-      } else if (p.type === 'PLATFORM') {
-        return baseFloorY - p.h;
-      }
-    }
-  }
-  return baseFloorY;
-}
-
 // Cube and physics parameters
 const CUBE_SIZE = 22;
 const SPEED = 4.8;
 const GRAVITY = 0.52;
 const JUMP_VELOCITY = -8.2;
-const CORRIDOR_HEIGHT = 114;
+const CORRIDOR_HEIGHT = 120;
 
 // Phase Thresholds in Distance (Endless Mode Progression)
 const PHASE_THRESHOLDS = [
   { phase: 1, name: 'CUBE PROTOCOL', desc: 'BASIC HURDLE RUN', startDist: 0, color: '#FFE600' },
   { phase: 2, name: 'SPIKE MATRIX', desc: 'SHARP GROUND SPIKES', startDist: 1000, color: '#FF0055' },
   { phase: 3, name: 'AERO-DROP HAZARDS', desc: 'ARROW SPIKES SLAMMING DOWN', startDist: 2400, color: '#FF6D00' },
-  { phase: 4, name: 'PLASMA BARRAGE', desc: 'INCOMING FRONT PROJECTILES', startDist: 4000, color: '#00F5FF' },
+  { phase: 4, name: 'PLASMA TURRET BARRAGE', desc: 'CEILING MOUNTED HOMING CANNONS', startDist: 4000, color: '#00F5FF' },
   { phase: 5, name: 'VOID CHASMS', desc: 'BOTTOM LINE GAPS // ABYSS', startDist: 5800, color: '#9D4EDD' },
 ];
 
@@ -83,7 +64,67 @@ function getPhaseForDistance(dist) {
   return PHASE_THRESHOLDS[0];
 }
 
-// Generate static ambient background stars (lightweight, zero per-frame math)
+/**
+ * Returns the exact ground elevation at worldX along the segmented terrain path.
+ * Supports:
+ * - STRAIGHT: Flat horizontal line
+ * - SMOOTH: Gentle sine wave hills and dips
+ * - SHARP: Angular zigzag ridges and plateaus
+ * - RAMP: Elevated launch ramps and highway descents
+ */
+function getGroundSurfaceAtX(worldX, segments, baseFloorY) {
+  for (let i = 0; i < segments.length; i++) {
+    const s = segments[i];
+    if (worldX >= s.x && worldX <= s.x + s.w) {
+      if (s.type === 'SMOOTH') {
+        const t = (worldX - s.x) / s.w;
+        return baseFloorY - s.amp * Math.sin(Math.PI * t);
+      } else if (s.type === 'SHARP') {
+        const relX = worldX - s.x;
+        const upW = s.upW || 35;
+        const platW = s.platW || 80;
+        const downW = s.downW || 35;
+        const h = s.h || 24;
+        if (relX < upW) {
+          return baseFloorY - (relX / upW) * h;
+        } else if (relX < upW + platW) {
+          return baseFloorY - h;
+        } else {
+          const downRel = relX - (upW + platW);
+          return baseFloorY - h * (1 - Math.min(1, downRel / downW));
+        }
+      } else if (s.type === 'RAMP') {
+        const relX = worldX - s.x;
+        const upW = s.upW || 55;
+        const platW = s.platW || 110;
+        const downW = s.downW || 55;
+        const h = s.h || 30;
+        if (relX < upW) {
+          return baseFloorY - (relX / upW) * h;
+        } else if (relX < upW + platW) {
+          return baseFloorY - h;
+        } else {
+          const downRel = relX - (upW + platW);
+          return baseFloorY - h * (1 - Math.min(1, downRel / downW));
+        }
+      }
+      return baseFloorY;
+    }
+  }
+  return baseFloorY;
+}
+
+/**
+ * Calculate tangent slope angle in degrees at worldX for tilting the player cube
+ */
+function getGroundSlopeAngle(worldX, segments, baseFloorY) {
+  const y1 = getGroundSurfaceAtX(worldX - 3, segments, baseFloorY);
+  const y2 = getGroundSurfaceAtX(worldX + 3, segments, baseFloorY);
+  const slope = (y2 - y1) / 6;
+  return Math.atan(slope) * (180 / Math.PI);
+}
+
+// Generate static ambient background stars
 function createGalaxyStars(count = 20) {
   const stars = [];
   for (let i = 0; i < count; i++) {
@@ -100,7 +141,7 @@ function createGalaxyStars(count = 20) {
   return stars;
 }
 
-// Cute Kawaii Space Pals roaming OUTSIDE the 2 corridor lines
+// Cute Space Pals roaming outside the 2 corridor lines
 function createInitialNpcShips() {
   return [
     {
@@ -112,7 +153,6 @@ function createInitialNpcShips() {
       speed: 0.9,
       dir: 1,
       scale: 1.0,
-      phase: 0.5,
     },
     {
       id: 'ship_rocket_1',
@@ -123,7 +163,6 @@ function createInitialNpcShips() {
       speed: 1.3,
       dir: 1,
       scale: 0.95,
-      phase: 2.1,
     },
     {
       id: 'ship_kitty_1',
@@ -134,14 +173,15 @@ function createInitialNpcShips() {
       speed: 0.75,
       dir: -1,
       scale: 0.95,
-      phase: 3.6,
     },
   ];
 }
 
 export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPaused = false }) {
   const isPausedRef = useRef(isPaused);
-  isPausedRef.current = isPaused;
+  useEffect(() => {
+    isPausedRef.current = isPaused;
+  }, [isPaused]);
 
   const { width, height } = useWindowDimensions();
   const arenaWidth = width;
@@ -160,7 +200,7 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
   const [currentPhase, setCurrentPhase] = useState(PHASE_THRESHOLDS[0]);
   const [phaseBanner, setPhaseBanner] = useState(null);
 
-  // Consolidated 60 FPS visual state (Only 1 state update per frame to eliminate lag)
+  // Consolidated 60 FPS visual state
   const [frameState, setFrameState] = useState({
     distance: 0,
     playerY: groundY,
@@ -173,14 +213,16 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
   const [modalType, setModalType] = useState('gameover');
   const [crashCause, setCrashCause] = useState('COLLISION');
 
-  // Physics refs for 60 FPS synchronous calculation
+  // Physics refs
   const playerYRef = useRef(groundY);
   const playerVyRef = useRef(0);
   const distanceRef = useRef(0);
   const rotationRef = useRef(0);
+  const segmentsRef = useRef([]);
   const obstaclesRef = useRef([]);
+  const turretsRef = useRef([]);
+  const projectilesRef = useRef([]);
   const gapsRef = useRef([]);
-  const platformsRef = useRef([]);
   const spawnCursorXRef = useRef(420);
   const currentPhaseRef = useRef(currentPhase);
   const animFrameRef = useRef(null);
@@ -204,144 +246,197 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
   }, []);
 
   /**
-   * Procedural Endless Obstacle Spawner.
-   * All obstacles spawn strictly ON THE BOTTOM LINE or inside the corridor.
+   * Procedural Endless World Spawner.
+   * Path alternates between:
+   * - STRAIGHT (ONLY terrain where static cubes and spikes spawn)
+   * - SMOOTH (gentle sine wave hills)
+   * - SHARP (angular cyber ridges)
+   * - RAMP (elevated launch ramps)
+   * Ceiling turrets spawn mounted at the top line and shoot at the player.
    */
   const spawnAhead = useCallback((targetWorldX) => {
     let curX = spawnCursorXRef.current;
+    const newSegments = [];
     const newObs = [];
+    const newTurrets = [];
     const newGaps = [];
-    const newPlatforms = [];
+
+    const terrainTypes = ['STRAIGHT', 'SMOOTH', 'STRAIGHT', 'SHARP', 'STRAIGHT', 'RAMP'];
 
     while (curX < targetWorldX) {
-      // ALL enemies and obstacles active immediately right from the start!
-      const options = [
-        'BLOCK',
-        'SPIKE_BOTTOM',
-        'SPIKE_BOTTOM_DOUBLE',
-        'RAMP_SECTION',
-        'SPIKE_DROP',
-        'PROJECTILE_LOW',
-        'PROJECTILE_HIGH',
-        'GAP',
-      ];
+      const terrainType = terrainTypes[Math.floor(Math.random() * terrainTypes.length)];
 
-      const pick = options[Math.floor(Math.random() * options.length)];
+      if (terrainType === 'STRAIGHT') {
+        const segW = 340 + Math.floor(Math.random() * 140);
+        newSegments.push({
+          id: `seg_str_${curX}`,
+          type: 'STRAIGHT',
+          x: curX,
+          w: segW,
+        });
 
-      if (pick === 'BLOCK') {
-        newObs.push({
-          id: `blk_${curX}`,
-          type: 'BLOCK',
+        // ONLY on STRAIGHT sections: spawn static cubes, ground spikes, or void gaps!
+        const randChoice = Math.random();
+        if (randChoice < 0.32) {
+          // Static cube block
+          newObs.push({
+            id: `blk_${curX}`,
+            type: 'BLOCK',
+            x: curX + 130 + Math.random() * (segW - 200),
+            w: 24,
+            h: 22,
+          });
+        } else if (randChoice < 0.60) {
+          // Ground spikes (single or double)
+          const isDouble = Math.random() > 0.5;
+          const spX = curX + 120 + Math.random() * (segW - 220);
+          newObs.push({
+            id: `sp_1_${spX}`,
+            type: 'SPIKE_BOTTOM',
+            x: spX,
+            w: 22,
+            h: 22,
+          });
+          if (isDouble) {
+            newObs.push({
+              id: `sp_2_${spX}`,
+              type: 'SPIKE_BOTTOM',
+              x: spX + 22,
+              w: 22,
+              h: 22,
+            });
+          }
+        } else if (randChoice < 0.82) {
+          // Void gap (well-centered within straight section so player has runway before and after)
+          const gapW = 88;
+          const gapX = curX + 110 + Math.random() * (segW - gapW - 140);
+          newGaps.push({
+            id: `gap_${gapX}`,
+            x: gapX,
+            w: gapW,
+          });
+        }
+
+        // Ceiling Turret chance
+        if (Math.random() < 0.45) {
+          newTurrets.push({
+            id: `turret_${curX}`,
+            x: curX + segW * 0.5,
+            y: ceilingY,
+            fired: false,
+          });
+        }
+
+        // Aero-Drop Spike chance
+        if (Math.random() < 0.35) {
+          newObs.push({
+            id: `sp_drop_${curX}`,
+            type: 'SPIKE_DROP',
+            x: curX + segW * 0.7,
+            w: 22,
+            h: 24,
+          });
+        }
+
+        curX += segW;
+      } else if (terrainType === 'SMOOTH') {
+        // Smooth sine wave hill
+        const segW = 300 + Math.floor(Math.random() * 80);
+        const amp = 22 + Math.floor(Math.random() * 8);
+        newSegments.push({
+          id: `seg_sm_${curX}`,
+          type: 'SMOOTH',
           x: curX,
-          w: 24,
-          h: 22,
+          w: segW,
+          amp,
         });
-        curX += 300 + Math.random() * 80;
-      } else if (pick === 'SPIKE_BOTTOM') {
-        newObs.push({
-          id: `sp_f_${curX}`,
-          type: 'SPIKE_BOTTOM',
+
+        // Turret or drop spike can appear above smooth hills, but NEVER static ground cubes or spikes
+        if (Math.random() < 0.4) {
+          newTurrets.push({
+            id: `turret_${curX}`,
+            x: curX + segW * 0.5,
+            y: ceilingY,
+            fired: false,
+          });
+        }
+
+        curX += segW;
+      } else if (terrainType === 'SHARP') {
+        // Sharp angular cyber ridge (steep up, flat crest, steep down)
+        const upW = 35;
+        const platW = 75 + Math.floor(Math.random() * 30);
+        const downW = 35;
+        const h = 24;
+        const segW = upW + platW + downW;
+        newSegments.push({
+          id: `seg_shp_${curX}`,
+          type: 'SHARP',
           x: curX,
-          w: 22,
-          h: 22,
+          w: segW,
+          upW,
+          platW,
+          downW,
+          h,
         });
-        curX += 290 + Math.random() * 80;
-      } else if (pick === 'SPIKE_BOTTOM_DOUBLE') {
-        newObs.push({
-          id: `sp_f1_${curX}`,
-          type: 'SPIKE_BOTTOM',
+
+        // NO static cubes and NO spikes on sharp ridges
+        if (Math.random() < 0.4) {
+          newTurrets.push({
+            id: `turret_${curX}`,
+            x: curX + upW + platW * 0.5,
+            y: ceilingY,
+            fired: false,
+          });
+        }
+
+        curX += segW;
+      } else if (terrainType === 'RAMP') {
+        // Elevated launch ramp
+        const upW = 55;
+        const platW = 95 + Math.floor(Math.random() * 35);
+        const downW = 55;
+        const h = 30;
+        const segW = upW + platW + downW;
+        newSegments.push({
+          id: `seg_ramp_${curX}`,
+          type: 'RAMP',
           x: curX,
-          w: 20,
-          h: 22,
+          w: segW,
+          upW,
+          platW,
+          downW,
+          h,
         });
-        newObs.push({
-          id: `sp_f2_${curX}`,
-          type: 'SPIKE_BOTTOM',
-          x: curX + 20,
-          w: 20,
-          h: 22,
-        });
-        curX += 350 + Math.random() * 90;
-      } else if (pick === 'RAMP_SECTION') {
-        // Ramp Up -> Elevated Platform -> Ramp Down
-        const rampW = 64;
-        const platW = 110;
-        const rampH = 26;
-        newPlatforms.push({
-          id: `ramp_u_${curX}`,
-          type: 'RAMP_UP',
-          x: curX,
-          w: rampW,
-          h: rampH,
-        });
-        newPlatforms.push({
-          id: `plat_${curX}`,
-          type: 'PLATFORM',
-          x: curX + rampW,
-          w: platW,
-          h: rampH,
-        });
-        newPlatforms.push({
-          id: `ramp_d_${curX}`,
-          type: 'RAMP_DOWN',
-          x: curX + rampW + platW,
-          w: rampW,
-          h: rampH,
-        });
-        curX += rampW * 2 + platW + 280 + Math.random() * 80;
-      } else if (pick === 'SPIKE_DROP') {
-        newObs.push({
-          id: `sp_drop_${curX}`,
-          type: 'SPIKE_DROP',
-          x: curX,
-          w: 22,
-          h: 24,
-        });
-        curX += 320 + Math.random() * 90;
-      } else if (pick === 'PROJECTILE_LOW') {
-        newObs.push({
-          id: `proj_l_${curX}`,
-          type: 'PROJECTILE',
-          altitude: 'LOW',
-          x: curX,
-          spawnDist: curX - 550,
-          w: 28,
-          h: 10,
-        });
-        curX += 360 + Math.random() * 100;
-      } else if (pick === 'PROJECTILE_HIGH') {
-        newObs.push({
-          id: `proj_h_${curX}`,
-          type: 'PROJECTILE',
-          altitude: 'HIGH',
-          x: curX,
-          spawnDist: curX - 550,
-          w: 28,
-          h: 10,
-        });
-        curX += 360 + Math.random() * 100;
-      } else if (pick === 'GAP') {
-        const gapWidth = 92;
-        newGaps.push({
-          id: `gap_${curX}`,
-          x: curX,
-          w: gapWidth,
-        });
-        curX += gapWidth + 300 + Math.random() * 100;
+
+        // NO static cubes and NO spikes on ramps
+        if (Math.random() < 0.4) {
+          newTurrets.push({
+            id: `turret_${curX}`,
+            x: curX + upW + platW * 0.5,
+            y: ceilingY,
+            fired: false,
+          });
+        }
+
+        curX += segW;
       }
     }
 
     spawnCursorXRef.current = curX;
+    if (newSegments.length > 0) {
+      segmentsRef.current = [...segmentsRef.current, ...newSegments];
+    }
     if (newObs.length > 0) {
       obstaclesRef.current = [...obstaclesRef.current, ...newObs];
+    }
+    if (newTurrets.length > 0) {
+      turretsRef.current = [...turretsRef.current, ...newTurrets];
     }
     if (newGaps.length > 0) {
       gapsRef.current = [...gapsRef.current, ...newGaps];
     }
-    if (newPlatforms.length > 0) {
-      platformsRef.current = [...platformsRef.current, ...newPlatforms];
-    }
-  }, []);
+  }, [ceilingY]);
 
   // Initialize level
   const initLevel = useCallback(() => {
@@ -349,11 +444,22 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
     playerVyRef.current = 0;
     distanceRef.current = 0;
     rotationRef.current = 0;
-    spawnCursorXRef.current = 420;
+    spawnCursorXRef.current = 0;
     tickCountRef.current = 0;
+    segmentsRef.current = [];
     obstaclesRef.current = [];
+    turretsRef.current = [];
+    projectilesRef.current = [];
     gapsRef.current = [];
-    platformsRef.current = [];
+
+    // Initial safe runway
+    segmentsRef.current.push({
+      id: 'init_runway',
+      type: 'STRAIGHT',
+      x: 0,
+      w: 520,
+    });
+    spawnCursorXRef.current = 520;
 
     setFrameState({
       distance: 0,
@@ -367,8 +473,8 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
     currentPhaseRef.current = PHASE_THRESHOLDS[0];
     setPhaseBanner(null);
 
-    // Initial runway spawn
-    spawnAhead(1400);
+    // Spawn ahead into the distance
+    spawnAhead(1600);
   }, [groundY, spawnAhead]);
 
   useEffect(() => {
@@ -383,22 +489,19 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
     }
 
     const curDist = distanceRef.current;
-    const curPlayerCenterX = curDist + playerScreenX + CUBE_SIZE * 0.5;
-    const currentFloor = getGroundSurfaceAtX(curPlayerCenterX, platformsRef.current, floorY);
+    const playerLeftX = curDist + playerScreenX;
+    const playerRightX = playerLeftX + CUBE_SIZE;
+    const curPlayerCenterX = playerLeftX + CUBE_SIZE * 0.5;
+
+    const currentFloor = getGroundSurfaceAtX(curPlayerCenterX, segmentsRef.current, floorY);
     const targetSurfaceY = currentFloor - CUBE_SIZE;
 
-    const onPlatform = platformsRef.current.some(
-      (p) => curPlayerCenterX >= p.x && curPlayerCenterX <= p.x + p.w
+    // Accurate gap test: Player ONLY falls if their entire base has completely crossed over the edge
+    const isOverGap = gapsRef.current.some(
+      (g) => playerLeftX >= g.x && playerRightX <= g.x + g.w + 2
     );
 
-    // Fair gap collision: Player ONLY falls if center has actually crossed into gap
-    const isOverGap =
-      !onPlatform &&
-      gapsRef.current.some(
-        (g) => curPlayerCenterX >= g.x + 8 && curPlayerCenterX <= g.x + g.w - 8
-      );
-
-    const isGrounded = !isOverGap && playerYRef.current >= targetSurfaceY - 5;
+    const isGrounded = !isOverGap && playerYRef.current >= targetSurfaceY - 6;
 
     if (isGrounded) {
       playerVyRef.current = JUMP_VELOCITY;
@@ -407,7 +510,7 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
     }
   };
 
-  // High-performance 60 FPS Physics & Game Loop
+  // 60 FPS Physics & Game Loop
   useEffect(() => {
     if (!isPlaying) return;
 
@@ -426,7 +529,7 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
 
       const nextScore = Math.floor(nextDist / 5);
 
-      // Check progression phase updates
+      // Phase updates
       const newPhase = getPhaseForDistance(nextDist);
       if (newPhase.phase !== currentPhaseRef.current.phase) {
         currentPhaseRef.current = newPhase;
@@ -439,21 +542,24 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
         }, 2400);
       }
 
-      // Dynamically spawn more track ahead in endless mode
+      // Dynamically spawn more track ahead
       if (spawnCursorXRef.current < nextDist + arenaWidth + 900) {
         spawnAhead(nextDist + arenaWidth + 1800);
       }
 
-      // Cull offscreen obstacles behind player periodically
+      // Periodic cull
       if (tickCountRef.current % 120 === 0) {
+        segmentsRef.current = segmentsRef.current.filter((s) => s.x + s.w > nextDist - 250);
         obstaclesRef.current = obstaclesRef.current.filter((o) => o.x > nextDist - 250);
+        turretsRef.current = turretsRef.current.filter((t) => t.x > nextDist - 250);
         gapsRef.current = gapsRef.current.filter((g) => g.x + g.w > nextDist - 250);
-        platformsRef.current = platformsRef.current.filter((p) => p.x + p.w > nextDist - 250);
+        projectilesRef.current = projectilesRef.current.filter((p) => p.x > nextDist - 300);
       }
 
-      // Update ambient roaming cute space pals
+      // Update roaming space pals
       const ships = npcShipsRef.current;
-      for (const ship of ships) {
+      for (let i = 0; i < ships.length; i++) {
+        const ship = ships[i];
         ship.x += ship.speed * ship.dir;
         if (ship.dir === 1 && ship.x > arenaWidth + 60) {
           ship.x = -60;
@@ -463,20 +569,20 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
       }
 
       // Player coordinate calculations
-      const curPlayerCenterX = nextDist + playerScreenX + CUBE_SIZE * 0.5;
-      const curFloorSurface = getGroundSurfaceAtX(curPlayerCenterX, platformsRef.current, floorY);
+      const playerLeftX = nextDist + playerScreenX;
+      const playerRightX = playerLeftX + CUBE_SIZE;
+      const curPlayerCenterX = playerLeftX + CUBE_SIZE * 0.5;
+
+      const curFloorSurface = getGroundSurfaceAtX(curPlayerCenterX, segmentsRef.current, floorY);
       const targetGroundY = curFloorSurface - CUBE_SIZE;
 
-      const onPlatform = platformsRef.current.some(
-        (p) => curPlayerCenterX >= p.x && curPlayerCenterX <= p.x + p.w
+      // FIXED GAP COLLISION:
+      // Player only falls if their rear edge has left the solid ground (playerLeftX >= g.x)
+      // and front edge has not landed on the other side (playerRightX <= g.x + g.w + 2).
+      // They NEVER fall before reaching the gap!
+      const isOverGap = gapsRef.current.some(
+        (g) => playerLeftX >= g.x && playerRightX <= g.x + g.w + 2
       );
-
-      // Fair gap collision: Player ONLY falls if center is inside the gap with 8px edge safety margin
-      const isOverGap =
-        !onPlatform &&
-        gapsRef.current.some(
-          (g) => curPlayerCenterX >= g.x + 8 && curPlayerCenterX <= g.x + g.w - 8
-        );
 
       // Vertical movement & gravity
       let nextVy = playerVyRef.current + GRAVITY;
@@ -497,7 +603,7 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
           nextY = ceilingY;
           nextVy = 0;
         }
-        if (nextY > floorY + 35) {
+        if (nextY > floorY + 36) {
           handleCrash('VOID_FALL');
           return;
         }
@@ -506,16 +612,70 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
       playerVyRef.current = nextVy;
       playerYRef.current = nextY;
 
-      // Cube Rotation
+      // Cube Rotation: Tilts along slope when grounded, spins when airborne
       let nextRot = 0;
       if (!isGrounded) {
         nextRot = (rotationRef.current + 8) % 360;
         rotationRef.current = nextRot;
       } else {
-        rotationRef.current = 0;
+        const slopeDeg = getGroundSlopeAngle(curPlayerCenterX, segmentsRef.current, floorY);
+        rotationRef.current = slopeDeg;
+        nextRot = slopeDeg;
       }
 
-      // Single consolidated frame state update (Zero lag)
+      // CEILING MOUNTED TURRETS: Aim at player & shoot plasma projectiles!
+      const pMidX = playerScreenX + CUBE_SIZE / 2;
+      const pMidY = nextY + CUBE_SIZE / 2;
+
+      const turrets = turretsRef.current;
+      for (let i = 0; i < turrets.length; i++) {
+        const turret = turrets[i];
+        const tScreenX = turret.x - nextDist + playerScreenX;
+
+        // When player is approaching within firing distance: turret shoots towards player!
+        if (!turret.fired && tScreenX - pMidX < 320 && tScreenX - pMidX > 90) {
+          turret.fired = true;
+
+          const dx = pMidX - tScreenX;
+          const dy = pMidY - (ceilingY + 12);
+          const dist = Math.hypot(dx, dy) || 1;
+          const projSpeed = 5.2;
+
+          projectilesRef.current.push({
+            id: `plasma_${turret.id}_${Math.random()}`,
+            x: turret.x,
+            y: ceilingY + 12,
+            vx: (dx / dist) * projSpeed,
+            vy: (dy / dist) * projSpeed,
+            color: '#00F5FF',
+          });
+        }
+      }
+
+      // UPDATE ACTIVE PLASMA PROJECTILES & HIT CHECKS
+      const projs = projectilesRef.current;
+      for (let i = projs.length - 1; i >= 0; i--) {
+        const p = projs[i];
+        p.x += p.vx;
+        p.y += p.vy;
+
+        const projScreenX = p.x - nextDist + playerScreenX;
+        const projScreenY = p.y;
+
+        // Collision with player cube
+        const distToCube = Math.hypot(projScreenX - pMidX, projScreenY - pMidY);
+        if (distToCube < CUBE_SIZE * 0.68) {
+          handleCrash('PROJECTILE');
+          return;
+        }
+
+        // Remove if offscreen or past floor
+        if (projScreenX < -60 || projScreenY > floorY + 40) {
+          projs.splice(i, 1);
+        }
+      }
+
+      // Single consolidated frame state update
       setFrameState({
         distance: nextDist,
         playerY: nextY,
@@ -535,30 +695,6 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
       const obsList = obstaclesRef.current;
       for (let i = 0; i < obsList.length; i++) {
         const obs = obsList[i];
-        if (obs.type === 'PROJECTILE') {
-          const projDistTraveled = (nextDist - obs.spawnDist) * 0.45;
-          const projWorldX = obs.x - projDistTraveled;
-          const projScreenX = projWorldX - nextDist + playerScreenX;
-
-          if (projScreenX < -40 || projScreenX > arenaWidth + 50) continue;
-
-          const projY =
-            obs.altitude === 'LOW'
-              ? floorY - obs.h - 4
-              : ceilingY + 16;
-
-          if (
-            pHit.right > projScreenX + 2 &&
-            pHit.left < projScreenX + obs.w - 2 &&
-            pHit.bottom > projY + 1 &&
-            pHit.top < projY + obs.h - 1
-          ) {
-            handleCrash('PROJECTILE');
-            return;
-          }
-          continue;
-        }
-
         const obsScreenX = obs.x - nextDist + playerScreenX;
         if (obsScreenX < -40 || obsScreenX > arenaWidth + 40) continue;
 
@@ -587,10 +723,8 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
           const distToPlayer = obs.x - curPlayerX;
           let spikeY = ceilingY;
           if (distToPlayer <= 290 && distToPlayer > 170) {
-            // Telegraph hint: stays at ceiling
             spikeY = ceilingY;
           } else if (distToPlayer <= 170) {
-            // Drops down slowly and smoothly over 100px travel
             const dropProgress = Math.min(1, Math.max(0, (170 - distToPlayer) / 100));
             spikeY = ceilingY + (floorY - obs.h - ceilingY) * dropProgress;
           }
@@ -651,10 +785,11 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
 
   const { distance, playerY, rotation, score } = frameState;
 
-  // Viewport Culling: Obstacles & Gaps
-  const visiblePlatforms = platformsRef.current.filter(
-    (p) => p.x - distance + playerScreenX > -140 && p.x - distance + playerScreenX < arenaWidth + 140
-  );
+  // Viewport culling for visible elements
+  const visibleSegments = segmentsRef.current.filter((s) => {
+    const sX = s.x - distance + playerScreenX;
+    return sX + s.w > -60 && sX < arenaWidth + 60;
+  });
 
   const visibleGaps = gapsRef.current.filter((g) => {
     const sX = g.x - distance + playerScreenX;
@@ -666,11 +801,19 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
     return sX > -60 && sX < arenaWidth + 60;
   });
 
+  const visibleTurrets = turretsRef.current.filter((t) => {
+    const sX = t.x - distance + playerScreenX;
+    return sX > -60 && sX < arenaWidth + 60;
+  });
+
+  const pMidX = playerScreenX + CUBE_SIZE / 2;
+  const pMidY = playerY + CUBE_SIZE / 2;
+
   return (
     <View style={styles.container}>
       <MiniGameHeader
         floorNum={25}
-        gameTitle="CYBER CUBE DASH"
+        gameTitle="CUBE DASH"
         category="ENDLESS RUNNER"
         accentColor="#FFE600"
         score={score}
@@ -722,13 +865,17 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
               <Stop offset="0%" stopColor="#00F5FF" stopOpacity="0.16" />
               <Stop offset="100%" stopColor="#00F5FF" stopOpacity="0" />
             </RadialGradient>
+            <LinearGradient id="rampGlow" x1="0" y1="1" x2="0" y2="0">
+              <Stop offset="0%" stopColor="#00F5FF" stopOpacity="0.08" />
+              <Stop offset="100%" stopColor="#00F5FF" stopOpacity="0.3" />
+            </LinearGradient>
           </Defs>
 
           {/* GALAXY DEEP SPACE BACKGROUND */}
           <Circle cx={arenaWidth * 0.22} cy={arenaHeight * 0.18} r={120} fill="url(#nebulaViolet)" />
           <Circle cx={arenaWidth * 0.82} cy={arenaHeight * 0.82} r={140} fill="url(#nebulaCyan)" />
 
-          {/* Ambient Parallax Galaxy Stars (Lightweight) */}
+          {/* Ambient Parallax Galaxy Stars */}
           {starsRef.current.map((star) => {
             const screenX =
               ((star.origX - distance * star.parallax) % (arenaWidth + 80) +
@@ -750,7 +897,7 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
             );
           })}
 
-          {/* ROAMING CUTE SPACE PALS (Strictly OUTSIDE the 2 corridor lines) */}
+          {/* ROAMING CUTE SPACE PALS */}
           {npcShipsRef.current.map((ship) => {
             const sY =
               ship.zone === 'UPPER'
@@ -767,19 +914,14 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
               >
                 {ship.type === 'CUTE_UFO' && (
                   <G>
-                    {/* Soft pastel beam */}
                     <Polygon points="-8,7 8,7 15,22 -15,22" fill="rgba(0, 245, 212, 0.18)" />
-                    {/* Glass Bubble Cockpit */}
                     <Circle cx={0} cy={-5} r={9} fill="rgba(0, 245, 212, 0.4)" stroke="#00F5D4" strokeWidth={1.5} />
-                    {/* Cute smiling Alien with rosy cheeks */}
                     <Circle cx={0} cy={-5} r={5} fill="#39FF14" />
                     <Circle cx={-2} cy={-6} r={1.2} fill="#050510" />
                     <Circle cx={2} cy={-6} r={1.2} fill="#050510" />
                     <Circle cx={-3.2} cy={-3.5} r={1} fill="#FF007F" opacity={0.7} />
                     <Circle cx={3.2} cy={-3.5} r={1} fill="#FF007F" opacity={0.7} />
-                    {/* Saucer Hull */}
                     <Rect x={-18} y={-1} width={36} height={8} rx={4} fill="#FF70A6" stroke="#FFFFFF" strokeWidth={1.4} />
-                    {/* Glowing rim beads */}
                     <Circle cx={-10} cy={3} r={1.6} fill="#FFE600" />
                     <Circle cx={0} cy={3} r={1.6} fill="#FFE600" />
                     <Circle cx={10} cy={3} r={1.6} fill="#FFE600" />
@@ -788,22 +930,17 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
 
                 {ship.type === 'CHIBI_ROCKET' && (
                   <G>
-                    {/* Cute flame trail */}
                     <Circle cx={-16} cy={0} r={3.5} fill="#FFE600" />
                     <Circle cx={-21} cy={0} r={2} fill="#FF6D00" />
-                    {/* Rocket Fins */}
                     <Polygon points="-8,-8 -13,-12 -11,-3" fill="#7928CA" />
                     <Polygon points="-8,8 -13,12 -11,3" fill="#7928CA" />
-                    {/* Chubby Rocket Body */}
                     <Path
                       d="M 15 0 C 11 -7 -7 -7 -11 -4 C -12 0 -12 0 -11 4 C -7 7 11 7 15 0 Z"
                       fill="#FFFFFF"
                       stroke="#00F5FF"
                       strokeWidth={1.5}
                     />
-                    {/* Nose Cone */}
                     <Path d="M 15 0 C 12 -3.5 8 -3.5 8 0 C 8 3.5 12 3.5 15 0 Z" fill="#FF007F" />
-                    {/* Porthole with smiley eyes */}
                     <Circle cx={-1} cy={0} r={4.5} fill="#180A2E" stroke="#FFE600" strokeWidth={1.2} />
                     <Circle cx={-2} cy={-0.8} r={0.9} fill="#00F5FF" />
                     <Circle cx={0.5} cy={-0.8} r={0.9} fill="#00F5FF" />
@@ -812,17 +949,12 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
 
                 {ship.type === 'STAR_KITTY' && (
                   <G>
-                    {/* Soft pink stardust trail */}
                     <Circle cx={-16} cy={0} r={2.5} fill="#FFB3C6" opacity={0.7} />
                     <Circle cx={-22} cy={0} r={1.5} fill="#FF70A6" opacity={0.5} />
-                    {/* Kitty Ears */}
                     <Polygon points="-8,-8 -4,-16 0,-10" fill="#FF70A6" stroke="#FFFFFF" strokeWidth={1} />
                     <Polygon points="2,-10 6,-16 10,-8" fill="#FF70A6" stroke="#FFFFFF" strokeWidth={1} />
-                    {/* Spherical Pod */}
                     <Circle cx={0} cy={0} r={11} fill="#FFE5EC" stroke="#FF70A6" strokeWidth={1.5} />
-                    {/* Glass bubble visor */}
                     <Circle cx={0} cy={0} r={11} fill="none" stroke="rgba(0, 245, 255, 0.45)" strokeWidth={1.2} />
-                    {/* Kitty Face */}
                     <Circle cx={-3.2} cy={-1.5} r={1.3} fill="#331832" />
                     <Circle cx={3.2} cy={-1.5} r={1.3} fill="#331832" />
                     <Polygon points="0,0.8 -1.2,0 1.2,0" fill="#FF007F" />
@@ -834,63 +966,7 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
             );
           })}
 
-                    {/* ELEVATED PLATFORMS & RAMPS (UP AND DOWN) */}
-          {visiblePlatforms.map((p) => {
-            const sX = p.x - distance + playerScreenX;
-            if (p.type === 'RAMP_UP') {
-              const points = `${sX},${floorY} ${sX + p.w},${floorY} ${sX + p.w},${floorY - p.h}`;
-              return (
-                <G key={p.id}>
-                  <Polygon points={points} fill="rgba(0, 245, 255, 0.16)" stroke="#00F5FF" strokeWidth={2} />
-                  <Line x1={sX} y1={floorY} x2={sX + p.w} y2={floorY - p.h} stroke="#FFFFFF" strokeWidth={2.5} />
-                  <Polygon
-                    points={`${sX + p.w * 0.4},${floorY - p.h * 0.3} ${sX + p.w * 0.55},${floorY - p.h * 0.6} ${sX + p.w * 0.7},${floorY - p.h * 0.3}`}
-                    fill="#FFE600"
-                  />
-                </G>
-              );
-            }
-            if (p.type === 'RAMP_DOWN') {
-              const points = `${sX},${floorY} ${sX},${floorY - p.h} ${sX + p.w},${floorY}`;
-              return (
-                <G key={p.id}>
-                  <Polygon points={points} fill="rgba(157, 78, 221, 0.18)" stroke="#9D4EDD" strokeWidth={2} />
-                  <Line x1={sX} y1={floorY - p.h} x2={sX + p.w} y2={floorY} stroke="#FFFFFF" strokeWidth={2.5} />
-                  <Polygon
-                    points={`${sX + p.w * 0.3},${floorY - p.h * 0.7} ${sX + p.w * 0.45},${floorY - p.h * 0.4} ${sX + p.w * 0.6},${floorY - p.h * 0.7}`}
-                    fill="#00F5D4"
-                  />
-                </G>
-              );
-            }
-            if (p.type === 'PLATFORM') {
-              return (
-                <G key={p.id}>
-                  <Rect
-                    x={sX}
-                    y={floorY - p.h}
-                    width={p.w}
-                    height={p.h}
-                    fill="rgba(10, 15, 38, 0.95)"
-                    stroke="#00F5FF"
-                    strokeWidth={1.8}
-                  />
-                  <Line
-                    x1={sX}
-                    y1={floorY - p.h}
-                    x2={sX + p.w}
-                    y2={floorY - p.h}
-                    stroke="#FFE600"
-                    strokeWidth={2.5}
-                  />
-                </G>
-              );
-            }
-            return null;
-          })}
-
-          {/* THE 2 CORRIDOR BOUNDARY LINES */}
-          {/* 1. TOP CORRIDOR CEILING LINE (Solid Neon Magenta) */}
+          {/* TOP CEILING CORRIDOR LINE */}
           <Line
             x1={-20}
             y1={ceilingY}
@@ -900,15 +976,237 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
             strokeWidth={3}
           />
 
-          {/* 2. BOTTOM CORRIDOR FLOOR LINE (Solid Neon Cyan) */}
-          <Line
-            x1={-20}
-            y1={floorY}
-            x2={arenaWidth + 20}
-            y2={floorY}
-            stroke="#00F5FF"
-            strokeWidth={3}
-          />
+          {/* CEILING-MOUNTED UPPER TURRETS (Rotating toward & shooting at player cube!) */}
+          {visibleTurrets.map((turret) => {
+            const tScreenX = turret.x - distance + playerScreenX;
+            const tScreenY = ceilingY;
+
+            // Angle towards player cube
+            const dx = pMidX - tScreenX;
+            const dy = pMidY - (tScreenY + 6);
+            const aimAngleDeg = Math.atan2(dy, dx) * (180 / Math.PI);
+            // Relative rotation for downward-pointing barrel
+            const barrelRot = aimAngleDeg - 90;
+
+            const isAiming = tScreenX - pMidX < 360 && tScreenX - pMidX > 40;
+
+            return (
+              <G key={turret.id}>
+                {/* Red Target Laser Line (Telegraph when aiming) */}
+                {isAiming && (
+                  <Line
+                    x1={tScreenX}
+                    y1={tScreenY + 8}
+                    x2={pMidX}
+                    y2={pMidY}
+                    stroke="#FF0055"
+                    strokeWidth={1.2}
+                    strokeDasharray="4,4"
+                    opacity={0.6}
+                  />
+                )}
+
+                {/* Ceiling Mount Base Plate */}
+                <Rect
+                  x={tScreenX - 16}
+                  y={tScreenY - 4}
+                  width={32}
+                  height={8}
+                  rx={3}
+                  fill="#1C0B38"
+                  stroke="#9D4EDD"
+                  strokeWidth={1.6}
+                />
+                <Circle cx={tScreenX - 10} cy={tScreenY} r={1.5} fill="#FFE600" />
+                <Circle cx={tScreenX + 10} cy={tScreenY} r={1.5} fill="#FFE600" />
+
+                {/* Swivel Pivot Dome */}
+                <Circle
+                  cx={tScreenX}
+                  cy={tScreenY + 6}
+                  r={8}
+                  fill="#14092A"
+                  stroke="#00F5FF"
+                  strokeWidth={1.8}
+                />
+
+                {/* Rotating Turret Cannon Barrels */}
+                <G transform={`rotate(${barrelRot}, ${tScreenX}, ${tScreenY + 6})`}>
+                  {/* Twin Barrels */}
+                  <Rect
+                    x={tScreenX - 4}
+                    y={tScreenY + 4}
+                    width={8}
+                    height={16}
+                    rx={2}
+                    fill="#261048"
+                    stroke="#FF0055"
+                    strokeWidth={1.4}
+                  />
+                  {/* Energy Muzzle Glow */}
+                  <Circle cx={tScreenX - 2.5} cy={tScreenY + 20} r={2} fill="#FFE600" />
+                  <Circle cx={tScreenX + 2.5} cy={tScreenY + 20} r={2} fill="#FFE600" />
+                </G>
+
+                {/* Center Core Eye */}
+                <Circle cx={tScreenX} cy={tScreenY + 6} r={3} fill="#FF0055" />
+                <Circle cx={tScreenX} cy={tScreenY + 6} r={1.2} fill="#FFE600" />
+              </G>
+            );
+          })}
+
+          {/* FIRED PLASMA PROJECTILES FLYING TOWARDS PLAYER */}
+          {projectilesRef.current.map((proj) => {
+            const sX = proj.x - distance + playerScreenX;
+            const sY = proj.y;
+            if (sX < -40 || sX > arenaWidth + 50) return null;
+
+            return (
+              <G key={proj.id}>
+                {/* Plasma Energy Trail */}
+                <Line
+                  x1={sX - proj.vx * 2.5}
+                  y1={sY - proj.vy * 2.5}
+                  x2={sX}
+                  y2={sY}
+                  stroke="#FF0055"
+                  strokeWidth={5}
+                  strokeLinecap="round"
+                  opacity={0.5}
+                />
+                <Line
+                  x1={sX - proj.vx * 1.5}
+                  y1={sY - proj.vy * 1.5}
+                  x2={sX}
+                  y2={sY}
+                  stroke="#FFE600"
+                  strokeWidth={3}
+                  strokeLinecap="round"
+                />
+                {/* Plasma Core Ball */}
+                <Circle cx={sX} cy={sY} r={7} fill="#00F5FF" stroke="#FFFFFF" strokeWidth={1.5} />
+                <Circle cx={sX} cy={sY} r={3.5} fill="#FFE600" />
+              </G>
+            );
+          })}
+
+          {/* DIVERSE TERRAIN PATH SEGMENTS (Straight, Smooth Waves, Sharp Ridges, Ramps) */}
+          {visibleSegments.map((seg) => {
+            const sX = seg.x - distance + playerScreenX;
+
+            if (seg.type === 'STRAIGHT') {
+              // Flat horizontal line
+              return (
+                <G key={seg.id}>
+                  <Line
+                    x1={sX}
+                    y1={floorY}
+                    x2={sX + seg.w}
+                    y2={floorY}
+                    stroke="#00F5FF"
+                    strokeWidth={3}
+                  />
+                  {/* Subtle ground guideline glow underneath */}
+                  <Line
+                    x1={sX}
+                    y1={floorY + 3}
+                    x2={sX + seg.w}
+                    y2={floorY + 3}
+                    stroke="rgba(0, 245, 255, 0.25)"
+                    strokeWidth={1}
+                  />
+                </G>
+              );
+            }
+
+            if (seg.type === 'SMOOTH') {
+              // Smooth sine wave hill
+              // Cubic bezier control points approximating sine curve
+              const cp1X = sX + seg.w * 0.28;
+              const cp1Y = floorY - seg.amp * 1.05;
+              const cp2X = sX + seg.w * 0.72;
+              const cp2Y = floorY - seg.amp * 1.05;
+              const pathD = `M ${sX} ${floorY} C ${cp1X} ${cp1Y}, ${cp2X} ${cp2Y}, ${sX + seg.w} ${floorY}`;
+              const fillD = `${pathD} L ${sX + seg.w} ${floorY} L ${sX} ${floorY} Z`;
+
+              return (
+                <G key={seg.id}>
+                  {/* Glowing hill fill */}
+                  <Path d={fillD} fill="rgba(0, 245, 255, 0.12)" />
+                  {/* Smooth neon crest line */}
+                  <Path
+                    d={pathD}
+                    fill="none"
+                    stroke="#00F5FF"
+                    strokeWidth={3}
+                    strokeLinecap="round"
+                  />
+                </G>
+              );
+            }
+
+            if (seg.type === 'SHARP') {
+              // Sharp angular cyber ridge: steep climb, flat crest, steep descent
+              const p1 = `${sX},${floorY}`;
+              const p2 = `${sX + seg.upW},${floorY - seg.h}`;
+              const p3 = `${sX + seg.upW + seg.platW},${floorY - seg.h}`;
+              const p4 = `${sX + seg.w},${floorY}`;
+
+              return (
+                <G key={seg.id}>
+                  <Polygon
+                    points={`${p1} ${p2} ${p3} ${p4}`}
+                    fill="rgba(157, 78, 221, 0.18)"
+                    stroke="#9D4EDD"
+                    strokeWidth={2.5}
+                  />
+                  <Line
+                    x1={sX + seg.upW}
+                    y1={floorY - seg.h}
+                    x2={sX + seg.upW + seg.platW}
+                    y2={floorY - seg.h}
+                    stroke="#FFE600"
+                    strokeWidth={2.8}
+                  />
+                </G>
+              );
+            }
+
+            if (seg.type === 'RAMP') {
+              // Elevated Launch Ramp with directional chevrons
+              const p1 = `${sX},${floorY}`;
+              const p2 = `${sX + seg.upW},${floorY - seg.h}`;
+              const p3 = `${sX + seg.upW + seg.platW},${floorY - seg.h}`;
+              const p4 = `${sX + seg.w},${floorY}`;
+
+              return (
+                <G key={seg.id}>
+                  <Polygon
+                    points={`${p1} ${p2} ${p3} ${p4}`}
+                    fill="url(#rampGlow)"
+                    stroke="#00F5FF"
+                    strokeWidth={2.5}
+                  />
+                  {/* Ascending launch arrows */}
+                  <Polygon
+                    points={`${sX + seg.upW * 0.4},${floorY - seg.h * 0.3} ${sX + seg.upW * 0.55},${floorY - seg.h * 0.6} ${sX + seg.upW * 0.7},${floorY - seg.h * 0.3}`}
+                    fill="#FFE600"
+                  />
+                  {/* High neon runway */}
+                  <Line
+                    x1={sX + seg.upW}
+                    y1={floorY - seg.h}
+                    x2={sX + seg.upW + seg.platW}
+                    y2={floorY - seg.h}
+                    stroke="#FFFFFF"
+                    strokeWidth={2.5}
+                  />
+                </G>
+              );
+            }
+
+            return null;
+          })}
 
           {/* VOID CHASM GAPS (Cover bottom line over active void gaps) */}
           {visibleGaps.map((gap) => {
@@ -948,7 +1246,7 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
             );
           })}
 
-          {/* OBSTACLES (Strictly ON THE BOTTOM LINE or INSIDE the corridor) */}
+          {/* STATIC CUBES & GROUND SPIKES (Spawned ONLY on STRAIGHT path sections) */}
           {visibleObstacles.map((obs) => {
             const sX = obs.x - distance + playerScreenX;
 
@@ -1016,7 +1314,6 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
 
               return (
                 <G key={obs.id}>
-                  {/* Warning Telegraph Beam & Ground Target Ring */}
                   {isTelegraphing && (
                     <G>
                       <Line
@@ -1061,57 +1358,6 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
                     y2={tipY - 5}
                     stroke="#FFE600"
                     strokeWidth={1.5}
-                  />
-                </G>
-              );
-            }
-
-            if (obs.type === 'PROJECTILE') {
-              const projDistTraveled = (distance - obs.spawnDist) * 0.45;
-              const projWorldX = obs.x - projDistTraveled;
-              const projScreenX = projWorldX - distance + playerScreenX;
-
-              const projY =
-                obs.altitude === 'LOW'
-                  ? floorY - obs.h - 4
-                  : ceilingY + 16;
-
-              const launcherScreenX = obs.x - distance + playerScreenX;
-
-              return (
-                <G key={obs.id}>
-                  {/* Cyber Drone Sentry Bot */}
-                  {launcherScreenX > -40 && launcherScreenX < arenaWidth + 80 && (
-                    <G transform={`translate(${launcherScreenX}, ${projY - 4})`}>
-                      <Rect x={-10} y={-8} width={20} height={16} rx={4} fill="#180A2E" stroke="#FF0055" strokeWidth={1.5} />
-                      <Circle cx={-3} cy={0} r={3} fill="#FF0055" />
-                      <Circle cx={-3} cy={0} r={1.2} fill="#FFE600" />
-                      <Rect x={-16} y={-2} width={7} height={4} rx={1.5} fill="#FF0055" />
-                    </G>
-                  )}
-
-                  <Rect
-                    x={projScreenX}
-                    y={projY}
-                    width={obs.w}
-                    height={obs.h}
-                    rx={obs.h / 2}
-                    fill="#00F5FF"
-                    stroke="#FFFFFF"
-                    strokeWidth={1.5}
-                  />
-                  <Circle
-                    cx={projScreenX + 5}
-                    cy={projY + obs.h / 2}
-                    r={obs.h / 2 - 1}
-                    fill="#FFE600"
-                  />
-                  <Circle
-                    cx={projScreenX + obs.w + 4}
-                    cy={projY + obs.h / 2}
-                    r={2.5}
-                    fill="#FF0055"
-                    opacity={0.8}
                   />
                 </G>
               );

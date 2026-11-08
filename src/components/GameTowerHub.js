@@ -57,7 +57,7 @@ import CyberTetrisGame from '../games/CyberTetrisGame';
 import Match3SagaGame from '../games/Match3SagaGame';
 import TapAwayArrowsGame from '../games/TapAwayArrowsGame';
 import IcyTowerClimberGame from '../games/IcyTowerClimberGame';
-import KnifeHitGame from '../games/KnifeHitGame';
+import WordScrambleGame from '../games/WordScrambleGame';
 
 import {
   triggerLightHaptic,
@@ -82,22 +82,22 @@ export const TOWER_GAMES = [
     id: 'knife_hit',
     floorNum: 30,
     floor: 'FLOOR 30',
-    tier: 'ORBIT',
-    title: 'CYBER BLADE TARGET',
-    category: 'PRECISION',
-    badge: 'ROTATING CORE',
-    desc: 'Fling plasma blades into the rotating quantum core without striking existing blades.',
+    tier: 'APEX',
+    title: 'WORD SCRAMBLE',
+    category: 'ANAGRAM MATRIX',
+    badge: 'LETTER DIAL',
+    desc: 'Unscramble cyber letter dials to forge 2 to 7+ letter words. Find more and more words to crack levels.',
     accent: '#00F5FF',
     secondary: '#7928CA',
-    icon: '🗡️',
-    storageKey: '@game_tower:best_knife_v1',
+    icon: '🔤',
+    storageKey: '@game_tower:best_scramble_v1',
   },
   {
     id: 'icy_climber',
     floorNum: 29,
     floor: 'FLOOR 29',
     tier: 'ORBIT',
-    title: 'CYBER SPIRE ASCENT',
+    title: 'SPIRE ASCENT',
     category: 'ARCADE',
     badge: 'FIRE & TURRETS',
     desc: 'Ascend the infinite cyber spire. Dodge incinerating fire platforms, outrun homing sentry bombs, and evade defense turrets.',
@@ -125,7 +125,7 @@ export const TOWER_GAMES = [
     floorNum: 27,
     floor: 'FLOOR 27',
     tier: 'ORBIT',
-    title: 'CYBER MATCH 3 SAGA',
+    title: 'MATCH 3 SAGA',
     category: 'PUZZLE',
     badge: 'BRICKS & STARS',
     desc: 'Match glowing gems, shatter armored cyber bricks, and collect caged stars before the countdown ends.',
@@ -139,7 +139,7 @@ export const TOWER_GAMES = [
     floorNum: 26,
     floor: 'FLOOR 26',
     tier: 'ORBIT',
-    title: 'CYBER TETRIS NEO',
+    title: 'TETRIS NEO',
     category: 'ARCADE',
     badge: 'HARD DROP JUICY',
     desc: 'Classic falling tetrominoes with hold slot, ghost projection, hard drop slams, and juicy multi-clears.',
@@ -153,7 +153,7 @@ export const TOWER_GAMES = [
     floorNum: 25,
     floor: 'FLOOR 25',
     tier: 'ORBIT',
-    title: 'CYBER CUBE DASH',
+    title: 'CUBE DASH',
     category: 'HARDCORE',
     badge: 'GRAVITY FLIP',
     desc: 'High-speed hardcore rhythm runner with spike hurdles, gravity-flip portals, and attempt counters.',
@@ -195,7 +195,7 @@ export const TOWER_GAMES = [
     floorNum: 22,
     floor: 'FLOOR 22',
     tier: 'APEX',
-    title: 'CYBER ROPE DROP',
+    title: 'ROPE DROP',
     category: 'PHYSICS',
     badge: 'SLICING DROP',
     desc: 'Slice suspended ropes with precise timing to swing the quantum ball safely into the floor receptor bucket.',
@@ -209,10 +209,10 @@ export const TOWER_GAMES = [
     floorNum: 21,
     floor: 'FLOOR 21',
     tier: 'APEX',
-    title: 'SAVE CYBER DOGE',
+    title: 'SAVE THE DOG',
     category: 'PHYSICS',
     badge: 'DRAW SHIELD',
-    desc: 'Draw energy barrier lines to shelter the cyber dog from attacking drone wasp swarms.',
+    desc: 'Draw energy barrier lines to shelter the dog from attacking drone wasp swarms.',
     accent: '#FFD166',
     secondary: '#FF6D00',
     icon: '🐕',
@@ -223,7 +223,7 @@ export const TOWER_GAMES = [
     floorNum: 20,
     floor: 'FLOOR 20',
     tier: 'APEX',
-    title: 'CYBER SUDOKU',
+    title: 'SUDOKU',
     category: 'BRAIN',
     badge: 'QUANTUM 9x9',
     desc: 'Solve the 9x9 quantum grid with pencil notes, conflict scan, and difficulty modes.',
@@ -335,10 +335,10 @@ export const TOWER_GAMES = [
     floorNum: 12,
     floor: 'FLOOR 12',
     tier: 'CORE',
-    title: 'CYBER TIC-TAC-TOE',
+    title: 'TIC-TAC-TOE',
     category: 'STRATEGY',
     badge: 'AI BATTLE & 2P',
-    desc: 'Claim lines of three against the adaptive Cyber AI or battle local 2-Player.',
+    desc: 'Claim lines of three against the adaptive AI or battle local 2-Player.',
     accent: '#06D6A0',
     secondary: '#118AB2',
     icon: '⚔️',
@@ -363,7 +363,7 @@ export const TOWER_GAMES = [
     floorNum: 10,
     floor: 'FLOOR 10',
     tier: 'CORE',
-    title: 'CYBER SNAKE',
+    title: 'SNAKE',
     category: 'ARCADE',
     badge: 'RETRO 15x15',
     desc: 'Slither through cyberspace, devour golden energy orbs, and grow your light trail.',
@@ -419,7 +419,7 @@ export const TOWER_GAMES = [
     floorNum: 6,
     floor: 'FLOOR 06',
     tier: 'CORE',
-    title: 'CYBER SLIDE 15',
+    title: 'SLIDE 15',
     category: 'PUZZLE',
     badge: '15-PUZZLE',
     desc: 'Slide numbered neon blocks 1–15 into ascending order with minimum moves.',
@@ -1015,7 +1015,7 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
         );
       case 'knife_hit':
         return (
-          <KnifeHitGame
+          <WordScrambleGame
             isPaused={isPaused}
             onBackToHub={requestExitToHub}
             onScoreUpdate={(s) => handleScoreUpdate('knife_hit', s)}
