@@ -167,8 +167,9 @@ function canSwapMakeMatch(board, r1, c1, r2, c2) {
 export default function Match3SagaGame({ onBackToHub, onScoreUpdate, isPaused = false }) {
   const isPausedRef = useRef(isPaused);
   const { width, height } = useWindowDimensions();
-  const cellSize = Math.floor(Math.min((width - 48) / GRID_SIZE, (height - 310) / GRID_SIZE));
-  const cellStep = cellSize + 4;
+  const maxBoardDim = Math.min(width - 32, height - 260, 360);
+  const cellStep = Math.floor((maxBoardDim - 12) / GRID_SIZE);
+  const cellSize = Math.max(28, cellStep - 4);
   const boardWidth = GRID_SIZE * cellStep;
 
   const [level, setLevel] = useState(1);
@@ -807,7 +808,7 @@ export default function Match3SagaGame({ onBackToHub, onScoreUpdate, isPaused = 
               style={[styles.boardInner, { width: boardWidth, height: boardWidth }]}
             >
               {grid.map((row, r) => (
-                <View key={`row_${r}`} style={styles.gridRow}>
+                <View key={`row_${r}`} style={[styles.gridRow, { width: boardWidth, height: cellStep }]}>
                   {row.map((cell, c) => {
                     const isSelected = selectedCell && selectedCell.r === r && selectedCell.c === c;
                     const isSpecial = Boolean(cell?.special);
@@ -836,7 +837,12 @@ export default function Match3SagaGame({ onBackToHub, onScoreUpdate, isPaused = 
                           },
                         ]}
                       >
-                        <Text style={[styles.fruitIcon, { fontSize: cellSize * 0.52 }]}>
+                        <Text
+                          style={[
+                            styles.fruitIcon,
+                            { fontSize: Math.floor(cellSize * 0.52), lineHeight: cellSize },
+                          ]}
+                        >
                           {cell ? cell.icon : ''}
                         </Text>
 
@@ -1014,6 +1020,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingBottom: 12,
   },
   boardWrapper: {
     backgroundColor: 'rgba(8, 5, 20, 0.85)',
@@ -1023,22 +1030,31 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 6,
+    overflow: 'hidden',
   },
   boardInner: {
-    justifyContent: 'center',
+    flexDirection: 'column',
+    justifyContent: 'flex-start',
     alignItems: 'center',
+    overflow: 'hidden',
   },
   gridRow: {
     flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
   },
   cell: {
     alignItems: 'center',
     justifyContent: 'center',
     margin: 2,
     borderRadius: 10,
+    overflow: 'hidden',
   },
   fruitIcon: {
     textAlign: 'center',
+    textAlignVertical: 'center',
+    includeFontPadding: false,
   },
   armorStripe: {
     position: 'absolute',

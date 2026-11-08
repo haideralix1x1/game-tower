@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -23,9 +23,8 @@ import { COLORS } from '../../styles';
 import MiniGameHeader from '../components/MiniGameHeader';
 import GameResultModal from '../components/GameResultModal';
 import JuiceEngine from '../components/JuiceEngine';
-import { playTapSound, playSliceSound, playGameOverSound } from '../utils/sound';
+import { playSliceSound, playGameOverSound } from '../utils/sound';
 import {
-  triggerLightHaptic,
   triggerMediumHaptic,
   triggerGameOverHaptic,
 } from '../utils/haptics';
@@ -92,7 +91,6 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate, isPaused = 
     height: PLATFORM_HEIGHT,
   });
   const platformRef = useRef(platform);
-  platformRef.current = platform;
 
   const [level, setLevel] = useState(1);
   const [score, setScore] = useState(0);
@@ -122,18 +120,34 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate, isPaused = 
   const [modalMessage, setModalMessage] = useState('');
 
   const dogRef = useRef(dog);
-  dogRef.current = dog;
   const savedLinesRef = useRef(savedLines);
-  savedLinesRef.current = savedLines;
   const beesRef = useRef(bees);
-  beesRef.current = bees;
   const linesVelocityRef = useRef({ vx: 0, vy: 0 });
   const gameStateRef = useRef(gameState);
-  gameStateRef.current = gameState;
   const timeLeftRef = useRef(timeLeft);
-  timeLeftRef.current = timeLeft;
   const inkLeftRef = useRef(100);
-  inkLeftRef.current = inkLeft;
+
+  useEffect(() => {
+    platformRef.current = platform;
+  }, [platform]);
+  useEffect(() => {
+    dogRef.current = dog;
+  }, [dog]);
+  useEffect(() => {
+    savedLinesRef.current = savedLines;
+  }, [savedLines]);
+  useEffect(() => {
+    beesRef.current = bees;
+  }, [bees]);
+  useEffect(() => {
+    gameStateRef.current = gameState;
+  }, [gameState]);
+  useEffect(() => {
+    timeLeftRef.current = timeLeft;
+  }, [timeLeft]);
+  useEffect(() => {
+    inkLeftRef.current = inkLeft;
+  }, [inkLeft]);
 
   const juiceRef = useRef(null);
   const animFrameRef = useRef(null);
@@ -225,12 +239,50 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate, isPaused = 
   );
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     initLevel(level);
     return () => {
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
       if (timerRef.current) clearInterval(timerRef.current);
     };
   }, [level, initLevel]);
+
+  const handleWin = useCallback(() => {
+    if (gameStateRef.current !== 'SWARMING') return;
+    setGameState('OVER');
+    gameStateRef.current = 'OVER';
+    if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+    if (timerRef.current) clearInterval(timerRef.current);
+
+    if (juiceRef.current) {
+      juiceRef.current.celebrate('DOGE RESCUED!', '+300 PTS // SAFE DEFENSE', '#FFD166');
+    }
+    const winPoints = 300 + Math.floor(inkLeftRef.current * 2);
+    setScore((s) => {
+      const nextScore = s + winPoints;
+      onScoreUpdate?.(nextScore);
+      AsyncStorage.setItem(STORAGE_BEST_KEY, String(nextScore)).catch(() => {});
+      return nextScore;
+    });
+
+    setModalMessage('SURVIVED THE SWARM! EXCELLENT DEFENSE!');
+    setModalType('win');
+    setModalVisible(true);
+  }, [onScoreUpdate]);
+
+  const handleLose = useCallback((msg = 'LEVEL FAILED!') => {
+    if (gameStateRef.current !== 'SWARMING') return;
+    setGameState('OVER');
+    gameStateRef.current = 'OVER';
+    if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+    if (timerRef.current) clearInterval(timerRef.current);
+
+    playGameOverSound();
+    triggerGameOverHaptic();
+    setModalMessage(msg);
+    setModalType('gameover');
+    setModalVisible(true);
+  }, []);
 
   // Launch Swarm IMMEDIATELY with line & dog physics activation
   const activateSwarmImmediately = useCallback((finalLine) => {
@@ -268,65 +320,68 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate, isPaused = 
         return prev - 1;
       });
     }, 1000);
-  }, []);
+  }, [handleWin]);
 
   // PanResponder to draw lines
   // Automatically finishes drawing when ink is finished OR finger is released!
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => !isPausedRef.current && gameStateRef.current === 'DRAWING',
-      onMoveShouldSetPanResponder: () => !isPausedRef.current && gameStateRef.current === 'DRAWING',
-      onPanResponderGrant: (evt) => {
-        if (gameStateRef.current !== 'DRAWING') return;
-        if (inkLeftRef.current <= 0) return;
-        const { locationX, locationY } = evt.nativeEvent;
-        setCurrentLine([{ x: locationX, y: locationY }]);
-      },
-      onPanResponderMove: (evt) => {
-        if (gameStateRef.current !== 'DRAWING') return;
-        if (inkLeftRef.current <= 0) return;
-        const { locationX, locationY } = evt.nativeEvent;
+  const panResponder = useMemo(
+    () =>
+      // eslint-disable-next-line react-hooks/refs
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => !isPausedRef.current && gameStateRef.current === 'DRAWING',
+        onMoveShouldSetPanResponder: () => !isPausedRef.current && gameStateRef.current === 'DRAWING',
+        onPanResponderGrant: (evt) => {
+          if (gameStateRef.current !== 'DRAWING') return;
+          if (inkLeftRef.current <= 0) return;
+          const { locationX, locationY } = evt.nativeEvent;
+          setCurrentLine([{ x: locationX, y: locationY }]);
+        },
+        onPanResponderMove: (evt) => {
+          if (gameStateRef.current !== 'DRAWING') return;
+          if (inkLeftRef.current <= 0) return;
+          const { locationX, locationY } = evt.nativeEvent;
 
-        setCurrentLine((prev) => {
-          if (prev.length === 0) return [{ x: locationX, y: locationY }];
-          const last = prev[prev.length - 1];
+          setCurrentLine((prev) => {
+            if (prev.length === 0) return [{ x: locationX, y: locationY }];
+            const last = prev[prev.length - 1];
 
-          const deltaY = Math.abs(locationY - last.y);
-          const deltaX = Math.abs(locationX - last.x);
-          if (deltaY > 80 || deltaX > 80) return prev;
+            const deltaY = Math.abs(locationY - last.y);
+            const deltaX = Math.abs(locationX - last.x);
+            if (deltaY > 80 || deltaX > 80) return prev;
 
-          const dist = Math.hypot(deltaX, deltaY);
-          if (dist > 4) {
-            const inkCost = dist * 0.12;
-            const newInk = Math.max(0, inkLeftRef.current - inkCost);
-            inkLeftRef.current = newInk;
-            setInkLeft(newInk);
+            const dist = Math.hypot(deltaX, deltaY);
+            if (dist > 4) {
+              const inkCost = dist * 0.12;
+              const newInk = Math.max(0, inkLeftRef.current - inkCost);
+              inkLeftRef.current = newInk;
+              setInkLeft(newInk);
 
-            const updatedLine = [...prev, { x: locationX, y: locationY }];
+              const updatedLine = [...prev, { x: locationX, y: locationY }];
 
-            // INK FINISHED: Automatically complete the line & start the swarm!
-            if (newInk <= 0) {
-              setTimeout(() => {
-                activateSwarmImmediately(updatedLine);
-              }, 10);
-              return [];
+              // INK FINISHED: Automatically complete the line & start the swarm!
+              if (newInk <= 0) {
+                setTimeout(() => {
+                  activateSwarmImmediately(updatedLine);
+                }, 10);
+                return [];
+              }
+              return updatedLine;
             }
-            return updatedLine;
-          }
-          return prev;
-        });
-      },
-      onPanResponderRelease: () => {
-        if (gameStateRef.current !== 'DRAWING') return;
-        setCurrentLine((line) => {
-          if (line.length > 2) {
-            activateSwarmImmediately(line);
-          }
-          return [];
-        });
-      },
-    })
-  ).current;
+            return prev;
+          });
+        },
+        onPanResponderRelease: () => {
+          if (gameStateRef.current !== 'DRAWING') return;
+          setCurrentLine((line) => {
+            if (line.length > 2) {
+              activateSwarmImmediately(line);
+            }
+            return [];
+          });
+        },
+      }),
+    [activateSwarmImmediately]
+  );
 
   // 60 FPS Swarm, Dog Gravity & Rigid Line Physics Loop
   useEffect(() => {
@@ -563,9 +618,10 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate, isPaused = 
         for (const line of lines) {
           for (const pt of line) {
             if (
-              pt.x >= plat.x - 6 &&
-              pt.x <= plat.x + plat.width + 6 &&
-              Math.abs(pt.y - (plat.y - 2)) < 8
+              pt.x >= plat.x - 8 &&
+              pt.x <= plat.x + plat.width + 8 &&
+              pt.y >= plat.y - 8 &&
+              pt.y <= plat.y + plat.height + 4
             ) {
               restsOnPlatform = true;
               break;
@@ -593,9 +649,9 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate, isPaused = 
             line.map((pt) => {
               let ny = pt.y + dy;
               if (
-                pt.x >= plat.x - 6 &&
-                pt.x <= plat.x + plat.width + 6 &&
-                pt.y <= plat.y &&
+                pt.x >= plat.x - 8 &&
+                pt.x <= plat.x + plat.width + 8 &&
+                pt.y <= plat.y + 8 &&
                 ny >= plat.y - 2
               ) {
                 ny = plat.y - 2;
@@ -617,31 +673,26 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate, isPaused = 
       currentDog.vx *= 0.88;
       currentDog.vy *= 0.96;
 
-      // Transfer line motion to dog so the dog moves smoothly along with the line
-      if (Math.abs(lVel.vx) > 0.02) {
-        currentDog.x += lVel.vx;
-      }
-      if (Math.abs(lVel.vy) > 0.02) {
-        currentDog.y += lVel.vy;
-      }
+      // Platform reference
+      const plat = platformRef.current;
+      const checkPlatformLanding = () => {
+        const isOverPlatform =
+          currentDog.x >= plat.x - 6 &&
+          currentDog.x <= plat.x + plat.width + 6;
+        if (
+          isOverPlatform &&
+          currentDog.y >= plat.y - DOG_RADIUS &&
+          currentDog.y <= plat.y + plat.height + 8
+        ) {
+          currentDog.y = plat.y - DOG_RADIUS;
+          if (currentDog.vy > 0) currentDog.vy = 0;
+        }
+      };
 
       currentDog.x += currentDog.vx;
       currentDog.y += currentDog.vy;
 
-      // Platform Landing
-      const plat = platformRef.current;
-      const isOverPlatform =
-        currentDog.x >= plat.x - 6 &&
-        currentDog.x <= plat.x + plat.width + 6;
-
-      if (
-        isOverPlatform &&
-        currentDog.y <= plat.y - DOG_RADIUS + 6 &&
-        currentDog.y >= plat.y - DOG_RADIUS - 6
-      ) {
-        currentDog.y = plat.y - DOG_RADIUS;
-        if (currentDog.vy > 0) currentDog.vy = 0;
-      }
+      checkPlatformLanding();
 
       // MULTI-PASS RIGID BARRIER CONTAINMENT:
       // The dog is completely trapped inside the drawn circle/shield.
@@ -687,6 +738,9 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate, isPaused = 
         }
       }
 
+      // Re-enforce platform landing after line repulsion
+      checkPlatformLanding();
+
       // Acid Water Hazard
       if (currentDog.y >= acidY - DOG_RADIUS) {
         currentDog.y = acidY - DOG_RADIUS;
@@ -712,42 +766,7 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate, isPaused = 
       active = false;
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     };
-  }, [gameState, acidY, level]);
-
-  const handleWin = () => {
-    if (gameStateRef.current !== 'SWARMING') return;
-    setGameState('OVER');
-    gameStateRef.current = 'OVER';
-    if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
-    if (timerRef.current) clearInterval(timerRef.current);
-
-    if (juiceRef.current) {
-      juiceRef.current.celebrate('DOGE RESCUED!', '+300 PTS // SAFE DEFENSE', '#FFD166');
-    }
-    const winPoints = 300 + Math.floor(inkLeftRef.current * 2);
-    const nextScore = score + winPoints;
-    setScore(nextScore);
-    onScoreUpdate?.(nextScore);
-    AsyncStorage.setItem(STORAGE_BEST_KEY, String(nextScore)).catch(() => {});
-
-    setModalMessage('SURVIVED THE SWARM! EXCELLENT DEFENSE!');
-    setModalType('win');
-    setModalVisible(true);
-  };
-
-  const handleLose = (msg = 'LEVEL FAILED!') => {
-    if (gameStateRef.current !== 'SWARMING') return;
-    setGameState('OVER');
-    gameStateRef.current = 'OVER';
-    if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
-    if (timerRef.current) clearInterval(timerRef.current);
-
-    playGameOverSound();
-    triggerGameOverHaptic();
-    setModalMessage(msg);
-    setModalType('gameover');
-    setModalVisible(true);
-  };
+  }, [gameState, acidY, level, handleLose, arenaWidth]);
 
   const handleNextLevel = () => {
     setLevel((lvl) => {

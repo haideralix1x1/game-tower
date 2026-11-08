@@ -5,6 +5,7 @@ import {
   Pressable,
   StyleSheet,
   Platform,
+  ScrollView,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Svg, {
@@ -42,8 +43,18 @@ const monoFont = Platform.select({
 // Grid Dimensions: Exactly 24 Boxes (4 columns x 6 rows)
 const GRID_COLS = 4;
 const GRID_ROWS = 6;
-const TILE_SIZE = 50;
+const TILE_SIZE = 48;
 const TILE_GAP = 3;
+
+const TILE_POOL = [
+  'STRAIGHT_H',
+  'STRAIGHT_V',
+  'CURVE_TR',
+  'CURVE_RB',
+  'CURVE_BL',
+  'CURVE_LT',
+  'CROSS',
+];
 
 /**
  * Tile Path Definitions matching the Forest / Cyber Tileset reference image
@@ -88,9 +99,45 @@ const TILE_DEFS = {
 };
 
 /**
+ * Helper to build rich tray inventories containing the required path tiles
+ * plus ample filler tiles so player can fill all 24 grid boxes!
+ */
+const makeTray = (primaryList, count = 12, prefix = 't') => {
+  const result = primaryList.map((type, idx) => ({ id: `${prefix}_${idx}`, type }));
+  const fillers = ['STRAIGHT_H', 'STRAIGHT_V', 'CURVE_TR', 'CURVE_RB', 'CURVE_BL', 'CURVE_LT', 'CROSS'];
+  let fIdx = 0;
+  while (result.length < count) {
+    result.push({
+      id: `${prefix}_fill_${result.length}`,
+      type: fillers[fIdx % fillers.length],
+    });
+    fIdx++;
+  }
+  return result;
+};
+
+/**
+ * Ensures dock never runs dry by replenishing when low
+ */
+const getRefilledTray = (currentTray, prefix) => {
+  if (currentTray.length >= 4) return currentTray;
+  const needed = 4 - currentTray.length;
+  const newTiles = [];
+  for (let i = 0; i < needed; i++) {
+    const randomType = TILE_POOL[Math.floor(Math.random() * TILE_POOL.length)];
+    newTiles.push({
+      id: `${prefix}_gen_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      type: randomType,
+    });
+  }
+  return [...currentTray, ...newTiles];
+};
+
+/**
  * 8 Curated Escalating Levels of 24-box Puzzles
- * With pre-placed scenery (Pond, Trees, Rocks), Start, and Exit.
- * Left and Right trays hold available tiles to place!
+ * Entry and Exit are positioned OUTSIDE the 4x6 grid:
+ * Entry is on the LEFT outside col 0, Exit is on the RIGHT outside col 3.
+ * Left and Right docks hold ample tiles to fill all 24 boxes!
  */
 const CURATED_LEVELS = [
   // Level 1: Direct Meadow Route (Row 1)
@@ -102,16 +149,8 @@ const CURATED_LEVELS = [
       { col: 1, row: 3, type: 'POND' },
       { col: 2, row: 4, type: 'TREES' },
     ],
-    leftTray: [
-      { id: 'lt_0', type: 'STRAIGHT_H' },
-      { id: 'lt_1', type: 'STRAIGHT_H' },
-      { id: 'lt_2', type: 'CURVE_RB' },
-    ],
-    rightTray: [
-      { id: 'rt_0', type: 'STRAIGHT_H' },
-      { id: 'rt_1', type: 'CURVE_BL' },
-      { id: 'rt_2', type: 'STRAIGHT_V' },
-    ],
+    leftTray: makeTray(['STRAIGHT_H', 'STRAIGHT_H', 'CURVE_RB', 'STRAIGHT_V', 'CROSS'], 12, 'lt1'),
+    rightTray: makeTray(['STRAIGHT_H', 'CURVE_BL', 'STRAIGHT_V', 'CURVE_TR', 'CROSS'], 12, 'rt1'),
   },
 
   // Level 2: Gentle Detour around Pond
@@ -124,16 +163,8 @@ const CURATED_LEVELS = [
       { col: 1, row: 1, type: 'POND' },
       { col: 2, row: 3, type: 'TREES' },
     ],
-    leftTray: [
-      { id: 'lt_0', type: 'CURVE_RB' },
-      { id: 'lt_1', type: 'STRAIGHT_V' },
-      { id: 'lt_2', type: 'CURVE_TR' },
-    ],
-    rightTray: [
-      { id: 'rt_0', type: 'STRAIGHT_H' },
-      { id: 'rt_1', type: 'STRAIGHT_H' },
-      { id: 'rt_2', type: 'CURVE_BL' },
-    ],
+    leftTray: makeTray(['CURVE_RB', 'STRAIGHT_V', 'CURVE_TR', 'STRAIGHT_H', 'CROSS'], 12, 'lt2'),
+    rightTray: makeTray(['STRAIGHT_H', 'STRAIGHT_H', 'CURVE_BL', 'STRAIGHT_V', 'CROSS'], 12, 'rt2'),
   },
 
   // Level 3: Serpentine Brook
@@ -146,18 +177,8 @@ const CURATED_LEVELS = [
       { col: 2, row: 2, type: 'TREES' },
       { col: 1, row: 3, type: 'ROCKS' },
     ],
-    leftTray: [
-      { id: 'lt_0', type: 'CURVE_RB' },
-      { id: 'lt_1', type: 'STRAIGHT_V' },
-      { id: 'lt_2', type: 'STRAIGHT_V' },
-      { id: 'lt_3', type: 'CURVE_TR' },
-    ],
-    rightTray: [
-      { id: 'rt_0', type: 'STRAIGHT_V' },
-      { id: 'rt_1', type: 'STRAIGHT_H' },
-      { id: 'rt_2', type: 'STRAIGHT_H' },
-      { id: 'rt_3', type: 'CURVE_BL' },
-    ],
+    leftTray: makeTray(['CURVE_RB', 'STRAIGHT_V', 'STRAIGHT_V', 'CURVE_TR', 'STRAIGHT_H'], 12, 'lt3'),
+    rightTray: makeTray(['STRAIGHT_V', 'STRAIGHT_H', 'STRAIGHT_H', 'CURVE_BL', 'CROSS'], 12, 'rt3'),
   },
 
   // Level 4: Twin Groves
@@ -170,42 +191,22 @@ const CURATED_LEVELS = [
       { col: 2, row: 2, type: 'TREES' },
       { col: 1, row: 4, type: 'POND' },
     ],
-    leftTray: [
-      { id: 'lt_0', type: 'CURVE_TR' },
-      { id: 'lt_1', type: 'STRAIGHT_V' },
-      { id: 'lt_2', type: 'STRAIGHT_V' },
-      { id: 'lt_3', type: 'CURVE_RB' },
-    ],
-    rightTray: [
-      { id: 'rt_0', type: 'STRAIGHT_V' },
-      { id: 'rt_1', type: 'STRAIGHT_H' },
-      { id: 'rt_2', type: 'STRAIGHT_H' },
-      { id: 'rt_3', type: 'CURVE_BL' },
-    ],
+    leftTray: makeTray(['CURVE_TR', 'STRAIGHT_V', 'STRAIGHT_V', 'CURVE_RB', 'STRAIGHT_H'], 12, 'lt4'),
+    rightTray: makeTray(['STRAIGHT_V', 'STRAIGHT_H', 'STRAIGHT_H', 'CURVE_BL', 'CROSS'], 12, 'rt4'),
   },
 
   // Level 5: Boulder Canyon
   {
     name: 'BOULDER CANYON',
-    start: { col: 1, row: 0, dir: 'bottom' },
-    exit: { col: 2, row: 5, dir: 'bottom' },
+    start: { col: 0, row: 1, dir: 'right' },
+    exit: { col: 3, row: 4, dir: 'right' },
     scenery: [
       { col: 1, row: 2, type: 'ROCKS' },
       { col: 2, row: 3, type: 'ROCKS' },
       { col: 0, row: 4, type: 'POND' },
     ],
-    leftTray: [
-      { id: 'lt_0', type: 'CURVE_RB' },
-      { id: 'lt_1', type: 'CURVE_BL' },
-      { id: 'lt_2', type: 'STRAIGHT_V' },
-      { id: 'lt_3', type: 'CURVE_TR' },
-    ],
-    rightTray: [
-      { id: 'rt_0', type: 'CURVE_BL' },
-      { id: 'rt_1', type: 'STRAIGHT_V' },
-      { id: 'rt_2', type: 'CURVE_LT' },
-      { id: 'rt_3', type: 'CURVE_RB' },
-    ],
+    leftTray: makeTray(['CURVE_RB', 'CURVE_BL', 'STRAIGHT_V', 'CURVE_TR', 'STRAIGHT_H'], 12, 'lt5'),
+    rightTray: makeTray(['CURVE_BL', 'STRAIGHT_V', 'CURVE_LT', 'CURVE_RB', 'CROSS'], 12, 'rt5'),
   },
 
   // Level 6: Emerald Crossroads
@@ -218,18 +219,8 @@ const CURATED_LEVELS = [
       { col: 2, row: 4, type: 'POND' },
       { col: 0, row: 5, type: 'ROCKS' },
     ],
-    leftTray: [
-      { id: 'lt_0', type: 'STRAIGHT_H' },
-      { id: 'lt_1', type: 'STRAIGHT_H' },
-      { id: 'lt_2', type: 'CURVE_BL' },
-      { id: 'lt_3', type: 'CURVE_TR' },
-    ],
-    rightTray: [
-      { id: 'rt_0', type: 'CROSS' },
-      { id: 'rt_1', type: 'STRAIGHT_V' },
-      { id: 'rt_2', type: 'CURVE_LT' },
-      { id: 'rt_3', type: 'CURVE_RB' },
-    ],
+    leftTray: makeTray(['STRAIGHT_H', 'STRAIGHT_H', 'CURVE_BL', 'CURVE_TR', 'CROSS'], 12, 'lt6'),
+    rightTray: makeTray(['CROSS', 'STRAIGHT_V', 'CURVE_LT', 'CURVE_RB', 'STRAIGHT_H'], 12, 'rt6'),
   },
 
   // Level 7: Enchanted Glade
@@ -242,18 +233,8 @@ const CURATED_LEVELS = [
       { col: 1, row: 3, type: 'TREES' },
       { col: 2, row: 3, type: 'ROCKS' },
     ],
-    leftTray: [
-      { id: 'lt_0', type: 'CURVE_RB' },
-      { id: 'lt_1', type: 'STRAIGHT_V' },
-      { id: 'lt_2', type: 'STRAIGHT_V' },
-      { id: 'lt_3', type: 'CURVE_TR' },
-    ],
-    rightTray: [
-      { id: 'rt_0', type: 'STRAIGHT_V' },
-      { id: 'rt_1', type: 'STRAIGHT_H' },
-      { id: 'rt_2', type: 'STRAIGHT_H' },
-      { id: 'rt_3', type: 'CURVE_BL' },
-    ],
+    leftTray: makeTray(['CURVE_RB', 'STRAIGHT_V', 'STRAIGHT_V', 'CURVE_TR', 'CROSS'], 12, 'lt7'),
+    rightTray: makeTray(['STRAIGHT_V', 'STRAIGHT_H', 'STRAIGHT_H', 'CURVE_BL', 'STRAIGHT_V'], 12, 'rt7'),
   },
 
   // Level 8: Apex Valley
@@ -266,18 +247,8 @@ const CURATED_LEVELS = [
       { col: 2, row: 2, type: 'POND' },
       { col: 1, row: 4, type: 'ROCKS' },
     ],
-    leftTray: [
-      { id: 'lt_0', type: 'CURVE_RB' },
-      { id: 'lt_1', type: 'STRAIGHT_V' },
-      { id: 'lt_2', type: 'STRAIGHT_V' },
-      { id: 'lt_3', type: 'CURVE_TR' },
-    ],
-    rightTray: [
-      { id: 'rt_0', type: 'STRAIGHT_V' },
-      { id: 'rt_1', type: 'STRAIGHT_V' },
-      { id: 'rt_2', type: 'STRAIGHT_H' },
-      { id: 'rt_3', type: 'STRAIGHT_H' },
-    ],
+    leftTray: makeTray(['CURVE_RB', 'STRAIGHT_V', 'STRAIGHT_V', 'CURVE_TR', 'STRAIGHT_H'], 12, 'lt8'),
+    rightTray: makeTray(['STRAIGHT_V', 'STRAIGHT_V', 'STRAIGHT_H', 'STRAIGHT_H', 'CURVE_BL'], 12, 'rt8'),
   },
 ];
 
@@ -285,51 +256,54 @@ const CURATED_LEVELS = [
  * Procedural Endless Level Generator (for Level 9+)
  */
 function generateProceduralLevel(lvl) {
+  const sRow = lvl % 5;
+  const eRow = (lvl + 2) % 6;
   return {
     name: `ENDLESS GLADE // LVL ${lvl}`,
-    start: { col: 0, row: (lvl % 4), dir: 'right' },
-    exit: { col: 3, row: 5 - (lvl % 4), dir: 'right' },
+    start: { col: 0, row: sRow, dir: 'right' },
+    exit: { col: 3, row: eRow, dir: 'right' },
     scenery: [
       { col: 1, row: 2, type: 'POND' },
       { col: 2, row: 3, type: 'TREES' },
     ],
-    leftTray: [
-      { id: 'lt_0', type: 'CURVE_RB' },
-      { id: 'lt_1', type: 'STRAIGHT_H' },
-      { id: 'lt_2', type: 'CURVE_BL' },
-      { id: 'lt_3', type: 'CURVE_TR' },
-    ],
-    rightTray: [
-      { id: 'rt_0', type: 'STRAIGHT_V' },
-      { id: 'rt_1', type: 'CURVE_LT' },
-      { id: 'rt_2', type: 'STRAIGHT_H' },
-      { id: 'rt_3', type: 'CURVE_RB' },
-    ],
+    leftTray: makeTray(['CURVE_RB', 'STRAIGHT_H', 'CURVE_BL', 'CURVE_TR'], 12, `p_lt_${lvl}`),
+    rightTray: makeTray(['STRAIGHT_V', 'CURVE_LT', 'STRAIGHT_H', 'CURVE_RB'], 12, `p_rt_${lvl}`),
   };
 }
 
 /**
  * Intelligent Pathfinding Validator:
- * Traces continuous connected path from Start to Exit,
- * and detects where the next tile is needed for live hints!
+ * Traces continuous connected path from External Start (outside col 0)
+ * to External Exit (outside col 3), checking port connectivity.
  */
 function validatePath(grid, start, exit) {
+  const OPPOSITE_PORT = {
+    right: 'left',
+    left: 'right',
+    bottom: 'top',
+    top: 'bottom',
+  };
+
   const startKey = `${start.col}_${start.row}`;
   const startTile = grid[startKey];
+  const requiredEntryPort = OPPOSITE_PORT[start.dir] || 'left';
+
+  // Entry grid cell has no tile placed yet
   if (!startTile) {
     return {
       isValid: false,
-      steps: [{ col: start.col, row: start.row }],
+      steps: [],
       nextNeeded: { col: start.col, row: start.row },
     };
   }
 
   const startDef = TILE_DEFS[startTile];
-  if (!startDef) {
+  if (!startDef || !startDef.ports[requiredEntryPort]) {
+    // Placed tile doesn't connect to entrance
     return {
       isValid: false,
-      steps: [{ col: start.col, row: start.row }],
-      nextNeeded: null,
+      steps: [],
+      nextNeeded: { col: start.col, row: start.row },
     };
   }
 
@@ -339,7 +313,9 @@ function validatePath(grid, start, exit) {
     nextNeeded: null,
   };
 
-  const portDirs = Object.keys(startDef.ports).filter((p) => startDef.ports[p]);
+  const portDirs = Object.keys(startDef.ports).filter(
+    (p) => p !== requiredEntryPort && startDef.ports[p]
+  );
 
   for (const outDir of portDirs) {
     let curCol = start.col;
@@ -350,17 +326,20 @@ function validatePath(grid, start, exit) {
     let nextNeeded = null;
     let reached = false;
 
+    // Check if start tile itself connects directly to exit
+    if (
+      curCol === exit.col &&
+      curRow === exit.row &&
+      startDef.ports[exit.dir || 'right']
+    ) {
+      return { isValid: true, steps, nextNeeded: null };
+    }
+
     for (let s = 0; s < 24; s++) {
       const nextCol = curCol + (inDir === 'right' ? 1 : inDir === 'left' ? -1 : 0);
       const nextRow = curRow + (inDir === 'bottom' ? 1 : inDir === 'top' ? -1 : 0);
 
       if (nextCol < 0 || nextCol >= GRID_COLS || nextRow < 0 || nextRow >= GRID_ROWS) break;
-
-      if (nextCol === exit.col && nextRow === exit.row) {
-        steps.push({ col: nextCol, row: nextRow });
-        reached = true;
-        break;
-      }
 
       const nextKey = `${nextCol}_${nextRow}`;
       if (visited.has(nextKey)) break;
@@ -372,11 +351,18 @@ function validatePath(grid, start, exit) {
       }
 
       const nDef = TILE_DEFS[nextTile];
-      const reqPort = inDir === 'right' ? 'left' : inDir === 'left' ? 'right' : inDir === 'bottom' ? 'top' : 'bottom';
+      const reqPort = OPPOSITE_PORT[inDir];
       if (!nDef.ports[reqPort]) break;
 
       steps.push({ col: nextCol, row: nextRow });
       visited.add(nextKey);
+
+      // Check if this step is the exit cell AND it has an open port exiting to the outside!
+      if (nextCol === exit.col && nextRow === exit.row && nDef.ports[exit.dir || 'right']) {
+        reached = true;
+        break;
+      }
+
       const exits = Object.keys(nDef.ports).filter((p) => p !== reqPort && nDef.ports[p]);
       if (exits.length === 0) break;
       curCol = nextCol;
@@ -569,11 +555,11 @@ export default function CyberPathGame({
   // Selected tile from trays: { id, type, source: 'left' | 'right' | 'grid', col?: number, row?: number }
   const [selectedTile, setSelectedTile] = useState(null);
 
-  // Walking hero state: { isWalking: boolean, stepIdx: number, playerPos: { x, y } }
+  // Walking hero state: { isWalking: boolean, stepIdx: number, col: number, row: number }
   const [walkerState, setWalkerState] = useState({
     isWalking: false,
     stepIdx: 0,
-    col: levelConfig.start.col,
+    col: -1,
     row: levelConfig.start.row,
   });
 
@@ -601,7 +587,7 @@ export default function CyberPathGame({
     setWalkerState({
       isWalking: false,
       stepIdx: 0,
-      col: cfg.start.col,
+      col: -1,
       row: cfg.start.row,
     });
     setVictoryModal(false);
@@ -616,10 +602,20 @@ export default function CyberPathGame({
     return map;
   }, [levelConfig.scenery]);
 
+  // Full Grid check: all 24 boxes must be filled (tiles + scenery) to escape!
+  const totalFilled = useMemo(() => {
+    return Object.keys(gridTiles).length + Object.keys(sceneryMap).length;
+  }, [gridTiles, sceneryMap]);
+
+  const isGridFull = totalFilled >= GRID_COLS * GRID_ROWS;
+
   // Validate path on grid changes
   const pathResult = useMemo(() => {
     return validatePath(gridTiles, levelConfig.start, levelConfig.exit);
   }, [gridTiles, levelConfig.start, levelConfig.exit]);
+
+  // Ready to escape condition: route valid AND full 24-box grid filled!
+  const canEscape = pathResult.isValid && isGridFull;
 
   // Handle Tray Tile Selection
   const handleSelectTrayTile = (tile, source) => {
@@ -658,11 +654,15 @@ export default function CyberPathGame({
       nextGrid[key] = selectedTile.type;
       setGridTiles(nextGrid);
 
-      // Remove tile from source tray
+      // Remove tile from source tray and auto-refill if running low
       if (selectedTile.source === 'left') {
-        setLeftTray((prev) => prev.filter((t) => t.id !== selectedTile.id));
+        setLeftTray((prev) =>
+          getRefilledTray(prev.filter((t) => t.id !== selectedTile.id), 'lt')
+        );
       } else if (selectedTile.source === 'right') {
-        setRightTray((prev) => prev.filter((t) => t.id !== selectedTile.id));
+        setRightTray((prev) =>
+          getRefilledTray(prev.filter((t) => t.id !== selectedTile.id), 'rt')
+        );
       }
 
       // If there was already a tile on this box, return it to the left tray
@@ -677,12 +677,17 @@ export default function CyberPathGame({
       playTapSound();
       triggerMediumHaptic();
 
-      // Check if newly placed tile completed the entire route!
+      // Check if newly placed tile completed the entire route AND filled the full grid!
       const nextVal = validatePath(nextGrid, levelConfig.start, levelConfig.exit);
-      if (nextVal.isValid) {
+      const nextFilled = Object.keys(nextGrid).length + Object.keys(sceneryMap).length;
+      if (nextVal.isValid && nextFilled >= GRID_COLS * GRID_ROWS) {
         triggerPerfectHaptic();
         playPerfectSound();
-        juiceRef.current?.celebrate('⚡ PATH COMPLETE!', 'Ready to walk to exit!', COLORS.matrixMint);
+        juiceRef.current?.celebrate('⚡ ESCAPE READY!', 'All 24 boxes filled & route connected!', COLORS.matrixMint);
+      } else if (nextVal.isValid) {
+        triggerLightHaptic();
+        playTapSound();
+        juiceRef.current?.popup('ROUTE READY', `Fill ${24 - nextFilled} more boxes to escape!`, '#FFE600');
       }
     } else {
       // No tile selected: if tapping an existing placed tile, pick it back up to Left Tray
@@ -705,7 +710,7 @@ export default function CyberPathGame({
 
   // Start walking along the completed path!
   const handleWalkPath = useCallback(() => {
-    if (!pathResult.isValid || walkerState.isWalking || isPaused) return;
+    if (!canEscape || walkerState.isWalking || isPaused) return;
 
     triggerPerfectHaptic();
     playPerfectSound();
@@ -713,21 +718,26 @@ export default function CyberPathGame({
     setWalkerState({
       isWalking: true,
       stepIdx: 0,
-      col: pathResult.steps[0].col,
-      row: pathResult.steps[0].row,
+      col: -1,
+      row: levelConfig.start.row,
     });
-  }, [pathResult, walkerState.isWalking, isPaused]);
+  }, [canEscape, walkerState.isWalking, isPaused, levelConfig.start.row]);
 
-  // Walking Loop: steps tile by tile along the validated route
+  // Walking Loop: steps tile by tile along the validated route to the exit
   useEffect(() => {
     if (!walkerState.isWalking) return;
+
+    const fullRoute = [
+      { col: -1, row: levelConfig.start.row },
+      ...pathResult.steps,
+      { col: GRID_COLS, row: levelConfig.exit.row },
+    ];
 
     const timer = setTimeout(() => {
       const nextStep = walkerState.stepIdx + 1;
 
-      if (nextStep < pathResult.steps.length) {
-        // Step to next tile
-        const nextPos = pathResult.steps[nextStep];
+      if (nextStep < fullRoute.length) {
+        const nextPos = fullRoute[nextStep];
         setWalkerState({
           isWalking: true,
           stepIdx: nextStep,
@@ -738,8 +748,13 @@ export default function CyberPathGame({
         playSnapTickSound();
         triggerLightHaptic();
       } else {
-        // Reached exit! VICTORY!
-        setWalkerState((w) => ({ ...w, isWalking: false }));
+        // Reached exit outside grid! VICTORY!
+        setWalkerState({
+          isWalking: false,
+          stepIdx: 0,
+          col: GRID_COLS,
+          row: levelConfig.exit.row,
+        });
         triggerPerfectHaptic();
         playPerfectSound();
 
@@ -758,12 +773,12 @@ export default function CyberPathGame({
 
         setTimeout(() => {
           setVictoryModal(true);
-        }, 800);
+        }, 700);
       }
-    }, 250);
+    }, 240);
 
     return () => clearTimeout(timer);
-  }, [walkerState, pathResult.steps, level, highScore, onScoreUpdate]);
+  }, [walkerState, pathResult.steps, levelConfig, level, highScore, onScoreUpdate]);
 
   // Next level handler
   const handleNextLevel = () => {
@@ -802,14 +817,36 @@ export default function CyberPathGame({
           </View>
 
           <View style={styles.statusBox}>
-            <Text style={styles.statusDim}>STATUS</Text>
+            <Text style={styles.statusDim}>GRID FILLED</Text>
             <Text
               style={[
                 styles.statusVal,
-                { color: pathResult.isValid ? COLORS.matrixMint : '#FF0055' },
+                { color: isGridFull ? COLORS.matrixMint : '#FFE600' },
               ]}
             >
-              {pathResult.isValid ? 'ROUTE READY! ➔' : 'INCOMPLETE ⚠️'}
+              {totalFilled}/24 BOXES
+            </Text>
+          </View>
+
+          <View style={styles.statusBox}>
+            <Text style={styles.statusDim}>ESCAPE ROUTE</Text>
+            <Text
+              style={[
+                styles.statusVal,
+                {
+                  color: canEscape
+                    ? COLORS.matrixMint
+                    : pathResult.isValid
+                      ? '#FFE600'
+                      : '#FF0055',
+                },
+              ]}
+            >
+              {canEscape
+                ? 'READY ➔'
+                : pathResult.isValid
+                  ? 'NEED FULL GRID'
+                  : 'INCOMPLETE ⚠️'}
             </Text>
           </View>
         </View>
@@ -818,14 +855,16 @@ export default function CyberPathGame({
         <View style={styles.guideCard}>
           <Text style={styles.guideText}>
             {walkerState.isWalking
-              ? '🚶 Explorer walking along the path to the exit...'
-              : pathResult.isValid
-                ? '🎉 PATH COMPLETE! Tap "WALK TO EXIT" below to advance!'
-                : selectedTile
-                  ? `🎯 Step 2: Tap an empty box (highlighted) to place ${selectedTile.name || selectedTile.type}`
-                  : pathResult.steps.length > 1
-                    ? `⚡ Step 3: Connect next tile towards EXIT 🏆 (${pathResult.steps.length} tiles linked)`
-                    : '👆 Step 1: Tap a tile from LEFT or RIGHT dock to select it'}
+              ? '🚶 Escaping along the conduit trail to the exit trophy...'
+              : canEscape
+                ? '🎉 FULL GRID FILLED & ROUTE CONNECTED! Tap "WALK TO ESCAPE"!'
+                : pathResult.isValid
+                  ? `⚠️ Route connected! Fill all remaining boxes to escape! (${totalFilled}/24 filled)`
+                  : selectedTile
+                    ? `🎯 Step 2: Tap an empty box (highlighted) to place ${selectedTile.name || selectedTile.type}`
+                    : pathResult.steps.length > 0
+                      ? `⚡ Step 3: Link path to EXIT 🏆 (${pathResult.steps.length} linked, ${totalFilled}/24 filled)`
+                      : '👆 Step 1: Pick a tile from LEFT or RIGHT tray to begin'}
           </Text>
         </View>
 
@@ -833,8 +872,12 @@ export default function CyberPathGame({
         <View style={styles.arenaRow}>
           {/* Left Tile Selection Dock */}
           <View style={styles.sideDock}>
-            <Text style={styles.dockTitle}>LEFT TILES</Text>
-            <View style={styles.dockSlots}>
+            <Text style={styles.dockTitle}>LEFT ({leftTray.length})</Text>
+            <ScrollView
+              style={styles.dockScroll}
+              contentContainerStyle={styles.dockSlots}
+              showsVerticalScrollIndicator={false}
+            >
               {leftTray.map((tile) => {
                 const isSelected = selectedTile?.id === tile.id;
                 return (
@@ -846,7 +889,7 @@ export default function CyberPathGame({
                     ]}
                     onPress={() => handleSelectTrayTile(tile, 'left')}
                   >
-                    <TileGraphic type={tile.type} size={44} />
+                    <TileGraphic type={tile.type} size={42} />
                     {isSelected && (
                       <View style={styles.pickedBadge}>
                         <Text style={styles.pickedText}>PICKED</Text>
@@ -855,102 +898,123 @@ export default function CyberPathGame({
                   </Pressable>
                 );
               })}
-            </View>
+            </ScrollView>
           </View>
 
-          {/* Center 24-Box Grid (4 Columns x 6 Rows = 24 Boxes) */}
-          <View style={styles.gridBoard}>
-            {Array.from({ length: GRID_ROWS }).map((_, r) => (
-              <View key={`row_${r}`} style={styles.gridRow}>
-                {Array.from({ length: GRID_COLS }).map((__, c) => {
-                  const key = `${c}_${r}`;
-                  const placedTileType = gridTiles[key];
-                  const sceneryType = sceneryMap[key];
-                  const isStart = levelConfig.start.col === c && levelConfig.start.row === r;
-                  const isExit = levelConfig.exit.col === c && levelConfig.exit.row === r;
-                  const isPlayerHere = walkerState.col === c && walkerState.row === r;
-                  const isConnected = pathResult.steps.some((s) => s.col === c && s.row === r);
-                  const isNextNeeded =
-                    !pathResult.isValid &&
-                    pathResult.nextNeeded &&
-                    pathResult.nextNeeded.col === c &&
-                    pathResult.nextNeeded.row === r;
+          {/* Center 24-Box Grid with External Start and Exit Markers */}
+          <View style={styles.gridBoardWrapper}>
+            {/* EXTERNAL START ARCH (OUTSIDE GRID ON LEFT) */}
+            <View
+              style={[
+                styles.externalStartBadge,
+                { top: levelConfig.start.row * (TILE_SIZE + TILE_GAP) + 8 },
+              ]}
+            >
+              <Text style={styles.externalMarkerIcon}>🚩</Text>
+              <Text style={styles.externalMarkerArrow}>➔</Text>
+              {walkerState.isWalking && walkerState.col === -1 && (
+                <View style={styles.walkerExternalOverlay}>
+                  <Text style={{ fontSize: 16 }}>🚶</Text>
+                </View>
+              )}
+            </View>
 
-                  return (
-                    <Pressable
-                      key={key}
-                      style={[
-                        styles.gridBox,
-                        isStart && styles.gridBoxStart,
-                        isExit && styles.gridBoxExit,
-                        isConnected && styles.gridBoxConnected,
-                        isNextNeeded && styles.gridBoxNextNeeded,
-                      ]}
-                      onPress={() => handleGridBoxPress(c, r)}
-                    >
-                      {/* Empty Box Recess Outline */}
-                      <View style={styles.boxRecess} />
+            {/* Center 24-Box Grid (4 Columns x 6 Rows = 24 Boxes) */}
+            <View style={styles.gridBoard}>
+              {Array.from({ length: GRID_ROWS }).map((_, r) => (
+                <View key={`row_${r}`} style={styles.gridRow}>
+                  {Array.from({ length: GRID_COLS }).map((__, c) => {
+                    const key = `${c}_${r}`;
+                    const placedTileType = gridTiles[key];
+                    const sceneryType = sceneryMap[key];
+                    const isPlayerHere = walkerState.col === c && walkerState.row === r;
+                    const isConnected = pathResult.steps.some((s) => s.col === c && s.row === r);
+                    const isNextNeeded =
+                      !pathResult.isValid &&
+                      pathResult.nextNeeded &&
+                      pathResult.nextNeeded.col === c &&
+                      pathResult.nextNeeded.row === r;
 
-                      {/* Scenery Tile (Pond, Trees, Rocks) */}
-                      {Boolean(sceneryType) && (
-                        <TileGraphic type={sceneryType} size={TILE_SIZE} />
-                      )}
+                    return (
+                      <Pressable
+                        key={key}
+                        style={[
+                          styles.gridBox,
+                          isConnected && styles.gridBoxConnected,
+                          isNextNeeded && styles.gridBoxNextNeeded,
+                        ]}
+                        onPress={() => handleGridBoxPress(c, r)}
+                      >
+                        {/* Empty Box Recess Outline */}
+                        <View style={styles.boxRecess} />
 
-                      {/* Placed Path Tile */}
-                      {Boolean(placedTileType) && (
-                        <TileGraphic
-                          type={placedTileType}
-                          size={TILE_SIZE}
-                          isConnected={isConnected}
-                        />
-                      )}
+                        {/* Scenery Tile (Pond, Trees, Rocks) */}
+                        {Boolean(sceneryType) && (
+                          <TileGraphic type={sceneryType} size={TILE_SIZE} />
+                        )}
 
-                      {/* Next Box Hint Badge */}
-                      {isNextNeeded && !placedTileType && !sceneryType && (
-                        <View style={styles.nextHintBadge}>
-                          <Text style={styles.nextHintText}>
-                            {isStart ? 'START 🚩' : 'NEXT ➔'}
-                          </Text>
-                        </View>
-                      )}
+                        {/* Placed Path Tile */}
+                        {Boolean(placedTileType) && (
+                          <TileGraphic
+                            type={placedTileType}
+                            size={TILE_SIZE}
+                            isConnected={isConnected}
+                          />
+                        )}
 
-                      {/* Start Arch & Player Indicator */}
-                      {isStart && !placedTileType && (
-                        <View style={styles.markerBadge}>
-                          <Text style={styles.markerIcon}>🚩</Text>
-                          <Text style={styles.markerText}>START</Text>
-                        </View>
-                      )}
+                        {/* Next Box Hint Badge */}
+                        {isNextNeeded && !placedTileType && !sceneryType && (
+                          <View style={styles.nextHintBadge}>
+                            <Text style={styles.nextHintText}>
+                              {c === levelConfig.start.col && r === levelConfig.start.row
+                                ? 'ENTER ➔'
+                                : 'NEXT ➔'}
+                            </Text>
+                          </View>
+                        )}
 
-                      {/* Exit Golden Chest Indicator */}
-                      {isExit && (
-                        <View style={styles.exitBadge}>
-                          <Text style={styles.exitIcon}>🏆</Text>
-                          <Text style={styles.exitText}>EXIT</Text>
-                        </View>
-                      )}
+                        {/* Walking Player Character Silhouette */}
+                        {isPlayerHere && (
+                          <View style={styles.playerSprite}>
+                            <Svg width={28} height={28} viewBox="0 0 28 28">
+                              <Circle cx={14} cy={14} r={12} fill="#FFE600" stroke="#FFFFFF" strokeWidth={2} />
+                              <Circle cx={14} cy={11} r={4.5} fill="#050814" />
+                              <Path d="M 9 19 Q 14 15 19 19" stroke="#050814" strokeWidth={3} fill="none" strokeLinecap="round" />
+                            </Svg>
+                          </View>
+                        )}
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              ))}
+            </View>
 
-                      {/* Walking Player Character Silhouette */}
-                      {isPlayerHere && (
-                        <View style={styles.playerSprite}>
-                          <Svg width={28} height={28} viewBox="0 0 28 28">
-                            <Circle cx={14} cy={14} r={12} fill="#FFE600" stroke="#FFFFFF" strokeWidth={2} />
-                            <Circle cx={14} cy={11} r={4.5} fill="#050814" />
-                            <Path d="M 9 19 Q 14 15 19 19" stroke="#050814" strokeWidth={3} fill="none" strokeLinecap="round" />
-                          </Svg>
-                        </View>
-                      )}
-                    </Pressable>
-                  );
-                })}
-              </View>
-            ))}
+            {/* EXTERNAL EXIT ARCH (OUTSIDE GRID ON RIGHT) */}
+            <View
+              style={[
+                styles.externalExitBadge,
+                { top: levelConfig.exit.row * (TILE_SIZE + TILE_GAP) + 8 },
+              ]}
+            >
+              <Text style={styles.externalMarkerArrow}>➔</Text>
+              <Text style={styles.externalMarkerIcon}>🏆</Text>
+              {walkerState.isWalking && walkerState.col === GRID_COLS && (
+                <View style={styles.walkerExternalOverlay}>
+                  <Text style={{ fontSize: 16 }}>🚶</Text>
+                </View>
+              )}
+            </View>
           </View>
 
           {/* Right Tile Selection Dock */}
           <View style={styles.sideDock}>
-            <Text style={styles.dockTitle}>RIGHT TILES</Text>
-            <View style={styles.dockSlots}>
+            <Text style={styles.dockTitle}>RIGHT ({rightTray.length})</Text>
+            <ScrollView
+              style={styles.dockScroll}
+              contentContainerStyle={styles.dockSlots}
+              showsVerticalScrollIndicator={false}
+            >
               {rightTray.map((tile) => {
                 const isSelected = selectedTile?.id === tile.id;
                 return (
@@ -962,7 +1026,7 @@ export default function CyberPathGame({
                     ]}
                     onPress={() => handleSelectTrayTile(tile, 'right')}
                   >
-                    <TileGraphic type={tile.type} size={44} />
+                    <TileGraphic type={tile.type} size={42} />
                     {isSelected && (
                       <View style={styles.pickedBadge}>
                         <Text style={styles.pickedText}>PICKED</Text>
@@ -971,7 +1035,7 @@ export default function CyberPathGame({
                   </Pressable>
                 );
               })}
-            </View>
+            </ScrollView>
           </View>
         </View>
 
@@ -980,14 +1044,18 @@ export default function CyberPathGame({
           <Pressable
             style={[
               styles.walkBtn,
-              !pathResult.isValid && styles.btnDisabled,
-              pathResult.isValid && styles.walkBtnReady,
+              !canEscape && styles.btnDisabled,
+              canEscape && styles.walkBtnReady,
             ]}
             onPress={handleWalkPath}
-            disabled={!pathResult.isValid || walkerState.isWalking}
+            disabled={!canEscape || walkerState.isWalking}
           >
             <Text style={styles.walkBtnText}>
-              {pathResult.isValid ? '▶ WALK TO EXIT! (READY)' : 'CONNECT TILES TO EXIT'}
+              {canEscape
+                ? '🚶 WALK TO ESCAPE ➔'
+                : pathResult.isValid
+                  ? `FILL ALL BOXES (${totalFilled}/24)`
+                  : 'CONNECT TILES TO EXIT'}
             </Text>
           </Pressable>
 
@@ -1002,8 +1070,8 @@ export default function CyberPathGame({
       <GameResultModal
         visible={victoryModal}
         type="VICTORY"
-        title="PATH COMPLETED!"
-        subtitle="Explorer walked through the 24-box map and reached the exit!"
+        title="ESCAPED THE GRID!"
+        subtitle="All 24 boxes powered and full route escaped successfully!"
         score={score}
         bestScore={highScore}
         accentColor="#00F5FF"
@@ -1071,19 +1139,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 6,
+    paddingHorizontal: 4,
     paddingVertical: 6,
-    gap: 6,
+    gap: 34,
   },
   sideDock: {
-    width: 52,
+    width: 50,
+    height: 324,
     alignItems: 'center',
     backgroundColor: 'rgba(10, 14, 28, 0.92)',
     borderRadius: 12,
     borderWidth: 1.2,
     borderColor: 'rgba(0, 245, 255, 0.25)',
-    paddingVertical: 6,
+    paddingVertical: 4,
     paddingHorizontal: 2,
+  },
+  dockScroll: {
+    width: '100%',
   },
   dockTitle: {
     fontFamily: monoFont,
@@ -1096,11 +1168,12 @@ const styles = StyleSheet.create({
   dockSlots: {
     gap: 6,
     alignItems: 'center',
+    paddingVertical: 2,
   },
   dockCard: {
-    width: 46,
-    height: 46,
-    borderRadius: 10,
+    width: 44,
+    height: 44,
+    borderRadius: 8,
     backgroundColor: '#070A14',
     borderWidth: 1.5,
     borderColor: 'rgba(255, 255, 255, 0.15)',
@@ -1129,6 +1202,60 @@ const styles = StyleSheet.create({
     fontSize: 6,
     fontWeight: '900',
     color: '#05060D',
+  },
+  gridBoardWrapper: {
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  externalStartBadge: {
+    position: 'absolute',
+    left: -32,
+    width: 28,
+    height: 44,
+    borderRadius: 8,
+    backgroundColor: '#0A1E14',
+    borderWidth: 1.5,
+    borderColor: '#00FF9D',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 20,
+    shadowColor: '#00FF9D',
+    shadowOpacity: 0.7,
+    shadowRadius: 6,
+    elevation: 6,
+  },
+  externalExitBadge: {
+    position: 'absolute',
+    right: -32,
+    width: 28,
+    height: 44,
+    borderRadius: 8,
+    backgroundColor: '#1E1805',
+    borderWidth: 1.5,
+    borderColor: '#FFE600',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 20,
+    shadowColor: '#FFE600',
+    shadowOpacity: 0.7,
+    shadowRadius: 6,
+    elevation: 6,
+  },
+  externalMarkerIcon: {
+    fontSize: 14,
+  },
+  externalMarkerArrow: {
+    fontFamily: monoFont,
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#00F5FF',
+    marginTop: 1,
+  },
+  walkerExternalOverlay: {
+    position: 'absolute',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   gridBoard: {
     backgroundColor: '#070914',
