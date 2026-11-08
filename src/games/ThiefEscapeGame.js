@@ -241,6 +241,20 @@ export default function ThiefEscapeGame({
   const [diamondTaken, setDiamondTaken] = useState(false);
   const [petrolTaken, setPetrolTaken] = useState(!levelConfig.requiresPetrol);
 
+  // Getaway Car State: drives off screen once thief jumps inside!
+  const [carState, setCarState] = useState(() => ({
+    x: levelConfig.car.x,
+    isEscaping: false,
+    thiefInside: false,
+    jumpPhase: 0,
+    vx: 3,
+    escapeDir: levelConfig.car.x < 150 ? -1 : 1,
+  }));
+  const carStateRef = useRef(carState);
+  useEffect(() => {
+    carStateRef.current = carState;
+  }, [carState]);
+
   // Movement & Action Input Refs
   const inputDirRef = useRef(0); // -1 = left, 0 = idle, 1 = right
   const climbDirRef = useRef(0); // -1 = climb up, 0 = hold/stop, 1 = climb down
@@ -340,6 +354,17 @@ export default function ThiefEscapeGame({
       thrownStonesRef.current = [];
       setStonePickupTaken(false);
       stonePickupTakenRef.current = false;
+
+      const initialCar = {
+        x: cfg.car.x,
+        isEscaping: false,
+        thiefInside: false,
+        jumpPhase: 0,
+        vx: 3,
+        escapeDir: cfg.car.x < 150 ? -1 : 1,
+      };
+      setCarState(initialCar);
+      carStateRef.current = initialCar;
 
       inputDirRef.current = 0;
       climbDirRef.current = 0;
@@ -593,8 +618,8 @@ export default function ThiefEscapeGame({
       setThrownStones(nextStones);
 
       // 4. Update Vision Detection against Player
-      // Only detected if player is NOT hidden in a window and aligns with guard level
-      if (!curPlayer.isHiding) {
+      // Only detected if player is NOT hidden in a window, not escaping in car, and aligns with guard level
+      if (!curPlayer.isHiding && !carStateRef.current.isEscaping && !carStateRef.current.thiefInside) {
         const playerY = curPlayer.isClimbing && curPlayer.y != null ? curPlayer.y : getFloorY(curPlayer.floor);
 
         curGuards.forEach((g) => {
@@ -711,26 +736,65 @@ export default function ThiefEscapeGame({
         }
       }
 
-      // 10. Check Escape to Car on Ground Floor (Wide 55px Hitbox ensures level clears smoothly!)
+      // 10. Check Escape to Car on Ground Floor
       if (curPlayer.floor === 0 && !curPlayer.isClimbing && curPlayer.hasDiamond && curPlayer.hasPetrol) {
-        if (Math.abs(curPlayer.x - levelConfig.car.x) <= 55) {
+        if (!carStateRef.current.isEscaping && Math.abs(curPlayer.x - carStateRef.current.x) <= 40) {
+          inputDirRef.current = 0;
+          climbDirRef.current = 0;
+          carStateRef.current = {
+            ...carStateRef.current,
+            isEscaping: true,
+            thiefInside: false,
+            jumpPhase: 0.05,
+            vx: 3.5,
+            escapeDir: carStateRef.current.x < 150 ? -1 : 1,
+          };
+          setCarState({ ...carStateRef.current });
           triggerPerfectHaptic();
           playPerfectSound();
-          setVictoryModal(true);
-
-          const earned = 500 + level * 250;
-          setScore((s) => {
-            const nextScore = s + earned;
-            if (nextScore > highScore) {
-              setHighScore(nextScore);
-              AsyncStorage.setItem(STORAGE_KEY, String(nextScore)).catch(() => {});
-            }
-            onScoreUpdate?.(nextScore);
-            return nextScore;
-          });
-
-          juiceRef.current?.celebrate('🚗 GETAWAY SUCCESSFUL!', `Level ${level} Cleared! +${earned} PTS`, COLORS.matrixMint);
+          juiceRef.current?.popup('🚗 JUMPING INTO CAR!', 'Hop into getaway vehicle!', COLORS.matrixMint);
         }
+      }
+
+      // 11. Update Getaway Car Escape & Jump Sequence
+      if (carStateRef.current.isEscaping) {
+        const cState = { ...carStateRef.current };
+        if (!cState.thiefInside) {
+          // Thief hops in an arc directly into the car cabin
+          cState.jumpPhase = Math.min(1, cState.jumpPhase + 0.1);
+          if (cState.jumpPhase >= 1) {
+            cState.jumpPhase = 1;
+            cState.thiefInside = true;
+            playTapSound();
+            triggerMediumHaptic();
+            juiceRef.current?.popup('💨 TIRE SCREECH!', 'Escaping the building!', '#FFE600');
+          }
+        } else {
+          // Car accelerates and speeds off the screen
+          cState.vx = Math.min(18, cState.vx + 0.6);
+          cState.x += cState.escapeDir * cState.vx;
+
+          // Once car has completely driven off screen, show victory popup for next level!
+          if (cState.x < -90 || cState.x > ARENA_W + 90) {
+            cState.isEscaping = false;
+            setVictoryModal(true);
+
+            const earned = 500 + level * 250;
+            setScore((s) => {
+              const nextScore = s + earned;
+              if (nextScore > highScore) {
+                setHighScore(nextScore);
+                AsyncStorage.setItem(STORAGE_KEY, String(nextScore)).catch(() => {});
+              }
+              onScoreUpdate?.(nextScore);
+              return nextScore;
+            });
+
+            juiceRef.current?.celebrate('🚗 GETAWAY SUCCESSFUL!', `Level ${level} Cleared! +${earned} PTS`, COLORS.matrixMint);
+          }
+        }
+        carStateRef.current = cState;
+        setCarState(cState);
       }
 
       // Commit State updates
@@ -1053,13 +1117,13 @@ export default function ThiefEscapeGame({
                 );
               })}
 
-              {/* Ground Floor Getaway Car with Animated Escape Beacon */}
+              {/* Ground Floor Getaway Car with Animated Escape Beacon & Getaway Drive */}
               <G>
-                {/* Active Escape Zone indicator when diamond & fuel are ready */}
-                {player.hasDiamond && player.hasPetrol && (
+                {/* Active Escape Zone indicator when diamond & fuel are ready and not yet escaping */}
+                {player.hasDiamond && player.hasPetrol && !carState.isEscaping && (
                   <G>
                     <Rect
-                      x={levelConfig.car.x - 34}
+                      x={carState.x - 34}
                       y={getFloorY(0) - 24}
                       width={68}
                       height={26}
@@ -1070,7 +1134,7 @@ export default function ThiefEscapeGame({
                       strokeDasharray="6 4"
                     />
                     <Polygon
-                      points={`${levelConfig.car.x},${getFloorY(0) - 26} ${levelConfig.car.x - 7},${getFloorY(0) - 34} ${levelConfig.car.x + 7},${getFloorY(0) - 34}`}
+                      points={`${carState.x},${getFloorY(0) - 26} ${carState.x - 7},${getFloorY(0) - 34} ${carState.x + 7},${getFloorY(0) - 34}`}
                       fill={COLORS.matrixMint}
                     />
                   </G>
@@ -1079,18 +1143,50 @@ export default function ThiefEscapeGame({
                 {/* Warning beacon if diamond is ready but petrol still needed */}
                 {player.hasDiamond && !player.hasPetrol && (
                   <Polygon
-                    points={`${levelConfig.car.x},${getFloorY(0) - 24} ${levelConfig.car.x - 6},${getFloorY(0) - 32} ${levelConfig.car.x + 6},${getFloorY(0) - 32}`}
+                    points={`${carState.x},${getFloorY(0) - 24} ${carState.x - 6},${getFloorY(0) - 32} ${carState.x + 6},${getFloorY(0) - 32}`}
                     fill="#FFE600"
                   />
                 )}
 
-                <Rect x={levelConfig.car.x - 28} y={getFloorY(0) - 18} width={56} height={16} rx={5} fill="#141829" stroke={player.hasDiamond && player.hasPetrol ? COLORS.matrixMint : '#FF0055'} strokeWidth={1.8} />
-                <Circle cx={levelConfig.car.x - 18} cy={getFloorY(0) - 2} r={5} fill="#05060C" stroke={player.hasDiamond && player.hasPetrol ? COLORS.matrixMint : '#FF0055'} strokeWidth={1} />
-                <Circle cx={levelConfig.car.x + 18} cy={getFloorY(0) - 2} r={5} fill="#05060C" stroke={player.hasDiamond && player.hasPetrol ? COLORS.matrixMint : '#FF0055'} strokeWidth={1} />
+                {/* Headlight beam shining when car is escaping off screen */}
+                {carState.isEscaping && (
+                  <Polygon
+                    points={`${carState.x + carState.escapeDir * 28},${getFloorY(0) - 14} ${carState.x + carState.escapeDir * 95},${getFloorY(0) - 26} ${carState.x + carState.escapeDir * 95},${getFloorY(0) - 2}`}
+                    fill="rgba(255, 230, 0, 0.35)"
+                  />
+                )}
+
+                {/* Exhaust flames / smoke when driving away */}
+                {carState.isEscaping && carState.thiefInside && (
+                  <G>
+                    <Circle cx={carState.x - carState.escapeDir * 32} cy={getFloorY(0) - 10} r={5} fill="#FF0055" opacity={0.8} />
+                    <Circle cx={carState.x - carState.escapeDir * 42} cy={getFloorY(0) - 11} r={7} fill="#FFE600" opacity={0.6} />
+                    <Circle cx={carState.x - carState.escapeDir * 54} cy={getFloorY(0) - 12} r={9} fill="rgba(255,255,255,0.3)" opacity={0.4} />
+                  </G>
+                )}
+
+                {/* Car Chassis */}
+                <Rect x={carState.x - 28} y={getFloorY(0) - 18} width={56} height={16} rx={5} fill="#141829" stroke={player.hasDiamond && player.hasPetrol ? COLORS.matrixMint : '#FF0055'} strokeWidth={1.8} />
+                <Circle cx={carState.x - 18} cy={getFloorY(0) - 2} r={5} fill="#05060C" stroke={player.hasDiamond && player.hasPetrol ? COLORS.matrixMint : '#FF0055'} strokeWidth={1} />
+                <Circle cx={carState.x + 18} cy={getFloorY(0) - 2} r={5} fill="#05060C" stroke={player.hasDiamond && player.hasPetrol ? COLORS.matrixMint : '#FF0055'} strokeWidth={1} />
                 <Polygon
-                  points={`${levelConfig.car.x - 12},${getFloorY(0) - 18} ${levelConfig.car.x + 8},${getFloorY(0) - 18} ${levelConfig.car.x + 16},${getFloorY(0) - 8} ${levelConfig.car.x - 18},${getFloorY(0) - 8}`}
-                  fill="#00F5FF44"
+                  points={
+                    carState.escapeDir === -1
+                      ? `${carState.x + 12},${getFloorY(0) - 18} ${carState.x - 8},${getFloorY(0) - 18} ${carState.x - 16},${getFloorY(0) - 8} ${carState.x + 18},${getFloorY(0) - 8}`
+                      : `${carState.x - 12},${getFloorY(0) - 18} ${carState.x + 8},${getFloorY(0) - 18} ${carState.x + 16},${getFloorY(0) - 8} ${carState.x - 18},${getFloorY(0) - 8}`
+                  }
+                  fill={carState.thiefInside ? '#00F5FF88' : '#00F5FF44'}
                 />
+
+                {/* Thief Head visible through windshield once inside */}
+                {carState.thiefInside && (
+                  <Circle
+                    cx={carState.x + (carState.escapeDir === -1 ? -4 : 4)}
+                    cy={getFloorY(0) - 13}
+                    r={3.5}
+                    fill="#00F5FF"
+                  />
+                )}
               </G>
 
               {/* Fuel Canister (Petrol) on required levels */}
@@ -1189,18 +1285,25 @@ export default function ThiefEscapeGame({
                 </G>
               )}
 
-              {/* Player Stealth Thief Operative: Shown on catwalk ONLY when not hidden in window */}
-              {!player.isHiding && (
-                player.isClimbing ? (
+              {/* Player Stealth Thief Operative: Hidden when inside window or inside getaway car */}
+              {!player.isHiding && !carState.thiefInside && (() => {
+                const curThiefX = carState.isEscaping
+                  ? player.x + (carState.x - player.x) * carState.jumpPhase
+                  : player.x;
+                const curThiefY = carState.isEscaping
+                  ? activePlayerY - Math.sin(carState.jumpPhase * Math.PI) * 22
+                  : activePlayerY;
+
+                return player.isClimbing ? (
                   <G>
                     {/* Gripping Hands on Ladder Rails */}
-                    <Line x1={player.x - 11} y1={activePlayerY - 18} x2={player.x - 5} y2={activePlayerY - 14} stroke="#00F5FF" strokeWidth={2.2} />
-                    <Line x1={player.x + 5} y1={activePlayerY - 14} x2={player.x + 11} y2={activePlayerY - 18} stroke="#00F5FF" strokeWidth={2.2} />
+                    <Line x1={curThiefX - 11} y1={curThiefY - 18} x2={curThiefX - 5} y2={curThiefY - 14} stroke="#00F5FF" strokeWidth={2.2} />
+                    <Line x1={curThiefX + 5} y1={curThiefY - 14} x2={curThiefX + 11} y2={curThiefY - 18} stroke="#00F5FF" strokeWidth={2.2} />
 
                     {/* Body climbing back silhouette */}
                     <Rect
-                      x={player.x - 6}
-                      y={activePlayerY - 24}
+                      x={curThiefX - 6}
+                      y={curThiefY - 24}
                       width={12}
                       height={20}
                       rx={3}
@@ -1210,16 +1313,16 @@ export default function ThiefEscapeGame({
                     />
 
                     {/* Head */}
-                    <Circle cx={player.x} cy={activePlayerY - 26} r={5} fill="#00F5FF" />
+                    <Circle cx={curThiefX} cy={curThiefY - 26} r={5} fill="#00F5FF" />
 
                     {/* Gripping Feet on Ladder Rungs */}
-                    <Line x1={player.x - 10} y1={activePlayerY - 4} x2={player.x - 4} y2={activePlayerY - 2} stroke="#00F5FF" strokeWidth={2.2} />
-                    <Line x1={player.x + 4} y1={activePlayerY - 2} x2={player.x + 10} y2={activePlayerY - 4} stroke="#00F5FF" strokeWidth={2.2} />
+                    <Line x1={curThiefX - 10} y1={curThiefY - 4} x2={curThiefX - 4} y2={curThiefY - 2} stroke="#00F5FF" strokeWidth={2.2} />
+                    <Line x1={curThiefX + 4} y1={curThiefY - 2} x2={curThiefX + 10} y2={curThiefY - 4} stroke="#00F5FF" strokeWidth={2.2} />
 
                     {/* Diamond on operative's back */}
                     {player.hasDiamond && (
                       <Polygon
-                        points={`${player.x},${activePlayerY - 33} ${player.x + 5},${activePlayerY - 28} ${player.x},${activePlayerY - 23} ${player.x - 5},${activePlayerY - 28}`}
+                        points={`${curThiefX},${curThiefY - 33} ${curThiefX + 5},${curThiefY - 28} ${curThiefX},${curThiefY - 23} ${curThiefX - 5},${curThiefY - 28}`}
                         fill="#00F5FF"
                         stroke="#FFFFFF"
                         strokeWidth={1.2}
@@ -1229,8 +1332,8 @@ export default function ThiefEscapeGame({
                 ) : (
                   <G>
                     <Rect
-                      x={player.x - 7}
-                      y={activePlayerY - 26}
+                      x={curThiefX - 7}
+                      y={curThiefY - 26}
                       width={14}
                       height={24}
                       rx={3}
@@ -1238,21 +1341,21 @@ export default function ThiefEscapeGame({
                       stroke="#00F5FF"
                       strokeWidth={1.8}
                     />
-                    <Circle cx={player.x} cy={activePlayerY - 28} r={5} fill="#00F5FF" />
+                    <Circle cx={curThiefX} cy={curThiefY - 28} r={5} fill="#00F5FF" />
                     <Line
-                      x1={player.x - 4}
-                      y1={activePlayerY - 28}
-                      x2={player.x + player.facing * 5}
-                      y2={activePlayerY - 28}
+                      x1={curThiefX - 4}
+                      y1={curThiefY - 28}
+                      x2={curThiefX + player.facing * 5}
+                      y2={curThiefY - 28}
                       stroke="#FFFFFF"
                       strokeWidth={2}
                     />
                     {player.hasDiamond && (
-                      <Circle cx={player.x} cy={activePlayerY - 36} r={5} fill="#00F5FF" stroke="#FFFFFF" strokeWidth={1.5} />
+                      <Circle cx={curThiefX} cy={curThiefY - 36} r={5} fill="#00F5FF" stroke="#FFFFFF" strokeWidth={1.5} />
                     )}
                   </G>
-                )
-              )}
+                );
+              })()}
             </Svg>
           </View>
         </View>
