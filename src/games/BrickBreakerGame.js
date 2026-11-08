@@ -8,14 +8,15 @@ import {
   useWindowDimensions,
   PanResponder,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { COLORS } from '../../styles';
 import MiniGameHeader from '../components/MiniGameHeader';
 import JuiceEngine from '../components/JuiceEngine';
 import GameResultModal from '../components/GameResultModal';
 import {
   triggerLightHaptic,
+  triggerMediumHaptic,
   triggerSliceHaptic,
   triggerPerfectHaptic,
   triggerGameOverHaptic,
@@ -23,18 +24,30 @@ import {
 import {
   playTapSound,
   playSliceSound,
-  playPerfectSound,
   playSpeedUpSound,
   playGameOverSound,
 } from '../utils/sound';
 
-const STORAGE_KEY = '@game_tower:best_breaker_v4';
+const STORAGE_KEY = '@game_tower:best_breaker_v5';
 
 const monoFont = Platform.select({
   ios: 'Menlo',
   android: 'monospace',
   default: 'monospace',
 });
+
+// Safe helper for haptics so hardware exceptions never crash the game loop
+const safeHaptic = (fn, ...args) => {
+  try {
+    fn?.(...args);
+  } catch {}
+};
+
+const safeSound = (fn, ...args) => {
+  try {
+    fn?.(...args);
+  } catch {}
+};
 
 // 3 Game Modes
 const MODES = [
@@ -136,15 +149,17 @@ const CAPSULE_TYPES = [
 const SPHERE_ABILITIES = [
   { id: 'MULTI_BALL', name: 'MULTI-BALL', icon: '🔮', duration: 8 },
   { id: 'SPEED_UP', name: 'HYPER SPEED', icon: '⚡', duration: 7 },
-  { id: 'BIG_BALL', name: 'MEGA BALL', icon: '💥', duration: 8 },
+  { id: 'BIG_BALL', name: 'MEGA HEAVY', icon: '💥', duration: 8 },
   { id: 'MINI_BALL', name: 'MINI BALL', icon: '🌀', duration: 8 },
 ];
 
 const INITIAL_HEARTS = 4;
 const DEFAULT_BALL_RADIUS = 8;
+const HEAVY_BALL_RADIUS = 18;
 const PADDLE_HEIGHT = 14;
 
 export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused = false }) {
+  const insets = useSafeAreaInsets();
   const isPausedRef = useRef(isPaused);
   useEffect(() => {
     isPausedRef.current = isPaused;
@@ -152,7 +167,8 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
 
   const { width, height } = useWindowDimensions();
   const arenaWidth = Math.min(width - 24, 420);
-  const arenaHeight = Math.max(480, height - 165);
+  const availableHeight = height - insets.top - insets.bottom;
+  const arenaHeight = Math.max(400, Math.min(560, availableHeight - 165));
 
   const basePaddleW = Math.min(94, arenaWidth * 0.26);
   const paddleY = arenaHeight - 38;
@@ -169,7 +185,7 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
   const [playerHearts, setPlayerHearts] = useState(INITIAL_HEARTS);
   const [aiHearts, setAiHearts] = useState(INITIAL_HEARTS);
 
-  // Ball launched state (for Solo mode launch)
+  // Ball launched state (all modes require Tap to Start)
   const [ballLaunched, setBallLaunched] = useState(false);
 
   // Ability state
@@ -186,12 +202,15 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
   const [renderState, setRenderState] = useState({
     paddleX: (arenaWidth - basePaddleW) / 2,
     paddleW: basePaddleW,
+    paddleOffsetY: 0,
     aiPaddleX: (arenaWidth - basePaddleW) / 2,
     aiPaddleW: basePaddleW,
+    aiPaddleOffsetY: 0,
     balls: [],
     bricks: [],
     capsules: [],
     hasShield: false,
+    aiHasShield: false,
   });
 
   const juiceRef = useRef(null);
@@ -208,15 +227,21 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
     aiHearts: INITIAL_HEARTS,
     paddleX: (arenaWidth - basePaddleW) / 2,
     paddleW: basePaddleW,
+    paddleRecoil: 0,
     aiPaddleX: (arenaWidth - basePaddleW) / 2,
     aiPaddleW: basePaddleW,
+    aiPaddleRecoil: 0,
     balls: [],
     bricks: [],
     capsules: [],
     hasShield: false,
+    aiHasShield: false,
     ballLaunched: false,
+    // Periodic ball spawn timer for AI vs Player duel (every 18 seconds)
+    ballSpawnTimer: 18.0,
     // Power-up timers
     wideTimer: 0,
+    aiWideTimer: 0,
     fireBallTimer: 0,
     slowTimer: 0,
     // Sphere duel ability timer (Mode 3)
@@ -269,7 +294,7 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
     // Start Y: top half for Solo, middle of arena for Center Duel
     let startY = 48;
     if (curMode === 'AI_BRICK_DUEL') {
-      startY = Math.floor(arenaHeight * 0.36);
+      startY = Math.floor(arenaHeight * 0.35);
     }
 
     const bricks = [];
@@ -353,11 +378,17 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
       eng.aiHearts = INITIAL_HEARTS;
       eng.paddleX = startPadX;
       eng.paddleW = basePaddleW;
+      eng.paddleRecoil = 0;
       eng.aiPaddleX = startPadX;
       eng.aiPaddleW = basePaddleW;
+      eng.aiPaddleRecoil = 0;
       eng.capsules = [];
       eng.hasShield = false;
+      eng.aiHasShield = false;
+      eng.ballLaunched = false;
+      eng.ballSpawnTimer = 18.0;
       eng.wideTimer = 0;
+      eng.aiWideTimer = 0;
       eng.fireBallTimer = 0;
       eng.slowTimer = 0;
       eng.abilityTimer = 5.0;
@@ -369,9 +400,8 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
       let initialBalls = [];
 
       if (chosenMode === 'SINGLE_BRICKS') {
-        // Mode 1: Solo Bricks
+        // Mode 1: Solo Bricks (1 ball docked to player paddle)
         initialBricks = createBricksForLevel(nextLvl, chosenMode);
-        eng.ballLaunched = false;
         initialBalls = [
           {
             id: 'solo_ball_1',
@@ -382,64 +412,71 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
             r: DEFAULT_BALL_RADIUS,
             color: '#00F5FF',
             isFire: false,
+            isHeavy: false,
             lastHitter: 'PLAYER',
+            owner: 'PLAYER',
           },
         ];
       } else if (chosenMode === 'AI_BRICK_DUEL') {
-        // Mode 2: Center Brick Duel
+        // Mode 2: Center Brick Duel (1 ball on Player paddle, 1 ball on AI paddle)
         initialBricks = createBricksForLevel(nextLvl, chosenMode);
-        eng.ballLaunched = true;
         initialBalls = [
           {
-            id: 'duel_ball_1',
-            x: arenaWidth / 2 - 30,
-            y: arenaHeight / 2 - 40,
-            vx: -130,
-            vy: 160,
+            id: 'duel_ball_player',
+            x: startPadX + basePaddleW / 2,
+            y: paddleY - DEFAULT_BALL_RADIUS - 2,
+            vx: 0,
+            vy: 0,
             r: DEFAULT_BALL_RADIUS,
             color: '#00F5FF',
             isFire: false,
-            lastHitter: 'AI',
+            isHeavy: false,
+            lastHitter: 'PLAYER',
+            owner: 'PLAYER',
           },
           {
-            id: 'duel_ball_2',
-            x: arenaWidth / 2 + 30,
-            y: arenaHeight / 2 + 40,
-            vx: 130,
-            vy: -160,
+            id: 'duel_ball_ai',
+            x: startPadX + basePaddleW / 2,
+            y: aiPaddleY + PADDLE_HEIGHT + DEFAULT_BALL_RADIUS + 2,
+            vx: 0,
+            vy: 0,
             r: DEFAULT_BALL_RADIUS,
             color: '#FF007F',
             isFire: false,
-            lastHitter: 'PLAYER',
+            isHeavy: false,
+            lastHitter: 'AI',
+            owner: 'AI',
           },
         ];
       } else {
-        // Mode 3: Hard AI Ball Duel (No Bricks, Fast Balls!)
+        // Mode 3: Hard AI Ball Duel (No Bricks: 1 ball on Player, 1 ball on AI)
         initialBricks = [];
-        eng.ballLaunched = true;
-        const speed = 260; // Faster initial speed
         initialBalls = [
           {
-            id: 'hard_ball_1',
-            x: arenaWidth / 2 - 35,
-            y: arenaHeight / 2,
-            vx: -speed * 0.65,
-            vy: speed * 0.76,
+            id: 'hard_ball_player',
+            x: startPadX + basePaddleW / 2,
+            y: paddleY - DEFAULT_BALL_RADIUS - 2,
+            vx: 0,
+            vy: 0,
             r: DEFAULT_BALL_RADIUS,
             color: '#00F5FF',
             isFire: false,
-            lastHitter: 'AI',
+            isHeavy: false,
+            lastHitter: 'PLAYER',
+            owner: 'PLAYER',
           },
           {
-            id: 'hard_ball_2',
-            x: arenaWidth / 2 + 35,
-            y: arenaHeight / 2 - 20,
-            vx: speed * 0.70,
-            vy: -speed * 0.71,
+            id: 'hard_ball_ai',
+            x: startPadX + basePaddleW / 2,
+            y: aiPaddleY + PADDLE_HEIGHT + DEFAULT_BALL_RADIUS + 2,
+            vx: 0,
+            vy: 0,
             r: DEFAULT_BALL_RADIUS,
             color: '#FF007F',
             isFire: false,
-            lastHitter: 'PLAYER',
+            isHeavy: false,
+            lastHitter: 'AI',
+            owner: 'AI',
           },
         ];
       }
@@ -453,7 +490,7 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
       setAiScore(0);
       setPlayerHearts(INITIAL_HEARTS);
       setAiHearts(INITIAL_HEARTS);
-      setBallLaunched(eng.ballLaunched);
+      setBallLaunched(false);
       setNextAbilityCountdown(5);
       setActiveAbility(null);
       setModalVisible(false);
@@ -461,41 +498,77 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
       setRenderState({
         paddleX: startPadX,
         paddleW: basePaddleW,
+        paddleOffsetY: 0,
         aiPaddleX: startPadX,
         aiPaddleW: basePaddleW,
+        aiPaddleOffsetY: 0,
         balls: initialBalls,
         bricks: initialBricks,
         capsules: [],
         hasShield: false,
+        aiHasShield: false,
       });
 
       if (juiceRef.current) {
         juiceRef.current.flash(chosenMode === 'HARD_SPHERE_DUEL' ? '#FF0055' : '#00F5FF');
       }
     },
-    [arenaWidth, basePaddleW, paddleY, arenaHeight, createBricksForLevel, mode]
+    [arenaWidth, basePaddleW, paddleY, aiPaddleY, createBricksForLevel, mode]
   );
 
   useEffect(() => {
     resetGame(mode, 1);
   }, []);
 
-  // Launch Ball for Solo Mode
+  // Launch Balls on Tap
   const handleLaunchBall = useCallback(() => {
     const eng = engineRef.current;
-    if (eng.ballLaunched || eng.mode !== 'SINGLE_BRICKS') return;
+    if (eng.ballLaunched) return;
 
     eng.ballLaunched = true;
     setBallLaunched(true);
-    playTapSound();
-    triggerLightHaptic();
+    safeSound(playTapSound);
+    safeHaptic(triggerLightHaptic);
 
-    if (eng.balls.length > 0) {
-      const b = eng.balls[0];
-      const speed = 230;
-      const angle = -Math.PI / 2 + (Math.random() - 0.5) * 0.6;
-      b.vx = Math.cos(angle) * speed;
-      b.vy = Math.sin(angle) * speed;
+    if (eng.mode === 'SINGLE_BRICKS') {
+      if (eng.balls.length > 0) {
+        const b = eng.balls[0];
+        const speed = 240;
+        const angle = -Math.PI / 2 + (Math.random() - 0.5) * 0.5;
+        b.vx = Math.cos(angle) * speed;
+        b.vy = Math.sin(angle) * speed;
+      }
+    } else if (eng.mode === 'AI_BRICK_DUEL') {
+      const speed = 210;
+      // Ball 0: Player ball launches upwards into center bricks
+      if (eng.balls[0]) {
+        const angle = -Math.PI / 2 + (Math.random() - 0.5) * 0.5;
+        eng.balls[0].vx = Math.cos(angle) * speed;
+        eng.balls[0].vy = Math.sin(angle) * speed;
+        eng.balls[0].lastHitter = 'PLAYER';
+      }
+      // Ball 1: AI ball launches downwards into center bricks
+      if (eng.balls[1]) {
+        const angle = Math.PI / 2 + (Math.random() - 0.5) * 0.5;
+        eng.balls[1].vx = Math.cos(angle) * speed;
+        eng.balls[1].vy = Math.sin(angle) * speed;
+        eng.balls[1].lastHitter = 'AI';
+      }
+    } else {
+      // HARD_SPHERE_DUEL
+      const speed = 270;
+      if (eng.balls[0]) {
+        const angle = -Math.PI / 2 + (Math.random() - 0.5) * 0.6;
+        eng.balls[0].vx = Math.cos(angle) * speed;
+        eng.balls[0].vy = Math.sin(angle) * speed;
+        eng.balls[0].lastHitter = 'PLAYER';
+      }
+      if (eng.balls[1]) {
+        const angle = Math.PI / 2 + (Math.random() - 0.5) * 0.6;
+        eng.balls[1].vx = Math.cos(angle) * speed;
+        eng.balls[1].vy = Math.sin(angle) * speed;
+        eng.balls[1].lastHitter = 'AI';
+      }
     }
   }, []);
 
@@ -511,538 +584,833 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
 
       const eng = engineRef.current;
 
-      if (!isPausedRef.current && eng.running) {
-        // --- 1. MODE 3 ABILITY COUNTDOWN ---
-        if (eng.mode === 'HARD_SPHERE_DUEL') {
-          if (!eng.activeAbility) {
-            eng.abilityTimer -= dt;
-            const displaySec = Math.max(1, Math.ceil(eng.abilityTimer));
-            setNextAbilityCountdown(displaySec);
+      try {
+        if (!isPausedRef.current && eng.running) {
+          // --- 0. SPRING BACK PADDLE RECOIL ---
+          if (Math.abs(eng.paddleRecoil) > 0.05) {
+            eng.paddleRecoil *= 0.82;
+          } else {
+            eng.paddleRecoil = 0;
+          }
+          if (Math.abs(eng.aiPaddleRecoil) > 0.05) {
+            eng.aiPaddleRecoil *= 0.82;
+          } else {
+            eng.aiPaddleRecoil = 0;
+          }
 
-            if (eng.abilityTimer <= 0) {
-              const ability = SPHERE_ABILITIES[eng.nextAbilityIdx % SPHERE_ABILITIES.length];
-              eng.activeAbility = ability;
-              eng.activeAbilityTimer = ability.duration;
-              setActiveAbility(ability);
-              playSpeedUpSound();
-              triggerSliceHaptic();
+          // --- 0B. PRE-LAUNCH STATE: BALLS STICK TO PADDLES ---
+          if (!eng.ballLaunched) {
+            for (const b of eng.balls) {
+              if (b.owner === 'AI' || b.lastHitter === 'AI') {
+                b.x = eng.aiPaddleX + eng.aiPaddleW / 2;
+                b.y = aiPaddleY + PADDLE_HEIGHT + b.r + 2;
+                b.vx = 0;
+                b.vy = 0;
+              } else {
+                b.x = eng.paddleX + eng.paddleW / 2;
+                b.y = paddleY - b.r - 2;
+                b.vx = 0;
+                b.vy = 0;
+              }
+            }
+            setRenderState({
+              paddleX: eng.paddleX,
+              paddleW: eng.paddleW,
+              paddleOffsetY: eng.paddleRecoil,
+              aiPaddleX: eng.aiPaddleX,
+              aiPaddleW: eng.aiPaddleW,
+              aiPaddleOffsetY: eng.aiPaddleRecoil,
+              balls: [...eng.balls],
+              bricks: [...eng.bricks],
+              capsules: [...eng.capsules],
+              hasShield: eng.hasShield,
+              aiHasShield: eng.aiHasShield,
+            });
+            frameId = requestAnimationFrame(tick);
+            return;
+          }
 
-              if (ability.id === 'MULTI_BALL') {
+          // --- 1. PERIODIC BALL SPAWNER (EVERY 18 SECONDS IN DUEL MODES) ---
+          if (eng.mode !== 'SINGLE_BRICKS' && eng.ballLaunched) {
+            eng.ballSpawnTimer -= dt;
+            if (eng.ballSpawnTimer <= 0) {
+              eng.ballSpawnTimer = 18.0;
+              const isHeavy = Math.random() < 0.45;
+              const spd = isHeavy ? 190 : 230;
+              const angle = (Math.random() - 0.5) * 0.8 + (Math.random() > 0.5 ? Math.PI / 2 : -Math.PI / 2);
+
+              eng.balls.push({
+                id: `spawn_${Date.now()}_${Math.random()}`,
+                x: arenaWidth / 2 + (Math.random() - 0.5) * 50,
+                y: arenaHeight / 2 + (Math.random() - 0.5) * 30,
+                vx: Math.cos(angle) * spd,
+                vy: Math.sin(angle) * spd,
+                r: isHeavy ? HEAVY_BALL_RADIUS : DEFAULT_BALL_RADIUS,
+                color: isHeavy ? '#FF4500' : '#FFE600',
+                isFire: isHeavy,
+                isHeavy: isHeavy,
+                lastHitter: Math.random() > 0.5 ? 'PLAYER' : 'AI',
+                owner: 'NEUTRAL',
+              });
+
+              safeSound(playSpeedUpSound);
+              safeHaptic(triggerSliceHaptic);
+              if (juiceRef.current) {
+                juiceRef.current.popup(
+                  isHeavy ? '🔥 HEAVY BALL INCOMING!' : '🔮 NEW SPHERE SPAWNED!',
+                  'ARENA EXPANSION',
+                  isHeavy ? '#FF4500' : '#FFE600'
+                );
+              }
+            }
+          }
+
+          // --- 2. MODE 3 ABILITY COUNTDOWN ---
+          if (eng.mode === 'HARD_SPHERE_DUEL') {
+            if (!eng.activeAbility) {
+              eng.abilityTimer -= dt;
+              const displaySec = Math.max(1, Math.ceil(eng.abilityTimer));
+              setNextAbilityCountdown(displaySec);
+
+              if (eng.abilityTimer <= 0) {
+                const ability = SPHERE_ABILITIES[eng.nextAbilityIdx % SPHERE_ABILITIES.length];
+                eng.activeAbility = ability;
+                eng.activeAbilityTimer = ability.duration;
+                setActiveAbility(ability);
+                safeSound(playSpeedUpSound);
+                safeHaptic(triggerSliceHaptic);
+
+                if (ability.id === 'MULTI_BALL') {
+                  const extra = [];
+                  eng.balls.forEach((b, idx) => {
+                    const spd = Math.hypot(b.vx, b.vy) || 240;
+                    extra.push({
+                      id: `extra_${Date.now()}_${idx}`,
+                      x: b.x + (idx % 2 === 0 ? 12 : -12),
+                      y: b.y + (b.vy > 0 ? -12 : 12),
+                      vx: Math.cos(0.5) * spd * (idx % 2 === 0 ? 1 : -1),
+                      vy: Math.sin(0.5) * spd,
+                      r: b.r,
+                      color: '#FFE600',
+                      isFire: false,
+                      isHeavy: false,
+                      lastHitter: b.lastHitter,
+                      owner: b.owner,
+                    });
+                  });
+                  eng.balls.push(...extra);
+                } else if (ability.id === 'SPEED_UP') {
+                  eng.balls.forEach((b) => {
+                    b.vx *= 1.35;
+                    b.vy *= 1.35;
+                  });
+                } else if (ability.id === 'BIG_BALL') {
+                  // TURNS ALL BALLS INTO HEAVY MEGA BALLS
+                  eng.balls.forEach((b) => {
+                    b.r = HEAVY_BALL_RADIUS;
+                    b.isHeavy = true;
+                    b.color = '#FF4500';
+                  });
+                } else if (ability.id === 'MINI_BALL') {
+                  eng.balls.forEach((b) => {
+                    b.r = 5;
+                    b.isHeavy = false;
+                  });
+                }
+                eng.nextAbilityIdx += 1;
+              }
+            } else {
+              eng.activeAbilityTimer -= dt;
+              if (eng.activeAbilityTimer <= 0) {
+                if (eng.activeAbility.id === 'BIG_BALL' || eng.activeAbility.id === 'MINI_BALL') {
+                  eng.balls.forEach((b) => {
+                    b.r = DEFAULT_BALL_RADIUS;
+                    b.isHeavy = false;
+                  });
+                }
+                eng.activeAbility = null;
+                eng.abilityTimer = 6.0;
+                setActiveAbility(null);
+              }
+            }
+          }
+
+          // --- 3. POWER-UP TIMERS (Solo & Center Duel) ---
+          if (eng.wideTimer > 0) {
+            eng.wideTimer -= dt;
+            if (eng.wideTimer <= 0) eng.paddleW = basePaddleW;
+          }
+          if (eng.aiWideTimer > 0) {
+            eng.aiWideTimer -= dt;
+            if (eng.aiWideTimer <= 0) eng.aiPaddleW = basePaddleW;
+          }
+          if (eng.fireBallTimer > 0) {
+            eng.fireBallTimer -= dt;
+            if (eng.fireBallTimer <= 0) {
+              eng.balls.forEach((b) => {
+                if (!b.isHeavy) b.isFire = false;
+              });
+            }
+          }
+          if (eng.slowTimer > 0) {
+            eng.slowTimer -= dt;
+          }
+
+          // --- 4. FALLING POWER-UP CAPSULES UPDATE ---
+          const nextCapsules = [];
+          for (let i = 0; i < eng.capsules.length; i++) {
+            const cap = eng.capsules[i];
+            cap.y += cap.vy * dt;
+
+            // Check player paddle catch
+            if (
+              cap.y + 12 >= paddleY &&
+              cap.y <= paddleY + PADDLE_HEIGHT &&
+              cap.x + 16 >= eng.paddleX &&
+              cap.x - 16 <= eng.paddleX + eng.paddleW
+            ) {
+              safeSound(playSpeedUpSound);
+              safeHaptic(triggerPerfectHaptic, 2);
+              if (juiceRef.current) {
+                juiceRef.current.popup(cap.name, '+50 PTS', cap.color);
+              }
+              eng.score += 50;
+              setScore(eng.score);
+              persistBest(eng.score);
+
+              if (cap.type === 'MULTI_BALL') {
                 const extra = [];
-                eng.balls.forEach((b, idx) => {
-                  const spd = Math.hypot(b.vx, b.vy) || 240;
+                eng.balls.forEach((b) => {
                   extra.push({
-                    id: `extra_${Date.now()}_${idx}`,
-                    x: b.x + (idx % 2 === 0 ? 12 : -12),
-                    y: b.y + (b.vy > 0 ? -12 : 12),
-                    vx: Math.cos(0.5) * spd * (idx % 2 === 0 ? 1 : -1),
-                    vy: Math.sin(0.5) * spd,
+                    id: `p_extra_${Date.now()}_${Math.random()}`,
+                    x: b.x,
+                    y: b.y,
+                    vx: -b.vx * 0.9,
+                    vy: b.vy,
                     r: b.r,
                     color: '#FFE600',
-                    isFire: false,
-                    lastHitter: b.lastHitter,
+                    isFire: b.isFire,
+                    isHeavy: b.isHeavy || false,
+                    lastHitter: 'PLAYER',
+                    owner: 'PLAYER',
                   });
                 });
                 eng.balls.push(...extra);
-              } else if (ability.id === 'SPEED_UP') {
+              } else if (cap.type === 'WIDE_PADDLE') {
+                eng.paddleW = basePaddleW * 1.45;
+                eng.wideTimer = 11;
+              } else if (cap.type === 'FIRE_BALL') {
                 eng.balls.forEach((b) => {
-                  b.vx *= 1.4;
-                  b.vy *= 1.4;
+                  b.isFire = true;
+                  b.color = '#FF6D00';
                 });
-              } else if (ability.id === 'BIG_BALL') {
+                eng.fireBallTimer = 9;
+              } else if (cap.type === 'SLOW_BALL') {
                 eng.balls.forEach((b) => {
-                  b.r = 18;
+                  b.vx *= 0.75;
+                  b.vy *= 0.75;
                 });
-              } else if (ability.id === 'MINI_BALL') {
-                eng.balls.forEach((b) => {
-                  b.r = 5;
-                });
+                eng.slowTimer = 8;
+              } else if (cap.type === 'SAFETY_SHIELD') {
+                eng.hasShield = true;
               }
-              eng.nextAbilityIdx += 1;
-            }
-          } else {
-            eng.activeAbilityTimer -= dt;
-            if (eng.activeAbilityTimer <= 0) {
-              if (eng.activeAbility.id === 'BIG_BALL' || eng.activeAbility.id === 'MINI_BALL') {
-                eng.balls.forEach((b) => {
-                  b.r = DEFAULT_BALL_RADIUS;
-                });
-              }
-              eng.activeAbility = null;
-              eng.abilityTimer = 6.0;
-              setActiveAbility(null);
-            }
-          }
-        }
-
-        // --- 2. POWER-UP TIMERS (Solo & Center Duel) ---
-        if (eng.wideTimer > 0) {
-          eng.wideTimer -= dt;
-          if (eng.wideTimer <= 0) eng.paddleW = basePaddleW;
-        }
-        if (eng.fireBallTimer > 0) {
-          eng.fireBallTimer -= dt;
-          if (eng.fireBallTimer <= 0) {
-            eng.balls.forEach((b) => {
-              b.isFire = false;
-            });
-          }
-        }
-        if (eng.slowTimer > 0) {
-          eng.slowTimer -= dt;
-        }
-
-        // --- 3. FALLING POWER-UP CAPSULES UPDATE ---
-        const nextCapsules = [];
-        for (let i = 0; i < eng.capsules.length; i++) {
-          const cap = eng.capsules[i];
-          cap.y += cap.vy * dt;
-
-          // Check paddle catch
-          if (
-            cap.y + 12 >= paddleY &&
-            cap.y <= paddleY + PADDLE_HEIGHT &&
-            cap.x + 16 >= eng.paddleX &&
-            cap.x - 16 <= eng.paddleX + eng.paddleW
-          ) {
-            // Player caught capsule!
-            playSpeedUpSound();
-            triggerPerfectHaptic(2);
-            if (juiceRef.current) {
-              juiceRef.current.popup(cap.name, '+50 PTS', cap.color);
-            }
-            eng.score += 50;
-            setScore(eng.score);
-            persistBest(eng.score);
-
-            if (cap.type === 'MULTI_BALL') {
-              const extra = [];
-              eng.balls.forEach((b) => {
-                extra.push({
-                  id: `p_extra_${Date.now()}_${Math.random()}`,
-                  x: b.x,
-                  y: b.y,
-                  vx: -b.vx * 0.9,
-                  vy: b.vy,
-                  r: b.r,
-                  color: '#FFE600',
-                  isFire: b.isFire,
-                  lastHitter: 'PLAYER',
-                });
-              });
-              eng.balls.push(...extra);
-            } else if (cap.type === 'WIDE_PADDLE') {
-              eng.paddleW = basePaddleW * 1.4;
-              eng.wideTimer = 11;
-            } else if (cap.type === 'FIRE_BALL') {
-              eng.balls.forEach((b) => {
-                b.isFire = true;
-                b.color = '#FF6D00';
-              });
-              eng.fireBallTimer = 9;
-            } else if (cap.type === 'SLOW_BALL') {
-              eng.balls.forEach((b) => {
-                b.vx *= 0.75;
-                b.vy *= 0.75;
-              });
-              eng.slowTimer = 8;
-            } else if (cap.type === 'SAFETY_SHIELD') {
-              eng.hasShield = true;
-            }
-            continue;
-          }
-
-          // In Duel mode: AI can also catch upward capsules
-          if (
-            eng.mode === 'AI_BRICK_DUEL' &&
-            cap.vy < 0 &&
-            cap.y <= aiPaddleY + PADDLE_HEIGHT &&
-            cap.y >= aiPaddleY &&
-            cap.x + 16 >= eng.aiPaddleX &&
-            cap.x - 16 <= eng.aiPaddleX + eng.aiPaddleW
-          ) {
-            eng.aiScore += 50;
-            setAiScore(eng.aiScore);
-            continue;
-          }
-
-          // Offscreen cull
-          if (cap.y > 0 && cap.y < arenaHeight + 30) {
-            nextCapsules.push(cap);
-          }
-        }
-        eng.capsules = nextCapsules;
-
-        // --- 4. PREDICTIVE AI PADDLE (Modes 2 & 3) ---
-        if (eng.mode !== 'SINGLE_BRICKS') {
-          // Find most dangerous ball heading towards AI
-          let targetBall = null;
-          let minTime = Infinity;
-
-          for (const b of eng.balls) {
-            if (b.vy < 0) {
-              const timeToReach = (b.y - aiPaddleY) / Math.abs(b.vy);
-              if (timeToReach < minTime) {
-                minTime = timeToReach;
-                targetBall = b;
-              }
-            }
-          }
-
-          if (targetBall) {
-            // Predictive intercept position
-            let predictedX = targetBall.x + targetBall.vx * minTime;
-            // Bounce calculation off walls
-            while (predictedX < 0 || predictedX > arenaWidth) {
-              if (predictedX < 0) predictedX = -predictedX;
-              if (predictedX > arenaWidth) predictedX = 2 * arenaWidth - predictedX;
-            }
-
-            const aiCenter = eng.aiPaddleX + eng.aiPaddleW / 2;
-            const diff = predictedX - aiCenter;
-
-            // Mode 3 is Hard AI (faster, more aggressive)
-            const aiMaxSpeed = eng.mode === 'HARD_SPHERE_DUEL' ? 380 : 250;
-            const moveStep = Math.sign(diff) * Math.min(Math.abs(diff), aiMaxSpeed * dt);
-            eng.aiPaddleX = Math.max(4, Math.min(arenaWidth - eng.aiPaddleW - 4, eng.aiPaddleX + moveStep));
-          }
-        }
-
-        // --- 5. BALL PHYSICS & COLLISIONS ---
-        const nextBalls = [];
-
-        for (let i = 0; i < eng.balls.length; i++) {
-          const b = eng.balls[i];
-
-          // If not launched in Solo mode, stick to paddle
-          if (eng.mode === 'SINGLE_BRICKS' && !eng.ballLaunched) {
-            b.x = eng.paddleX + eng.paddleW / 2;
-            b.y = paddleY - b.r - 2;
-            nextBalls.push(b);
-            continue;
-          }
-
-          let nextX = b.x + b.vx * dt;
-          let nextY = b.y + b.vy * dt;
-
-          // Wall Collisions (Left & Right)
-          if (nextX - b.r <= 0) {
-            nextX = b.r;
-            b.vx = Math.abs(b.vx);
-            playTapSound();
-          } else if (nextX + b.r >= arenaWidth) {
-            nextX = arenaWidth - b.r;
-            b.vx = -Math.abs(b.vx);
-            playTapSound();
-          }
-
-          // Top Boundary Collision
-          if (eng.mode === 'SINGLE_BRICKS') {
-            // Solid energy reflector wall at top
-            if (nextY - b.r <= 12) {
-              nextY = 12 + b.r;
-              b.vy = Math.abs(b.vy);
-              playTapSound();
-              triggerLightHaptic();
-            }
-          } else {
-            // AI Paddle at Top (Modes 2 & 3)
-            const aiTop = aiPaddleY;
-            const aiBottom = aiPaddleY + PADDLE_HEIGHT;
-            if (
-              b.vy < 0 &&
-              nextY - b.r <= aiBottom &&
-              nextY + b.r >= aiTop &&
-              nextX >= eng.aiPaddleX - 4 &&
-              nextX <= eng.aiPaddleX + eng.aiPaddleW + 4
-            ) {
-              nextY = aiBottom + b.r;
-              // Return angle based on hit position
-              const hitOffset = (nextX - (eng.aiPaddleX + eng.aiPaddleW / 2)) / (eng.aiPaddleW / 2);
-              const maxAngle = Math.PI * 0.38;
-              const angle = hitOffset * maxAngle;
-              const spd = Math.hypot(b.vx, b.vy);
-              b.vx = spd * Math.sin(angle);
-              b.vy = Math.abs(spd * Math.cos(angle));
-              b.lastHitter = 'AI';
-              playTapSound();
-              triggerLightHaptic();
-            } else if (nextY - b.r < 0) {
-              // Ball breached AI baseline!
-              if (eng.mode === 'AI_BRICK_DUEL' || eng.mode === 'HARD_SPHERE_DUEL') {
-                eng.aiHearts = Math.max(0, eng.aiHearts - 1);
-                setAiHearts(eng.aiHearts);
-                eng.score += 100; // Bonus points for breaching AI
-                setScore(eng.score);
-                persistBest(eng.score);
-                playSliceSound();
-                triggerMediumHaptic();
-
-                if (juiceRef.current) {
-                  juiceRef.current.popup('AI SHIELD BREACHED!', '+100 PTS', '#00F5D4');
-                }
-
-                if (eng.aiHearts <= 0) {
-                  eng.running = false;
-                  setModalType('win');
-                  setModalTitle('AI DEFEATED!');
-                  setModalSubtitle(`FINAL SCORE: ${eng.score} VS AI: ${eng.aiScore}`);
-                  setModalVisible(true);
-                  return;
-                }
-              }
-              // Reflect ball downwards
-              b.vy = Math.abs(b.vy);
-            }
-          }
-
-          // Bottom Player Paddle Collision
-          const pTop = paddleY;
-          const pBottom = paddleY + PADDLE_HEIGHT;
-          if (
-            b.vy > 0 &&
-            nextY + b.r >= pTop &&
-            nextY - b.r <= pBottom &&
-            nextX >= eng.paddleX - 4 &&
-            nextX <= eng.paddleX + eng.paddleW + 4
-          ) {
-            nextY = pTop - b.r;
-            const hitOffset = (nextX - (eng.paddleX + eng.paddleW / 2)) / (eng.paddleW / 2);
-            const maxAngle = Math.PI * 0.40;
-            const angle = hitOffset * maxAngle;
-            const spd = Math.hypot(b.vx, b.vy);
-            b.vx = spd * Math.sin(angle);
-            b.vy = -Math.abs(spd * Math.cos(angle));
-            b.lastHitter = 'PLAYER';
-
-            playTapSound();
-            triggerLightHaptic();
-          }
-
-          // --- 6. BRICK COLLISIONS (Solo & Center Duel) ---
-          if (eng.mode !== 'HARD_SPHERE_DUEL' && eng.bricks.length > 0) {
-            for (let j = eng.bricks.length - 1; j >= 0; j--) {
-              const brk = eng.bricks[j];
-
-              // Box collision with sphere
-              const testX = Math.max(brk.x, Math.min(nextX, brk.x + brk.w));
-              const testY = Math.max(brk.y, Math.min(nextY, brk.y + brk.h));
-              const distSq = (nextX - testX) ** 2 + (nextY - testY) ** 2;
-
-              if (distSq <= b.r * b.r) {
-                // Hit brick!
-                if (!b.isFire) {
-                  // Determine normal reflection axis
-                  const prevX = b.x;
-                  const prevY = b.y;
-                  if (prevX < brk.x || prevX > brk.x + brk.w) {
-                    b.vx = -b.vx;
-                  } else {
-                    b.vy = -b.vy;
-                  }
-                }
-
-                // Award points to last hitter
-                if (b.lastHitter === 'PLAYER') {
-                  eng.score += brk.pts;
-                  setScore(eng.score);
-                  persistBest(eng.score);
-                } else {
-                  eng.aiScore += brk.pts;
-                  setAiScore(eng.aiScore);
-                }
-
-                playTapSound();
-                triggerLightHaptic();
-
-                // Unbreakable brick reflects but doesn't take damage
-                if (brk.type === 'UNBREAKABLE') {
-                  break;
-                }
-
-                brk.hp -= 1;
-
-                if (brk.hp <= 0) {
-                  // Destroy brick!
-                  eng.bricks.splice(j, 1);
-                  playSliceSound();
-
-                  // Explosive brick: chain reaction adjacent bricks
-                  if (brk.type === 'EXPLOSIVE') {
-                    if (juiceRef.current) {
-                      juiceRef.current.shake(5, 3);
-                    }
-                    for (let k = eng.bricks.length - 1; k >= 0; k--) {
-                      const nb = eng.bricks[k];
-                      if (
-                        nb.type !== 'UNBREAKABLE' &&
-                        Math.abs(nb.row - brk.row) <= 1 &&
-                        Math.abs(nb.col - brk.col) <= 1
-                      ) {
-                        eng.bricks.splice(k, 1);
-                        if (b.lastHitter === 'PLAYER') {
-                          eng.score += nb.pts;
-                          setScore(eng.score);
-                        } else {
-                          eng.aiScore += nb.pts;
-                          setAiScore(eng.aiScore);
-                        }
-                      }
-                    }
-                  }
-
-                  // Drop falling power-up capsule
-                  if (brk.type === 'POWERUP' || Math.random() < 0.22) {
-                    const capType = CAPSULE_TYPES[Math.floor(Math.random() * CAPSULE_TYPES.length)];
-                    const isUpward = eng.mode === 'AI_BRICK_DUEL' && b.lastHitter === 'AI';
-                    eng.capsules.push({
-                      id: `cap_${Date.now()}_${Math.random()}`,
-                      type: capType.id,
-                      name: capType.name,
-                      icon: capType.icon,
-                      color: capType.color,
-                      x: brk.x + brk.w / 2,
-                      y: brk.y + brk.h / 2,
-                      vy: isUpward ? -120 : 130,
-                    });
-                  }
-
-                  // Check if all breakable bricks cleared!
-                  const breakableLeft = eng.bricks.filter((bk) => bk.type !== 'UNBREAKABLE').length;
-                  if (breakableLeft === 0) {
-                    if (eng.mode === 'SINGLE_BRICKS') {
-                      // Solo mode: Level cleared! Advance to next design!
-                      eng.running = false;
-                      const nextLvl = eng.level + 1;
-                      playGameOverSound();
-                      setModalType('win');
-                      setModalTitle('DESIGN CLEARED!');
-                      setModalSubtitle(`SCORE: ${eng.score} // READY FOR LEVEL ${nextLvl}?`);
-                      setModalVisible(true);
-                      return;
-                    } else if (eng.mode === 'AI_BRICK_DUEL') {
-                      // Center duel cleared: whoever has highest score wins!
-                      eng.running = false;
-                      const won = eng.score >= eng.aiScore;
-                      setModalType(won ? 'win' : 'gameover');
-                      setModalTitle(won ? 'DUEL VICTORY!' : 'AI RIVAL WON!');
-                      setModalSubtitle(`FINAL SCORE: ${eng.score} VS AI: ${eng.aiScore}`);
-                      setModalVisible(true);
-                      return;
-                    }
-                  }
-                }
-                break;
-              }
-            }
-          }
-
-          // Bottom Boundary Check (Missed Ball)
-          if (nextY + b.r >= arenaHeight) {
-            // Safety shield check
-            if (eng.hasShield) {
-              eng.hasShield = false;
-              nextY = arenaHeight - 6 - b.r;
-              b.vy = -Math.abs(b.vy);
-              playSpeedUpSound();
-              triggerMediumHaptic();
-              if (juiceRef.current) {
-                juiceRef.current.popup('SHIELD SAVED BALL!', 'DEFENSE MATRIX', '#00F5D4');
-              }
-              b.x = nextX;
-              b.y = nextY;
-              nextBalls.push(b);
               continue;
             }
 
-            // Ball lost past bottom
-            if (eng.mode === 'SINGLE_BRICKS') {
-              eng.playerHearts -= 1;
-              setPlayerHearts(eng.playerHearts);
-              playGameOverSound();
-              triggerGameOverHaptic();
+            // Check AI paddle catch (Mode 2 Center Duel)
+            if (
+              eng.mode === 'AI_BRICK_DUEL' &&
+              cap.y <= aiPaddleY + PADDLE_HEIGHT + 8 &&
+              cap.y >= aiPaddleY - 8 &&
+              cap.x + 16 >= eng.aiPaddleX &&
+              cap.x - 16 <= eng.aiPaddleX + eng.aiPaddleW
+            ) {
+              eng.aiScore += 50;
+              setAiScore(eng.aiScore);
+              safeSound(playTapSound);
+              if (juiceRef.current) {
+                juiceRef.current.popup(`AI: ${cap.name}!`, '+50 PTS', cap.color);
+              }
 
-              if (eng.playerHearts <= 0) {
-                eng.running = false;
-                setModalType('gameover');
-                setModalTitle('SHIELD DEPLETED!');
-                setModalSubtitle(`FINAL SCORE: ${eng.score} IN LEVEL ${eng.level}`);
-                setModalVisible(true);
-                return;
-              } else {
-                // Reset ball to paddle
-                eng.ballLaunched = false;
-                setBallLaunched(false);
-                nextBalls.push({
-                  id: `solo_ball_${Date.now()}`,
-                  x: eng.paddleX + eng.paddleW / 2,
-                  y: paddleY - DEFAULT_BALL_RADIUS - 2,
-                  vx: 0,
-                  vy: 0,
+              if (cap.type === 'WIDE_PADDLE') {
+                eng.aiPaddleW = basePaddleW * 1.45;
+                eng.aiWideTimer = 11;
+              } else if (cap.type === 'MULTI_BALL') {
+                eng.balls.push({
+                  id: `ai_extra_${Date.now()}_${Math.random()}`,
+                  x: eng.aiPaddleX + eng.aiPaddleW / 2,
+                  y: aiPaddleY + PADDLE_HEIGHT + 14,
+                  vx: (Math.random() - 0.5) * 160,
+                  vy: 200,
                   r: DEFAULT_BALL_RADIUS,
-                  color: '#00F5FF',
+                  color: '#FF007F',
                   isFire: false,
-                  lastHitter: 'PLAYER',
+                  isHeavy: false,
+                  lastHitter: 'AI',
+                  owner: 'AI',
                 });
-                break;
+              } else if (cap.type === 'SAFETY_SHIELD') {
+                eng.aiHasShield = true;
+              } else if (cap.type === 'FIRE_BALL') {
+                eng.balls.forEach((b) => {
+                  if (b.lastHitter === 'AI') {
+                    b.isFire = true;
+                    b.color = '#FF0055';
+                  }
+                });
+              }
+              continue;
+            }
+
+            // Offscreen cull
+            if (cap.y > -20 && cap.y < arenaHeight + 30) {
+              nextCapsules.push(cap);
+            }
+          }
+          eng.capsules = nextCapsules;
+
+          // --- 5. PREDICTIVE AI PADDLE (Prioritize ball, but collect abilities when safe) ---
+          if (eng.mode !== 'SINGLE_BRICKS' && eng.ballLaunched) {
+            let threatBall = null;
+            let minThreatTime = Infinity;
+
+            for (const b of eng.balls) {
+              if (b.vy < 0) {
+                const timeToReach = (b.y - aiPaddleY) / Math.abs(b.vy);
+                if (timeToReach < minThreatTime) {
+                  minThreatTime = timeToReach;
+                  threatBall = b;
+                }
+              }
+            }
+
+            let targetCapsule = null;
+            let minCapDist = Infinity;
+
+            if (eng.mode === 'AI_BRICK_DUEL' && eng.capsules.length > 0) {
+              for (const cap of eng.capsules) {
+                if (cap.y < arenaHeight * 0.65 || cap.vy < 0) {
+                  const d = Math.hypot(cap.x - (eng.aiPaddleX + eng.aiPaddleW / 2), cap.y - aiPaddleY);
+                  if (d < minCapDist) {
+                    minCapDist = d;
+                    targetCapsule = cap;
+                  }
+                }
+              }
+            }
+
+            const isBallUrgentThreat =
+              threatBall && (threatBall.y < arenaHeight * 0.44 || minThreatTime < 0.85);
+
+            let targetX = eng.aiPaddleX + eng.aiPaddleW / 2;
+
+            if (isBallUrgentThreat) {
+              // Priority 1: Defend against ball
+              let predictedX = threatBall.x + threatBall.vx * minThreatTime;
+              while (predictedX < 0 || predictedX > arenaWidth) {
+                if (predictedX < 0) predictedX = -predictedX;
+                if (predictedX > arenaWidth) predictedX = 2 * arenaWidth - predictedX;
+              }
+              targetX = predictedX;
+            } else if (targetCapsule) {
+              // Priority 2: Collect ability capsule
+              targetX = targetCapsule.x;
+            } else if (threatBall) {
+              let predictedX = threatBall.x + threatBall.vx * minThreatTime;
+              while (predictedX < 0 || predictedX > arenaWidth) {
+                if (predictedX < 0) predictedX = -predictedX;
+                if (predictedX > arenaWidth) predictedX = 2 * arenaWidth - predictedX;
+              }
+              targetX = predictedX;
+            }
+
+            const aiCenter = eng.aiPaddleX + eng.aiPaddleW / 2;
+            const diff = targetX - aiCenter;
+            const aiMaxSpeed = eng.mode === 'HARD_SPHERE_DUEL' ? 390 : 270;
+            const moveStep = Math.sign(diff) * Math.min(Math.abs(diff), aiMaxSpeed * dt);
+            eng.aiPaddleX = Math.max(4, Math.min(arenaWidth - eng.aiPaddleW - 4, eng.aiPaddleX + moveStep));
+          }
+
+          // --- 6. BALL PHYSICS & COLLISIONS ---
+          const nextBalls = [];
+
+          for (let i = 0; i < eng.balls.length; i++) {
+            const b = eng.balls[i];
+
+            let nextX = b.x + b.vx * dt;
+            let nextY = b.y + b.vy * dt;
+
+            // Wall Collisions (Left & Right)
+            if (nextX - b.r <= 0) {
+              nextX = b.r;
+              b.vx = Math.abs(b.vx);
+              safeSound(playTapSound);
+            } else if (nextX + b.r >= arenaWidth) {
+              nextX = arenaWidth - b.r;
+              b.vx = -Math.abs(b.vx);
+              safeSound(playTapSound);
+            }
+
+            // Top Boundary Check
+            if (eng.mode === 'SINGLE_BRICKS') {
+              // Solid energy reflector wall at top
+              if (nextY - b.r <= 12) {
+                nextY = 12 + b.r;
+                b.vy = Math.abs(b.vy);
+                safeSound(playTapSound);
+                safeHaptic(triggerLightHaptic);
               }
             } else {
-              // Duel modes: player loses 1 heart
-              eng.playerHearts = Math.max(0, eng.playerHearts - 1);
-              setPlayerHearts(eng.playerHearts);
-              eng.aiScore += 100;
-              setAiScore(eng.aiScore);
-              playGameOverSound();
-              triggerGameOverHaptic();
+              // AI Paddle at Top
+              const aiTop = aiPaddleY + eng.aiPaddleRecoil;
+              const aiBottom = aiPaddleY + eng.aiPaddleRecoil + PADDLE_HEIGHT;
+              if (
+                b.vy < 0 &&
+                nextY - b.r <= aiBottom &&
+                nextY + b.r >= aiTop &&
+                nextX >= eng.aiPaddleX - 4 &&
+                nextX <= eng.aiPaddleX + eng.aiPaddleW + 4
+              ) {
+                nextY = aiBottom + b.r;
+                const hitOffset = (nextX - (eng.aiPaddleX + eng.aiPaddleW / 2)) / (eng.aiPaddleW / 2);
+                const maxAngle = Math.PI * 0.38;
+                const angle = hitOffset * maxAngle;
+                const spd = Math.hypot(b.vx, b.vy);
+                b.vx = spd * Math.sin(angle);
+                b.vy = Math.abs(spd * Math.cos(angle));
+                b.lastHitter = 'AI';
 
-              if (eng.playerHearts <= 0) {
-                eng.running = false;
-                setModalType('gameover');
-                setModalTitle('YOUR SHIELD SHATTERED!');
-                setModalSubtitle(`AI WINS ${eng.aiScore} TO ${eng.score}`);
-                setModalVisible(true);
-                return;
+                if (b.isHeavy) {
+                  // HEAVY BALL PUSHES AI PADDLE UPWARDS & SHAKES
+                  eng.aiPaddleRecoil = -12;
+                  eng.aiPaddleX += Math.sign(b.vx || hitOffset) * 16;
+                  eng.aiPaddleX = Math.max(4, Math.min(arenaWidth - eng.aiPaddleW - 4, eng.aiPaddleX));
+
+                  safeSound(playSliceSound);
+                  safeHaptic(triggerPerfectHaptic, 2);
+                  if (juiceRef.current) {
+                    juiceRef.current.shake(6, 4);
+                    juiceRef.current.popup('💥 AI RECOILED!', 'HEAVY IMPACT', '#FF0055');
+                  }
+                } else {
+                  safeSound(playTapSound);
+                  safeHaptic(triggerLightHaptic);
+                }
+              } else if (nextY - b.r < 0) {
+                // Ball collided with AI Shield or breached AI baseline!
+                if (eng.aiHasShield) {
+                  // AI Safety Shield Matrix absorbs and DESTROYS the ball!
+                  eng.aiHasShield = false;
+                  safeSound(playSpeedUpSound);
+                  safeHaptic(triggerMediumHaptic);
+                  if (juiceRef.current) {
+                    juiceRef.current.popup('AI SHIELD VAPORIZED BALL!', 'DEFENSE MATRIX', '#FF0055');
+                    juiceRef.current.flash('#FF0055');
+                  }
+
+                  const otherBallsAlive = nextBalls.length + (eng.balls.length - 1 - i);
+                  if (otherBallsAlive > 0) {
+                    // DESTROY THE BALL!
+                    continue;
+                  } else {
+                    nextY = aiPaddleY + PADDLE_HEIGHT + b.r + 4;
+                    b.vy = Math.abs(b.vy);
+                    b.x = nextX;
+                    b.y = nextY;
+                    nextBalls.push(b);
+                    continue;
+                  }
+                } else {
+                  // Baseline breached: AI loses 1 heart
+                  eng.aiHearts = Math.max(0, eng.aiHearts - 1);
+                  setAiHearts(eng.aiHearts);
+                  eng.score += 100;
+                  setScore(eng.score);
+                  persistBest(eng.score);
+
+                  safeSound(playSliceSound);
+                  safeHaptic(triggerMediumHaptic);
+
+                  if (juiceRef.current) {
+                    juiceRef.current.popup('AI BASELINE BREACHED!', '+100 PTS', '#00F5D4');
+                  }
+
+                  if (eng.aiHearts <= 0) {
+                    eng.running = false;
+                    setModalType('win');
+                    setModalTitle('AI DEFEATED!');
+                    setModalSubtitle(`FINAL SCORE: ${eng.score} VS AI: ${eng.aiScore}`);
+                    setModalVisible(true);
+                    eng.balls = [];
+                    setRenderState((prev) => ({ ...prev, balls: [] }));
+                    return;
+                  }
+
+                  // Ball is destroyed on colliding with baseline if other balls are in play
+                  const otherBallsAlive = nextBalls.length + (eng.balls.length - 1 - i);
+                  if (otherBallsAlive > 0) {
+                    // Vaporize this ball
+                    continue;
+                  } else {
+                    // Respawn a fresh ball from center
+                    nextBalls.push({
+                      id: `respawn_${Date.now()}`,
+                      x: arenaWidth / 2,
+                      y: arenaHeight / 2,
+                      vx: (Math.random() - 0.5) * 160,
+                      vy: 200,
+                      r: DEFAULT_BALL_RADIUS,
+                      color: '#FF007F',
+                      isFire: false,
+                      isHeavy: false,
+                      lastHitter: 'AI',
+                      owner: 'AI',
+                    });
+                    continue;
+                  }
+                }
               }
-              // Bounce upward
-              b.vy = -Math.abs(b.vy);
+            }
+
+            // Bottom Player Paddle Collision with Recoil Check
+            const pTop = paddleY + eng.paddleRecoil;
+            const pBottom = paddleY + eng.paddleRecoil + PADDLE_HEIGHT;
+            if (
+              b.vy > 0 &&
+              nextY + b.r >= pTop &&
+              nextY - b.r <= pBottom &&
+              nextX >= eng.paddleX - 4 &&
+              nextX <= eng.paddleX + eng.paddleW + 4
+            ) {
+              nextY = pTop - b.r;
+              const hitOffset = (nextX - (eng.paddleX + eng.paddleW / 2)) / (eng.paddleW / 2);
+              const maxAngle = Math.PI * 0.40;
+              const angle = hitOffset * maxAngle;
+              const spd = Math.hypot(b.vx, b.vy);
+              b.vx = spd * Math.sin(angle);
+              b.vy = -Math.abs(spd * Math.cos(angle));
+              b.lastHitter = 'PLAYER';
+
+              if (b.isHeavy) {
+                // HEAVY BALL PUSHES PLAYER PADDLE BACKWARDS!
+                eng.paddleRecoil = 12; // Pushes paddle downwards towards bottom
+                eng.paddleX += Math.sign(b.vx || hitOffset) * 16;
+                eng.paddleX = Math.max(4, Math.min(arenaWidth - eng.paddleW - 4, eng.paddleX));
+
+                safeSound(playSliceSound);
+                safeHaptic(triggerPerfectHaptic, 2);
+                if (juiceRef.current) {
+                  juiceRef.current.shake(7, 5);
+                  juiceRef.current.popup('💥 HEAVY IMPACT!', 'PADDLE RECOIL', '#FF6D00');
+                }
+              } else {
+                safeSound(playTapSound);
+                safeHaptic(triggerLightHaptic);
+              }
+            }
+
+            // --- 7. BRICK COLLISIONS (Solo & Center Duel) ---
+            if (eng.mode !== 'HARD_SPHERE_DUEL' && eng.bricks.length > 0) {
+              for (let j = eng.bricks.length - 1; j >= 0; j--) {
+                const brk = eng.bricks[j];
+
+                const testX = Math.max(brk.x, Math.min(nextX, brk.x + brk.w));
+                const testY = Math.max(brk.y, Math.min(nextY, brk.y + brk.h));
+                const distSq = (nextX - testX) ** 2 + (nextY - testY) ** 2;
+
+                if (distSq <= b.r * b.r) {
+                  if (!b.isFire) {
+                    const prevX = b.x;
+                    const prevY = b.y;
+                    if (prevX < brk.x || prevX > brk.x + brk.w) {
+                      b.vx = -b.vx;
+                    } else {
+                      b.vy = -b.vy;
+                    }
+                  }
+
+                  if (b.lastHitter === 'PLAYER') {
+                    eng.score += brk.pts;
+                    setScore(eng.score);
+                    persistBest(eng.score);
+                  } else {
+                    eng.aiScore += brk.pts;
+                    setAiScore(eng.aiScore);
+                  }
+
+                  safeSound(playTapSound);
+                  safeHaptic(triggerLightHaptic);
+
+                  if (brk.type === 'UNBREAKABLE') {
+                    break;
+                  }
+
+                  brk.hp -= 1;
+
+                  if (brk.hp <= 0) {
+                    eng.bricks.splice(j, 1);
+                    safeSound(playSliceSound);
+
+                    if (brk.type === 'EXPLOSIVE') {
+                      if (juiceRef.current) {
+                        juiceRef.current.shake(5, 3);
+                      }
+                      for (let k = eng.bricks.length - 1; k >= 0; k--) {
+                        const nb = eng.bricks[k];
+                        if (
+                          nb.type !== 'UNBREAKABLE' &&
+                          Math.abs(nb.row - brk.row) <= 1 &&
+                          Math.abs(nb.col - brk.col) <= 1
+                        ) {
+                          eng.bricks.splice(k, 1);
+                          if (b.lastHitter === 'PLAYER') {
+                            eng.score += nb.pts;
+                            setScore(eng.score);
+                          } else {
+                            eng.aiScore += nb.pts;
+                            setAiScore(eng.aiScore);
+                          }
+                        }
+                      }
+                    }
+
+                    // Drop falling power-up capsule
+                    if (brk.type === 'POWERUP' || Math.random() < 0.25) {
+                      const capType = CAPSULE_TYPES[Math.floor(Math.random() * CAPSULE_TYPES.length)];
+                      const isUpward = eng.mode === 'AI_BRICK_DUEL' && b.lastHitter === 'AI';
+                      eng.capsules.push({
+                        id: `cap_${Date.now()}_${Math.random()}`,
+                        type: capType.id,
+                        name: capType.name,
+                        icon: capType.icon,
+                        color: capType.color,
+                        x: brk.x + brk.w / 2,
+                        y: brk.y + brk.h / 2,
+                        vy: isUpward ? -125 : 130,
+                      });
+                    }
+
+                    // Check if all breakable bricks cleared!
+                    const breakableLeft = eng.bricks.filter((bk) => bk.type !== 'UNBREAKABLE').length;
+                    if (breakableLeft === 0) {
+                      if (eng.mode === 'SINGLE_BRICKS') {
+                        eng.running = false;
+                        const nextLvl = eng.level + 1;
+                        safeSound(playGameOverSound);
+                        setModalType('win');
+                        setModalTitle('DESIGN CLEARED!');
+                        setModalSubtitle(`SCORE: ${eng.score} // READY FOR LEVEL ${nextLvl}?`);
+                        setModalVisible(true);
+                        return;
+                      } else if (eng.mode === 'AI_BRICK_DUEL') {
+                        eng.running = false;
+                        const won = eng.score >= eng.aiScore;
+                        setModalType(won ? 'win' : 'gameover');
+                        setModalTitle(won ? 'DUEL VICTORY!' : 'AI RIVAL WON!');
+                        setModalSubtitle(`FINAL SCORE: ${eng.score} VS AI: ${eng.aiScore}`);
+                        setModalVisible(true);
+                        return;
+                      }
+                    }
+                  }
+                  break;
+                }
+              }
+            }
+
+            // --- 8. BOTTOM BOUNDARY CHECK (PLAYER SHIELD / BASELINE) ---
+            if (nextY + b.r >= arenaHeight) {
+              // Safety shield check
+              if (eng.hasShield) {
+                // Safety Shield Matrix absorbs and DESTROYS the ball!
+                eng.hasShield = false;
+                safeSound(playSpeedUpSound);
+                safeHaptic(triggerMediumHaptic);
+                if (juiceRef.current) {
+                  juiceRef.current.popup('SHIELD VAPORIZED BALL!', 'DEFENSE MATRIX', '#00F5D4');
+                  juiceRef.current.flash('#00F5D4');
+                }
+
+                const otherBallsAlive = nextBalls.length + (eng.balls.length - 1 - i);
+                if (otherBallsAlive > 0) {
+                  // DESTROY THE BALL!
+                  continue;
+                } else {
+                  nextY = arenaHeight - 8 - b.r;
+                  b.vy = -Math.abs(b.vy);
+                  b.x = nextX;
+                  b.y = nextY;
+                  nextBalls.push(b);
+                  continue;
+                }
+              }
+
+              // Ball lost past bottom
+              if (eng.mode === 'SINGLE_BRICKS') {
+                const otherBallsAlive = nextBalls.length + (eng.balls.length - 1 - i);
+                if (otherBallsAlive > 0) {
+                  safeSound(playTapSound);
+                  continue; // drop extra ball, keep remaining
+                }
+
+                eng.playerHearts = Math.max(0, eng.playerHearts - 1);
+                setPlayerHearts(eng.playerHearts);
+                safeSound(playGameOverSound);
+                safeHaptic(triggerGameOverHaptic);
+
+                if (eng.playerHearts <= 0) {
+                  eng.running = false;
+                  setModalType('gameover');
+                  setModalTitle('SHIELD DEPLETED!');
+                  setModalSubtitle(`FINAL SCORE: ${eng.score} IN LEVEL ${eng.level}`);
+                  setModalVisible(true);
+                  eng.balls = [];
+                  setRenderState((prev) => ({ ...prev, balls: [] }));
+                  return;
+                } else {
+                  // Reset ball to paddle
+                  eng.ballLaunched = false;
+                  setBallLaunched(false);
+                  nextBalls.push({
+                    id: `solo_ball_${Date.now()}`,
+                    x: eng.paddleX + eng.paddleW / 2,
+                    y: paddleY - DEFAULT_BALL_RADIUS - 2,
+                    vx: 0,
+                    vy: 0,
+                    r: DEFAULT_BALL_RADIUS,
+                    color: '#00F5FF',
+                    isFire: false,
+                    isHeavy: false,
+                    lastHitter: 'PLAYER',
+                    owner: 'PLAYER',
+                  });
+                  break;
+                }
+              } else {
+                // Duel modes: player loses 1 heart
+                eng.playerHearts = Math.max(0, eng.playerHearts - 1);
+                setPlayerHearts(eng.playerHearts);
+                eng.aiScore += 100;
+                setAiScore(eng.aiScore);
+                safeSound(playGameOverSound);
+                safeHaptic(triggerGameOverHaptic);
+
+                if (eng.playerHearts <= 0) {
+                  eng.running = false;
+                  setModalType('gameover');
+                  setModalTitle('YOUR SHIELD SHATTERED!');
+                  setModalSubtitle(`AI WINS ${eng.aiScore} TO ${eng.score}`);
+                  setModalVisible(true);
+                  eng.balls = [];
+                  setRenderState((prev) => ({ ...prev, balls: [] }));
+                  return;
+                }
+
+                // In AI vs Player duel: ball is destroyed on colliding with shield/baseline!
+                const otherBallsAlive = nextBalls.length + (eng.balls.length - 1 - i);
+                if (otherBallsAlive > 0) {
+                  if (juiceRef.current) {
+                    juiceRef.current.popup('BALL DESTROYED!', '-1 HEART', '#FF0055');
+                  }
+                  continue; // DESTROY BALL!
+                } else {
+                  // Respawn a fresh ball from center so duel never stalls
+                  nextBalls.push({
+                    id: `respawn_${Date.now()}`,
+                    x: arenaWidth / 2,
+                    y: arenaHeight / 2,
+                    vx: (Math.random() - 0.5) * 160,
+                    vy: -200,
+                    r: DEFAULT_BALL_RADIUS,
+                    color: '#00F5FF',
+                    isFire: false,
+                    isHeavy: false,
+                    lastHitter: 'PLAYER',
+                    owner: 'PLAYER',
+                  });
+                  continue;
+                }
+              }
+            }
+
+            b.x = nextX;
+            b.y = nextY;
+            nextBalls.push(b);
+          }
+
+          // --- 9. BALL-TO-BALL ELASTIC COLLISIONS (WITH HEAVY BALL MOMENTUM) ---
+          if (nextBalls.length > 1) {
+            for (let i = 0; i < nextBalls.length; i++) {
+              for (let j = i + 1; j < nextBalls.length; j++) {
+                const b1 = nextBalls[i];
+                const b2 = nextBalls[j];
+
+                const dx = b2.x - b1.x;
+                const dy = b2.y - b1.y;
+                const distSq = dx * dx + dy * dy;
+                const minDist = b1.r + b2.r;
+
+                if (distSq < minDist * minDist && distSq > 0.0001) {
+                  const dist = Math.sqrt(distSq);
+                  const nx = dx / dist;
+                  const ny = dy / dist;
+
+                  // Positional separation to prevent sticking
+                  const overlap = minDist - dist;
+                  b1.x -= nx * overlap * 0.5;
+                  b1.y -= ny * overlap * 0.5;
+                  b2.x += nx * overlap * 0.5;
+                  b2.y += ny * overlap * 0.5;
+
+                  const m1 = b1.isHeavy ? 3.5 : 1.0;
+                  const m2 = b2.isHeavy ? 3.5 : 1.0;
+
+                  // Relative velocity
+                  const kx = b1.vx - b2.vx;
+                  const ky = b1.vy - b2.vy;
+                  const p = nx * kx + ny * ky;
+
+                  // Exchange momentum if moving towards each other
+                  if (p > 0) {
+                    const impulse = (2 * p) / (m1 + m2);
+                    b1.vx -= impulse * m2 * nx;
+                    b1.vy -= impulse * m2 * ny;
+                    b2.vx += impulse * m1 * nx;
+                    b2.vy += impulse * m1 * ny;
+
+                    if (b1.isHeavy || b2.isHeavy) {
+                      safeSound(playSliceSound);
+                      safeHaptic(triggerMediumHaptic);
+                      if (juiceRef.current) juiceRef.current.pulse(1.08);
+                    } else {
+                      safeSound(playTapSound);
+                      safeHaptic(triggerLightHaptic);
+                      if (juiceRef.current) juiceRef.current.pulse(1.04);
+                    }
+                  }
+                }
+              }
             }
           }
 
-          b.x = nextX;
-          b.y = nextY;
-          nextBalls.push(b);
+          eng.balls = nextBalls;
+
+          setRenderState({
+            paddleX: eng.paddleX,
+            paddleW: eng.paddleW,
+            paddleOffsetY: eng.paddleRecoil,
+            aiPaddleX: eng.aiPaddleX,
+            aiPaddleW: eng.aiPaddleW,
+            aiPaddleOffsetY: eng.aiPaddleRecoil,
+            balls: [...eng.balls],
+            bricks: [...eng.bricks],
+            capsules: [...eng.capsules],
+            hasShield: eng.hasShield,
+            aiHasShield: eng.aiHasShield,
+          });
         }
-
-        // Keep at least 2 balls in Duel modes
-        if (eng.mode !== 'SINGLE_BRICKS') {
-          while (nextBalls.length < 2) {
-            const spd = eng.mode === 'HARD_SPHERE_DUEL' ? 260 : 210;
-            nextBalls.push({
-              id: `respawn_${Date.now()}_${Math.random()}`,
-              x: arenaWidth / 2 + (Math.random() - 0.5) * 60,
-              y: arenaHeight / 2,
-              vx: (Math.random() - 0.5) * spd,
-              vy: Math.random() > 0.5 ? spd * 0.75 : -spd * 0.75,
-              r: DEFAULT_BALL_RADIUS,
-              color: nextBalls.length % 2 === 0 ? '#00F5FF' : '#FF007F',
-              isFire: false,
-              lastHitter: 'PLAYER',
-            });
-          }
-        }
-
-        eng.balls = nextBalls;
-
-        setRenderState({
-          paddleX: eng.paddleX,
-          paddleW: eng.paddleW,
-          aiPaddleX: eng.aiPaddleX,
-          aiPaddleW: eng.aiPaddleW,
-          balls: [...eng.balls],
-          bricks: [...eng.bricks],
-          capsules: [...eng.capsules],
-          hasShield: eng.hasShield,
-        });
+      } catch (err) {
+        // Prevent any game-loop error from crashing the entire app
       }
 
       frameId = requestAnimationFrame(tick);
@@ -1055,23 +1423,34 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
     };
   }, [arenaWidth, arenaHeight, paddleY, aiPaddleY, persistBest, basePaddleW]);
 
-  // PanResponder for smooth 1:1 paddle dragging
-  const dragStartRef = useRef({ startX: 0, startPaddleX: 0 });
+  // PanResponder for smooth 1:1 paddle dragging & tap-to-start detection
+  const dragStartRef = useRef({ startX: 0, startPaddleX: 0, hasMoved: false });
 
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => !isPausedRef.current,
-      onMoveShouldSetPanResponder: () => !isPausedRef.current,
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        return !isPausedRef.current && Math.abs(gestureState.dx) > 3;
+      },
       onPanResponderGrant: (evt) => {
         dragStartRef.current.startX = evt.nativeEvent.pageX;
         dragStartRef.current.startPaddleX = engineRef.current.paddleX;
+        dragStartRef.current.hasMoved = false;
       },
       onPanResponderMove: (evt) => {
         const dx = evt.nativeEvent.pageX - dragStartRef.current.startX;
+        if (Math.abs(dx) > 5) {
+          dragStartRef.current.hasMoved = true;
+        }
         const eng = engineRef.current;
         const targetX = dragStartRef.current.startPaddleX + dx;
         const clamped = Math.max(4, Math.min(arenaWidth - eng.paddleW - 4, targetX));
         eng.paddleX = clamped;
+      },
+      onPanResponderRelease: () => {
+        if (!engineRef.current.ballLaunched) {
+          handleLaunchBall();
+        }
       },
     })
   ).current;
@@ -1081,8 +1460,8 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
     const eng = engineRef.current;
     const targetX = eng.paddleX + delta;
     eng.paddleX = Math.max(4, Math.min(arenaWidth - eng.paddleW - 4, targetX));
-    playTapSound();
-    triggerLightHaptic();
+    safeSound(playTapSound);
+    safeHaptic(triggerLightHaptic);
   };
 
   const currentDesign = BRICK_DESIGNS[(level - 1) % BRICK_DESIGNS.length];
@@ -1095,293 +1474,324 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
           style={StyleSheet.absoluteFillObject}
         />
 
-        <MiniGameHeader
-          title="BRICK BREAKER"
-          floorLabel="FLOOR 09 // QUANTUM ARENA"
-          score={score}
-          bestScore={bestScore}
-          accentColor={mode === 'HARD_SPHERE_DUEL' ? '#FF0055' : '#00F5FF'}
-          onBack={onBackToHub}
-          onReset={() => resetGame(mode, level)}
-        />
+        <View
+          style={{ flex: 1 }}
+          pointerEvents={modalVisible ? 'none' : 'auto'}
+        >
+          <MiniGameHeader
+            title="BRICK BREAKER"
+            floorLabel="FLOOR 09 // QUANTUM ARENA"
+            score={score}
+            bestScore={bestScore}
+            accentColor={mode === 'HARD_SPHERE_DUEL' ? '#FF0055' : '#00F5FF'}
+            onBack={onBackToHub}
+            onReset={() => resetGame(mode, level)}
+            disabled={modalVisible}
+          />
 
-        {/* 3 Game Modes Selector */}
-        <View style={localStyles.modeSelectorBar}>
-          {MODES.map((m) => {
-            const isSelected = mode === m.id;
-            return (
-              <Pressable
-                key={m.id}
-                onPress={() => resetGame(m.id, 1)}
-                style={[
-                  localStyles.modePill,
-                  isSelected && {
-                    backgroundColor: `${m.color}25`,
-                    borderColor: m.color,
-                  },
-                ]}
-              >
-                <Text
+          {/* 3 Game Modes Selector */}
+          <View style={localStyles.modeSelectorBar}>
+            {MODES.map((m) => {
+              const isSelected = mode === m.id;
+              return (
+                <Pressable
+                  key={m.id}
+                  onPress={() => resetGame(m.id, 1)}
                   style={[
-                    localStyles.modePillText,
-                    { color: isSelected ? m.color : '#8A8F9E' },
+                    localStyles.modePill,
+                    isSelected && {
+                      backgroundColor: `${m.color}25`,
+                      borderColor: m.color,
+                    },
                   ]}
                 >
-                  {m.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
+                  <Text
+                    style={[
+                      localStyles.modePillText,
+                      { color: isSelected ? m.color : '#8A8F9E' },
+                    ]}
+                  >
+                    {m.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
 
-        {/* Status / Hearts Row */}
-        <View style={[localStyles.heartsRow, { width: arenaWidth }]}>
-          {mode === 'SINGLE_BRICKS' ? (
-            <>
-              <View style={localStyles.heartSide}>
-                <Text style={localStyles.heartLabel}>
-                  LEVEL {level}: {currentDesign.name} {currentDesign.icon}
-                </Text>
-                <Text style={localStyles.subInfoText}>
-                  BRICKS: {renderState.bricks.filter((b) => b.type !== 'UNBREAKABLE').length} REMAINING
-                </Text>
-              </View>
-
-              <View style={[localStyles.heartSide, { alignItems: 'flex-end' }]}>
-                <Text style={localStyles.heartLabel}>SHIELD LIVES</Text>
-                <View style={localStyles.heartsContainer}>
-                  {Array.from({ length: INITIAL_HEARTS }).map((_, i) => (
-                    <Text key={`p_h_${i}`} style={localStyles.heartIcon}>
-                      {i < playerHearts ? '💙' : '🖤'}
-                    </Text>
-                  ))}
-                </View>
-              </View>
-            </>
-          ) : (
-            <>
-              {/* Opponent Hearts / Score */}
-              <View style={localStyles.heartSide}>
-                <Text style={localStyles.heartLabel}>
-                  {mode === 'HARD_SPHERE_DUEL' ? '🔥 AI HARD' : '🤖 AI RIVAL'}: {aiScore} PTS
-                </Text>
-                <View style={localStyles.heartsContainer}>
-                  {Array.from({ length: INITIAL_HEARTS }).map((_, i) => (
-                    <Text key={`ai_h_${i}`} style={localStyles.heartIcon}>
-                      {i < aiHearts ? '❤️' : '🖤'}
-                    </Text>
-                  ))}
-                </View>
-              </View>
-
-              {/* Player Hearts / Score */}
-              <View style={[localStyles.heartSide, { alignItems: 'flex-end' }]}>
-                <Text style={localStyles.heartLabel}>YOU: {score} PTS</Text>
-                <View style={localStyles.heartsContainer}>
-                  {Array.from({ length: INITIAL_HEARTS }).map((_, i) => (
-                    <Text key={`p_h_${i}`} style={localStyles.heartIcon}>
-                      {i < playerHearts ? '💙' : '🖤'}
-                    </Text>
-                  ))}
-                </View>
-              </View>
-            </>
-          )}
-        </View>
-
-        {/* PLAYABLE ARENA */}
-        <View style={localStyles.arenaWrapper}>
-          <View
-            {...panResponder.panHandlers}
-            style={[
-              localStyles.arena,
-              {
-                width: arenaWidth,
-                height: arenaHeight,
-                borderColor: mode === 'HARD_SPHERE_DUEL' ? 'rgba(255, 0, 85, 0.45)' : 'rgba(0, 245, 255, 0.35)',
-              },
-            ]}
-          >
-            {/* Top Boundary: Solid Reflector Wall in Solo, AI Paddle in Duel */}
+          {/* Status / Hearts Row */}
+          <View style={[localStyles.heartsRow, { width: arenaWidth }]}>
             {mode === 'SINGLE_BRICKS' ? (
-              <View style={localStyles.singleTopWall}>
-                <View style={localStyles.wallGleam} />
-                <Text style={localStyles.singleWallText}>ENERGY REFLECTOR WALL</Text>
-              </View>
+              <>
+                <View style={localStyles.heartSide}>
+                  <Text style={localStyles.heartLabel}>
+                    LEVEL {level}: {currentDesign.name} {currentDesign.icon}
+                  </Text>
+                  <Text style={localStyles.subInfoText}>
+                    BRICKS: {renderState.bricks.filter((b) => b.type !== 'UNBREAKABLE').length} REMAINING
+                  </Text>
+                </View>
+
+                <View style={[localStyles.heartSide, { alignItems: 'flex-end' }]}>
+                  <Text style={localStyles.heartLabel}>SHIELD LIVES</Text>
+                  <View style={localStyles.heartsContainer}>
+                    {Array.from({ length: INITIAL_HEARTS }).map((_, i) => (
+                      <Text key={`p_h_${i}`} style={localStyles.heartIcon}>
+                        {i < playerHearts ? '💙' : '🖤'}
+                      </Text>
+                    ))}
+                  </View>
+                </View>
+              </>
             ) : (
-              <View
-                style={[
-                  localStyles.aiPaddle,
-                  {
-                    left: renderState.aiPaddleX,
-                    top: aiPaddleY,
-                    width: renderState.aiPaddleW,
-                    height: PADDLE_HEIGHT,
-                    borderColor: mode === 'HARD_SPHERE_DUEL' ? '#FF0055' : '#00F5D4',
-                  },
-                ]}
-              >
-                <View
-                  style={[
-                    localStyles.paddleInnerCore,
-                    { backgroundColor: mode === 'HARD_SPHERE_DUEL' ? '#FF0055' : '#00F5D4' },
-                  ]}
-                />
-              </View>
-            )}
-
-            {/* Mode 3 Ability Radar Countdown on Left Side */}
-            {mode === 'HARD_SPHERE_DUEL' && (
-              <View style={localStyles.abilityRadarBox} pointerEvents="none">
-                <Text style={localStyles.abilityRadarHeader}>RADAR</Text>
-                {activeAbility ? (
-                  <View style={localStyles.activeAbilityCard}>
-                    <Text style={localStyles.abilityIconLarge}>{activeAbility.icon}</Text>
-                    <Text style={localStyles.activeAbilityTitle}>ACTIVE</Text>
-                    <Text style={localStyles.activeAbilityName}>{activeAbility.name}</Text>
+              <>
+                {/* Opponent Hearts / Score */}
+                <View style={localStyles.heartSide}>
+                  <Text style={localStyles.heartLabel}>
+                    {mode === 'HARD_SPHERE_DUEL' ? '🔥 AI HARD' : '🤖 AI RIVAL'}: {aiScore} PTS
+                  </Text>
+                  <View style={localStyles.heartsContainer}>
+                    {Array.from({ length: INITIAL_HEARTS }).map((_, i) => (
+                      <Text key={`ai_h_${i}`} style={localStyles.heartIcon}>
+                        {i < aiHearts ? '❤️' : '🖤'}
+                      </Text>
+                    ))}
                   </View>
-                ) : (
-                  <View style={localStyles.nextAbilityCard}>
-                    <Text style={localStyles.abilityIconLarge}>⚡</Text>
-                    <Text style={localStyles.nextAbilityLabel}>UP NEXT</Text>
-                    <View style={localStyles.countdownPill}>
-                      <Text style={localStyles.countdownText}>{nextAbilityCountdown}s</Text>
-                    </View>
+                </View>
+
+                {/* Player Hearts / Score */}
+                <View style={[localStyles.heartSide, { alignItems: 'flex-end' }]}>
+                  <Text style={localStyles.heartLabel}>YOU: {score} PTS</Text>
+                  <View style={localStyles.heartsContainer}>
+                    {Array.from({ length: INITIAL_HEARTS }).map((_, i) => (
+                      <Text key={`p_h_${i}`} style={localStyles.heartIcon}>
+                        {i < playerHearts ? '💙' : '🖤'}
+                      </Text>
+                    ))}
                   </View>
-                )}
-              </View>
+                </View>
+              </>
             )}
+          </View>
 
-            {/* BRICKS (Modes 1 & 2) */}
-            {renderState.bricks.map((brk) => (
-              <View
-                key={brk.id}
-                style={[
-                  localStyles.brick,
-                  {
-                    left: brk.x,
-                    top: brk.y,
-                    width: brk.w,
-                    height: brk.h,
-                    borderColor: brk.color,
-                    backgroundColor:
-                      brk.type === 'UNBREAKABLE'
-                        ? 'rgba(100, 116, 139, 0.7)'
-                        : brk.hp < brk.maxHp
-                          ? 'rgba(255, 0, 85, 0.4)'
-                          : `${brk.color}35`,
-                  },
-                ]}
-              >
-                {brk.type === 'POWERUP' && (
-                  <Text style={localStyles.brickIcon}>★</Text>
-                )}
-                {brk.type === 'EXPLOSIVE' && (
-                  <Text style={localStyles.brickIcon}>💣</Text>
-                )}
-                {brk.type === 'UNBREAKABLE' && (
-                  <Text style={localStyles.brickIcon}>🔒</Text>
-                )}
-                {brk.type === 'ARMORED' && (
-                  <Text style={localStyles.brickHp}>{brk.hp}</Text>
-                )}
-              </View>
-            ))}
-
-            {/* FALLING POWER-UP CAPSULES */}
-            {renderState.capsules.map((cap) => (
-              <View
-                key={cap.id}
-                style={[
-                  localStyles.capsulePill,
-                  {
-                    left: cap.x - 14,
-                    top: cap.y - 10,
-                    borderColor: cap.color,
-                  },
-                ]}
-              >
-                <Text style={localStyles.capsuleIcon}>{cap.icon}</Text>
-              </View>
-            ))}
-
-            {/* BALLS */}
-            {renderState.balls.map((b) => (
-              <View
-                key={b.id}
-                pointerEvents="none"
-                style={[
-                  localStyles.ball,
-                  {
-                    left: b.x - b.r,
-                    top: b.y - b.r,
-                    width: b.r * 2,
-                    height: b.r * 2,
-                    borderRadius: b.r,
-                    backgroundColor: b.isFire ? '#FF6D00' : b.color,
-                    shadowColor: b.isFire ? '#FF6D00' : b.color,
-                  },
-                ]}
-              >
-                <View
-                  style={[
-                    localStyles.ballCore,
-                    b.isFire && { backgroundColor: '#FFE600' },
-                  ]}
-                />
-              </View>
-            ))}
-
-            {/* Bottom Safety Shield Line */}
-            {renderState.hasShield && (
-              <View style={[localStyles.safetyShieldLine, { width: arenaWidth }]} />
-            )}
-
-            {/* Player Paddle */}
+          {/* PLAYABLE ARENA */}
+          <View style={localStyles.arenaWrapper}>
             <View
+              {...panResponder.panHandlers}
               style={[
-                localStyles.playerPaddle,
+                localStyles.arena,
                 {
-                  left: renderState.paddleX,
-                  top: paddleY,
-                  width: renderState.paddleW,
-                  height: PADDLE_HEIGHT,
+                  width: arenaWidth,
+                  height: arenaHeight,
+                  borderColor: mode === 'HARD_SPHERE_DUEL' ? 'rgba(255, 0, 85, 0.45)' : 'rgba(0, 245, 255, 0.35)',
                 },
               ]}
             >
-              <View style={localStyles.paddleInnerCore} />
+              {/* Top Boundary: Solid Reflector Wall in Solo, AI Paddle in Duel */}
+              {mode === 'SINGLE_BRICKS' ? (
+                <View style={localStyles.singleTopWall}>
+                  <View style={localStyles.wallGleam} />
+                  <Text style={localStyles.singleWallText}>ENERGY REFLECTOR WALL</Text>
+                </View>
+              ) : (
+                <View
+                  style={[
+                    localStyles.aiPaddle,
+                    {
+                      left: renderState.aiPaddleX,
+                      top: aiPaddleY + renderState.aiPaddleOffsetY,
+                      width: renderState.aiPaddleW,
+                      height: PADDLE_HEIGHT,
+                      borderColor: mode === 'HARD_SPHERE_DUEL' ? '#FF0055' : '#00F5D4',
+                    },
+                  ]}
+                >
+                  <View
+                    style={[
+                      localStyles.paddleInnerCore,
+                      { backgroundColor: mode === 'HARD_SPHERE_DUEL' ? '#FF0055' : '#00F5D4' },
+                    ]}
+                  />
+                </View>
+              )}
+
+              {/* AI Safety Shield Line if AI picked shield */}
+              {renderState.aiHasShield && (
+                <View style={[localStyles.aiSafetyShieldLine, { width: arenaWidth }]} />
+              )}
+
+              {/* Mode 3 Ability Radar Countdown on Left Side */}
+              {mode === 'HARD_SPHERE_DUEL' && (
+                <View style={localStyles.abilityRadarBox} pointerEvents="none">
+                  <Text style={localStyles.abilityRadarHeader}>RADAR</Text>
+                  {activeAbility ? (
+                    <View style={localStyles.activeAbilityCard}>
+                      <Text style={localStyles.abilityIconLarge}>{activeAbility.icon}</Text>
+                      <Text style={localStyles.activeAbilityTitle}>ACTIVE</Text>
+                      <Text style={localStyles.activeAbilityName}>{activeAbility.name}</Text>
+                    </View>
+                  ) : (
+                    <View style={localStyles.nextAbilityCard}>
+                      <Text style={localStyles.abilityIconLarge}>⚡</Text>
+                      <Text style={localStyles.nextAbilityLabel}>UP NEXT</Text>
+                      <View style={localStyles.countdownPill}>
+                        <Text style={localStyles.countdownText}>{nextAbilityCountdown}s</Text>
+                      </View>
+                    </View>
+                  )}
+                </View>
+              )}
+
+              {/* BRICKS (Modes 1 & 2) */}
+              {renderState.bricks.map((brk) => (
+                <View
+                  key={brk.id}
+                  style={[
+                    localStyles.brick,
+                    {
+                      left: brk.x,
+                      top: brk.y,
+                      width: brk.w,
+                      height: brk.h,
+                      borderColor: brk.color,
+                      backgroundColor:
+                        brk.type === 'UNBREAKABLE'
+                          ? 'rgba(100, 116, 139, 0.7)'
+                          : brk.hp < brk.maxHp
+                            ? 'rgba(255, 0, 85, 0.4)'
+                            : `${brk.color}35`,
+                    },
+                  ]}
+                >
+                  {brk.type === 'POWERUP' && (
+                    <Text style={localStyles.brickIcon}>★</Text>
+                  )}
+                  {brk.type === 'EXPLOSIVE' && (
+                    <Text style={localStyles.brickIcon}>💣</Text>
+                  )}
+                  {brk.type === 'UNBREAKABLE' && (
+                    <Text style={localStyles.brickIcon}>🔒</Text>
+                  )}
+                  {brk.type === 'ARMORED' && (
+                    <Text style={localStyles.brickHp}>{brk.hp}</Text>
+                  )}
+                </View>
+              ))}
+
+              {/* FALLING POWER-UP CAPSULES */}
+              {renderState.capsules.map((cap) => (
+                <View
+                  key={cap.id}
+                  style={[
+                    localStyles.capsulePill,
+                    {
+                      left: cap.x - 14,
+                      top: cap.y - 10,
+                      borderColor: cap.color,
+                    },
+                  ]}
+                >
+                  <Text style={localStyles.capsuleIcon}>{cap.icon}</Text>
+                </View>
+              ))}
+
+              {/* BALLS WITH HEAVY BALL STYLING */}
+              {renderState.balls.map((b) => (
+                <View
+                  key={b.id}
+                  pointerEvents="none"
+                  style={[
+                    localStyles.ball,
+                    {
+                      left: b.x - b.r,
+                      top: b.y - b.r,
+                      width: b.r * 2,
+                      height: b.r * 2,
+                      borderRadius: b.r,
+                      backgroundColor: b.isHeavy ? '#FF4500' : b.isFire ? '#FF6D00' : b.color,
+                      shadowColor: b.isHeavy ? '#FF4500' : b.isFire ? '#FF6D00' : b.color,
+                      borderWidth: b.isHeavy ? 2.5 : 0,
+                      borderColor: b.isHeavy ? '#FFE600' : 'transparent',
+                    },
+                  ]}
+                >
+                  <View
+                    style={[
+                      localStyles.ballCore,
+                      b.isHeavy
+                        ? { backgroundColor: '#FFE600', width: '48%', height: '48%' }
+                        : b.isFire
+                        ? { backgroundColor: '#FFE600' }
+                        : null,
+                    ]}
+                  />
+                </View>
+              ))}
+
+              {/* Bottom Safety Shield Line */}
+              {renderState.hasShield && (
+                <View style={[localStyles.safetyShieldLine, { width: arenaWidth }]} />
+              )}
+
+              {/* Player Paddle with Recoil Offset */}
+              <View
+                style={[
+                  localStyles.playerPaddle,
+                  {
+                    left: renderState.paddleX,
+                    top: paddleY + renderState.paddleOffsetY,
+                    width: renderState.paddleW,
+                    height: PADDLE_HEIGHT,
+                  },
+                ]}
+              >
+                <View style={localStyles.paddleInnerCore} />
+              </View>
+
+              {/* PROMINENT "TAP TO START" BUTTON IN ALL MODES */}
+              {!ballLaunched && (
+                <View style={localStyles.launchOverlay} pointerEvents="box-none">
+                  <Pressable
+                    style={localStyles.launchBtnCard}
+                    onPress={handleLaunchBall}
+                    hitSlop={20}
+                  >
+                    <Text style={localStyles.launchBtnIcon}>🚀</Text>
+                    <Text style={localStyles.launchBtnText}>TAP TO START</Text>
+                    <Text style={localStyles.launchSubText}>
+                      {mode === 'SINGLE_BRICKS'
+                        ? 'LAUNCH BALL TO BREAK BRICKS'
+                        : mode === 'AI_BRICK_DUEL'
+                        ? '1 BALL EACH // CENTER BRICK BATTLE'
+                        : '1 BALL EACH // HIGH VELOCITY DUEL'}
+                    </Text>
+                  </Pressable>
+                </View>
+              )}
+            </View>
+          </View>
+
+          {/* Bottom Paddle Nudge Controls with Safe Area Insets */}
+          <View style={[localStyles.controlsRow, { width: arenaWidth, paddingBottom: Math.max(16, insets.bottom + 10) }]}>
+            <Pressable
+              style={localStyles.controlBtn}
+              onPress={() => handleNudge(-30)}
+              hitSlop={10}
+            >
+              <Text style={localStyles.controlBtnText}>◀</Text>
+            </Pressable>
+
+            <View style={localStyles.dragHint}>
+              <Text style={localStyles.dragHintText}>DRAG ANYWHERE TO STEER</Text>
             </View>
 
-            {/* Launch Prompt for Solo Mode */}
-            {mode === 'SINGLE_BRICKS' && !ballLaunched && (
-              <Pressable style={localStyles.launchBtn} onPress={handleLaunchBall}>
-                <Text style={localStyles.launchBtnText}>TAP TO LAUNCH 🚀</Text>
-              </Pressable>
-            )}
+            <Pressable
+              style={localStyles.controlBtn}
+              onPress={() => handleNudge(30)}
+              hitSlop={10}
+            >
+              <Text style={localStyles.controlBtnText}>▶</Text>
+            </Pressable>
           </View>
-        </View>
-
-        {/* Bottom Paddle Nudge Controls */}
-        <View style={[localStyles.controlsRow, { width: arenaWidth }]}>
-          <Pressable
-            style={localStyles.controlBtn}
-            onPress={() => handleNudge(-30)}
-            hitSlop={8}
-          >
-            <Text style={localStyles.controlBtnText}>◀</Text>
-          </Pressable>
-
-          <View style={localStyles.dragHint}>
-            <Text style={localStyles.dragHintText}>DRAG ANYWHERE TO STEER</Text>
-          </View>
-
-          <Pressable
-            style={localStyles.controlBtn}
-            onPress={() => handleNudge(30)}
-            hitSlop={8}
-          >
-            <Text style={localStyles.controlBtnText}>▶</Text>
-          </Pressable>
         </View>
 
         {/* Victory / Defeat Modal */}
@@ -1419,8 +1829,8 @@ const localStyles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     paddingHorizontal: 12,
-    marginTop: 6,
-    marginBottom: 8,
+    marginTop: 4,
+    marginBottom: 6,
   },
   modePill: {
     paddingHorizontal: 10,
@@ -1600,23 +2010,59 @@ const localStyles = StyleSheet.create({
     shadowOpacity: 0.9,
     shadowRadius: 6,
   },
-  launchBtn: {
+  aiSafetyShieldLine: {
     position: 'absolute',
-    alignSelf: 'center',
-    bottom: 70,
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    backgroundColor: 'rgba(0, 245, 255, 0.25)',
-    borderRadius: 12,
-    borderWidth: 1.5,
+    top: 4,
+    left: 0,
+    height: 3,
+    backgroundColor: '#FF0055',
+    shadowColor: '#FF0055',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.9,
+    shadowRadius: 6,
+  },
+  launchOverlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 25,
+  },
+  launchBtnCard: {
+    paddingHorizontal: 22,
+    paddingVertical: 14,
+    borderRadius: 16,
+    backgroundColor: 'rgba(10, 8, 28, 0.95)',
+    borderWidth: 2,
     borderColor: '#00F5FF',
+    alignItems: 'center',
+    shadowColor: '#00F5FF',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.9,
+    shadowRadius: 14,
+    elevation: 8,
+  },
+  launchBtnIcon: {
+    fontSize: 22,
+    marginBottom: 4,
   },
   launchBtnText: {
     fontFamily: monoFont,
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '900',
     color: '#00F5FF',
-    letterSpacing: 1.2,
+    letterSpacing: 1.5,
+  },
+  launchSubText: {
+    fontFamily: monoFont,
+    fontSize: 8.5,
+    fontWeight: '800',
+    color: '#A0AEC0',
+    letterSpacing: 0.8,
+    marginTop: 4,
   },
   abilityRadarBox: {
     position: 'absolute',
@@ -1694,7 +2140,7 @@ const localStyles = StyleSheet.create({
     justifyContent: 'space-between',
     alignSelf: 'center',
     paddingHorizontal: 8,
-    paddingVertical: 10,
+    paddingTop: 8,
   },
   controlBtn: {
     width: 48,

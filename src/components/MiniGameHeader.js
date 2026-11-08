@@ -45,6 +45,7 @@ export default function MiniGameHeader({
   onBackToHub,
   onReset,
   rightExtra = null,
+  disabled = false,
 }) {
   const insets = useSafeAreaInsets();
   const scoreScale = useSharedValue(1);
@@ -71,6 +72,7 @@ export default function MiniGameHeader({
   }));
 
   const handleBack = () => {
+    if (disabled) return;
     try {
       triggerLightHaptic();
       playTapSound();
@@ -81,6 +83,7 @@ export default function MiniGameHeader({
   };
 
   const handleReset = () => {
+    if (disabled) return;
     try {
       triggerLightHaptic();
       playTapSound();
@@ -95,8 +98,9 @@ export default function MiniGameHeader({
       style={[
         localStyles.wrapper,
         { paddingTop: Math.max(insets.top + 6, Platform.OS === 'android' ? 36 : 12) },
+        disabled && { opacity: 0.4 },
       ]}
-      pointerEvents="box-none"
+      pointerEvents={disabled ? 'none' : 'box-none'}
     >
       <LinearGradient
         colors={['rgba(8, 8, 22, 0.98)', 'rgba(16, 10, 34, 0.96)']}
@@ -111,11 +115,12 @@ export default function MiniGameHeader({
         <View style={localStyles.leftRow}>
           <Pressable
             onPress={handleBack}
+            disabled={disabled}
             hitSlop={{ top: 20, bottom: 20, left: 20, right: 30 }}
             style={({ pressed }) => [
               localStyles.backBtn,
               { borderColor: hexToRgba(accentColor, 0.65) },
-              pressed && { opacity: 0.65, transform: [{ scale: 0.92 }] },
+              pressed && !disabled && { opacity: 0.65, transform: [{ scale: 0.92 }] },
             ]}
           >
             <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
@@ -168,11 +173,12 @@ export default function MiniGameHeader({
           {onReset && (
             <Pressable
               onPress={handleReset}
+              disabled={disabled}
               hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
               style={({ pressed }) => [
                 localStyles.resetBtn,
                 { borderColor: hexToRgba(accentColor, 0.4) },
-                pressed && { opacity: 0.7, transform: [{ scale: 0.94 }] },
+                pressed && !disabled && { opacity: 0.7, transform: [{ scale: 0.94 }] },
               ]}
             >
               <Text style={[localStyles.resetText, { color: accentColor }]}>

@@ -23,7 +23,7 @@ import Svg, {
   Polygon,
   Line,
 } from 'react-native-svg';
-import { COLORS, GAME_CONFIG } from '../../styles';
+import { COLORS } from '../../styles';
 import TowerAnimatedBackground from './TowerAnimatedBackground';
 import JuiceEngine from './JuiceEngine';
 
@@ -39,7 +39,7 @@ import SimonPulseGame from '../games/SimonPulseGame';
 import BrickBreakerGame from '../games/BrickBreakerGame';
 import CyberSnakeGame from '../games/CyberSnakeGame';
 import NeonFlappyGame from '../games/NeonFlappyGame';
-import TicTacToeGame from '../games/TicTacToeGame';
+import BoxEscapeGame from '../games/BoxEscapeGame';
 import BlockBlastGame from '../games/BlockBlastGame';
 import WhackABotGame from '../games/WhackABotGame';
 import MathBlitzGame from '../games/MathBlitzGame';
@@ -58,6 +58,10 @@ import Match3SagaGame from '../games/Match3SagaGame';
 import TapAwayArrowsGame from '../games/TapAwayArrowsGame';
 import IcyTowerClimberGame from '../games/IcyTowerClimberGame';
 import WordScrambleGame from '../games/WordScrambleGame';
+import CyberPathGame from '../games/CyberPathGame';
+import CyberScrewGame from '../games/CyberScrewGame';
+import CyberBomberGame from '../games/CyberBomberGame';
+import ThiefEscapeGame from '../games/ThiefEscapeGame';
 
 import {
   triggerLightHaptic,
@@ -67,9 +71,18 @@ import {
 } from '../utils/haptics';
 import { playTapSound, playSnapTickSound } from '../utils/sound';
 import { useAudioPlayer } from 'expo-audio';
+import {
+  CATEGORIES,
+  STARTER_GAMES,
+  UNLOCK_REQUIREMENTS,
+  GAME_CATEGORY_MAP,
+  isGameUnlocked,
+  getUnlockProgress,
+} from '../utils/gameUnlocks';
 
 const menuMusicAsset = require('../../assets/menu-music.ogg');
 const STORAGE_MUSIC_MUTED_KEY = '@game_tower:music_muted';
+const STORAGE_UNLOCKED_GAMES_KEY = '@game_tower:unlocked_games_v3';
 
 const monoFont = Platform.select({
   ios: 'Menlo',
@@ -78,6 +91,62 @@ const monoFont = Platform.select({
 });
 
 export const TOWER_GAMES = [
+  {
+    id: 'thief_escape',
+    floorNum: 34,
+    floor: 'FLOOR 34',
+    tier: 'APEX',
+    title: 'THIEF ESCAPE',
+    category: 'STRATEGY',
+    badge: 'STEALTH HEIST',
+    desc: 'Scale high-rise buildings, evade flashlight patrol guards, secure emergency fuel, steal the Quantum Diamond, and outrun rival thieves to reach your getaway car!',
+    accent: '#00F5FF',
+    secondary: '#FFE600',
+    icon: '🕵️',
+    storageKey: '@game_tower:best_thief_v1',
+  },
+  {
+    id: 'cyber_bomber',
+    floorNum: 33,
+    floor: 'FLOOR 33',
+    tier: 'APEX',
+    title: 'CYBER BOMBER',
+    category: 'ARCADE',
+    badge: 'PLASMA CHARGES',
+    desc: 'Deploy timed plasma bombs to blast cyber crates, eradicate enemy patrol bots, collect tactical power-ups, and reach the data uplink exit!',
+    accent: '#FF0055',
+    secondary: '#00F5FF',
+    icon: '💣',
+    storageKey: '@game_tower:best_bomber_v1',
+  },
+  {
+    id: 'cyber_screw',
+    floorNum: 32,
+    floor: 'FLOOR 32',
+    tier: 'APEX',
+    title: 'CYBER SCREW PIN',
+    category: 'PUZZLE',
+    badge: 'BOLTS & STRUTS',
+    desc: 'Unscrew plasma bolts and relocate them into open sockets to strategically dismantle interlocking cyber struts!',
+    accent: '#FFE600',
+    secondary: '#00F5FF',
+    icon: '🔩',
+    storageKey: '@game_tower:best_screw_v1',
+  },
+  {
+    id: 'cyber_pathfinder',
+    floorNum: 31,
+    floor: 'FLOOR 31',
+    tier: 'APEX',
+    title: 'CYBER PATHFINDER',
+    category: 'PUZZLE',
+    badge: 'CONDUIT ROUTE',
+    desc: 'Slot modular glowing energy conduits to route your cyber operative safely from the entry gate to the exit receptor!',
+    accent: '#00F5D4',
+    secondary: '#39FF14',
+    icon: '🛤️',
+    storageKey: '@game_tower:best_pathfinder_v1',
+  },
   {
     id: 'knife_hit',
     floorNum: 30,
@@ -335,14 +404,14 @@ export const TOWER_GAMES = [
     floorNum: 12,
     floor: 'FLOOR 12',
     tier: 'CORE',
-    title: 'TIC-TAC-TOE',
+    title: 'BOX ESCAPE',
     category: 'STRATEGY',
-    badge: 'AI BATTLE & 2P',
-    desc: 'Claim lines of three against the adaptive AI or battle local 2-Player.',
+    badge: 'PHYSICS CRATE',
+    desc: 'Push heavy quantum crates with physical force to clear a pathway to the escape portal. Each level escalates in complexity!',
     accent: '#06D6A0',
     secondary: '#118AB2',
-    icon: '⚔️',
-    storageKey: '@game_tower:best_ttt_v1',
+    icon: '📦',
+    storageKey: '@game_tower:best_boxescape_v1',
   },
   {
     id: 'neon_flappy',
@@ -501,8 +570,8 @@ export const TOWER_GAMES = [
 ];
 
 const SECTORS = [
-  { id: 'ALL', label: 'ALL (30)' },
-  { id: 'ORBIT', label: '🛰️ ORBIT (30-25)' },
+  { id: 'ALL', label: 'ALL (34)' },
+  { id: 'ORBIT', label: '🛰️ ORBIT (34-25)' },
   { id: 'APEX', label: '⚡ APEX (24-20)' },
   { id: 'SKY', label: '🏙️ SKY (19-15)' },
   { id: 'CORE', label: '⚙️ CORE (14-05)' },
@@ -527,17 +596,35 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
   const [highScores, setHighScores] = useState({});
   const [ascendingSort, setAscendingSort] = useState(false); // false = Apex (20) top, true = Base (01) top
 
-  // Load saved music mute preference
+  // 2 Screen Tabs: 'TOWER' (only unlocked games in 3D skyscraper) vs 'ALL_GAMES' (grid view with all locked/unlocked)
+  const [activeTab, setActiveTab] = useState('TOWER');
+  const [selectedCategory, setSelectedCategory] = useState('ALL');
+  const [unlockedGames, setUnlockedGames] = useState(() => [...STARTER_GAMES]);
+  const [unlockModalGame, setUnlockModalGame] = useState(null);
+
+  // Load saved music mute preference & unlocked games
   useEffect(() => {
     (async () => {
       try {
-        const saved = await AsyncStorage.getItem(STORAGE_MUSIC_MUTED_KEY);
-        if (saved !== null) {
-          setIsMusicMuted(saved === 'true');
+        const savedMute = await AsyncStorage.getItem(STORAGE_MUSIC_MUTED_KEY);
+        if (savedMute !== null) {
+          setIsMusicMuted(savedMute === 'true');
+        }
+        const savedUnlocked = await AsyncStorage.getItem(STORAGE_UNLOCKED_GAMES_KEY);
+        if (savedUnlocked) {
+          const list = JSON.parse(savedUnlocked);
+          if (Array.isArray(list)) {
+            setUnlockedGames(Array.from(new Set([...STARTER_GAMES, ...list])));
+          }
         }
       } catch {}
     })();
   }, []);
+
+  const isGameCurrentUnlocked = useCallback(
+    (gameId) => isGameUnlocked(gameId, highScores, unlockedGames),
+    [highScores, unlockedGames]
+  );
 
   // Manage background menu music playback (loop in hub, pause inside mini-games)
   useEffect(() => {
@@ -617,36 +704,14 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
     } catch {}
   }, [loadAllHighScores]);
 
-  // Smoothly scroll back to the last played game card upon returning to the Hub!
-  useEffect(() => {
-    if (activeGameId === null && lastPlayedGameId.current) {
-      const targetId = lastPlayedGameId.current;
-      const timer = setTimeout(() => {
-        const idx = displayedGames.findIndex((g) => g.id === targetId);
-        if (idx !== -1) {
-          const targetY = layoutPositions.current[idx];
-          if (targetY !== undefined && scrollRef.current) {
-            scrollRef.current.scrollTo({
-              y: Math.max(0, targetY - 60),
-              animated: true,
-            });
-          }
-        }
-      }, 200);
-      return () => clearTimeout(timer);
-    }
-  }, [activeGameId, displayedGames]);
-
   // Handle Android mobile hardware / gesture back button
   useEffect(() => {
     const onHardwareBack = () => {
       if (activeGameId !== null) {
         if (showExitConfirm) {
-          // If confirmation is already showing, hardware back closes the dialog
           setShowExitConfirm(false);
           triggerLightHaptic();
         } else {
-          // Hardware back in game opens confirmation dialog instead of exiting to phone home!
           setShowExitConfirm(true);
           triggerLightHaptic();
           playTapSound();
@@ -663,15 +728,84 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
     return () => backSub.remove();
   }, [activeGameId, showExitConfirm]);
 
-  const handleScoreUpdate = useCallback((gameId, newScore) => {
-    setHighScores((prev) => {
-      const current = prev[gameId] || 0;
-      if (newScore > current) {
-        return { ...prev, [gameId]: newScore };
-      }
-      return prev;
-    });
-  }, []);
+  // Check and unlock new games when scores update
+  const checkAndUnlockGames = useCallback(
+    (gameId, score) => {
+      setUnlockedGames((prevUnlocked) => {
+        const newlyUnlocked = [];
+        Object.entries(UNLOCK_REQUIREMENTS).forEach(([lockedId, req]) => {
+          if (
+            req.reqGame === gameId &&
+            score >= req.targetScore &&
+            !prevUnlocked.includes(lockedId)
+          ) {
+            newlyUnlocked.push(lockedId);
+          }
+        });
+
+        if (newlyUnlocked.length > 0) {
+          const nextList = Array.from(new Set([...prevUnlocked, ...newlyUnlocked]));
+          AsyncStorage.setItem(
+            STORAGE_UNLOCKED_GAMES_KEY,
+            JSON.stringify(nextList)
+          ).catch(() => {});
+
+          const unlockedObj = TOWER_GAMES.find((g) => g.id === newlyUnlocked[0]);
+          if (unlockedObj && juiceRef.current) {
+            juiceRef.current.flash(unlockedObj.accent);
+            juiceRef.current.burst(width / 2, 280, unlockedObj.accent, 24);
+            juiceRef.current.popup(
+              '🎉 NEW GAME UNLOCKED!',
+              `${unlockedObj.title} is now available in your Tower!`,
+              unlockedObj.accent
+            );
+            triggerMediumHaptic();
+          }
+          return nextList;
+        }
+        return prevUnlocked;
+      });
+    },
+    [width]
+  );
+
+  // Sync unlocked games with any existing high scores
+  useEffect(() => {
+    if (Object.keys(highScores).length > 0) {
+      setUnlockedGames((prev) => {
+        const newlyUnlocked = [];
+        Object.entries(UNLOCK_REQUIREMENTS).forEach(([lockedId, req]) => {
+          const s = highScores[req.reqGame] || 0;
+          if (s >= req.targetScore && !prev.includes(lockedId)) {
+            newlyUnlocked.push(lockedId);
+          }
+        });
+        if (newlyUnlocked.length > 0) {
+          const combined = Array.from(new Set([...prev, ...newlyUnlocked]));
+          AsyncStorage.setItem(
+            STORAGE_UNLOCKED_GAMES_KEY,
+            JSON.stringify(combined)
+          ).catch(() => {});
+          return combined;
+        }
+        return prev;
+      });
+    }
+  }, [highScores]);
+
+  const handleScoreUpdate = useCallback(
+    (gameId, newScore) => {
+      setHighScores((prev) => {
+        const current = prev[gameId] || 0;
+        if (newScore > current) {
+          setTimeout(() => checkAndUnlockGames(gameId, newScore), 120);
+          return { ...prev, [gameId]: newScore };
+        }
+        return prev;
+      });
+    },
+    [checkAndUnlockGames]
+  );
 
   // Compute Tower Telemetry
   const totalTowerScore = Object.values(highScores).reduce(
@@ -692,11 +826,6 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
               ? 'GRID INITIATE'
               : 'ROOKIE';
 
-  const handleRandomLaunch = () => {
-    const pick = TOWER_GAMES[Math.floor(Math.random() * TOWER_GAMES.length)];
-    handleSelectGame(pick.id, pick.accent);
-  };
-
   const displayedGames = [...TOWER_GAMES]
     .sort((a, b) => (ascendingSort ? a.floorNum - b.floorNum : b.floorNum - a.floorNum))
     .filter((g) => {
@@ -704,19 +833,62 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
       return g.tier === selectedSector;
     });
 
-  // Calculate dynamic snapping offsets for each game deck
+  // ONLY UNLOCKED GAMES ARE PART OF THE TOWER!
+  const unlockedTowerGames = displayedGames.filter((g) =>
+    isGameCurrentUnlocked(g.id)
+  );
+
+  // ALL GAMES GRID: sorted by floor, filtered by selected category
+  const allGamesGridList = [...TOWER_GAMES]
+    .sort((a, b) => b.floorNum - a.floorNum)
+    .filter((g) => {
+      if (selectedCategory === 'ALL') return true;
+      return GAME_CATEGORY_MAP[g.id] === selectedCategory;
+    });
+
+  const unlockedCount = TOWER_GAMES.filter((g) =>
+    isGameCurrentUnlocked(g.id)
+  ).length;
+
+  const handleRandomLaunch = () => {
+    const pool = unlockedTowerGames.length > 0 ? unlockedTowerGames : TOWER_GAMES;
+    const pick = pool[Math.floor(Math.random() * pool.length)];
+    handleSelectGame(pick.id, pick.accent);
+  };
+
+  // Smoothly scroll back to the last played game card upon returning to the Hub!
+  useEffect(() => {
+    if (activeGameId === null && lastPlayedGameId.current) {
+      const targetId = lastPlayedGameId.current;
+      const timer = setTimeout(() => {
+        const idx = unlockedTowerGames.findIndex((g) => g.id === targetId);
+        if (idx !== -1) {
+          const targetY = layoutPositions.current[idx];
+          if (targetY !== undefined && scrollRef.current) {
+            scrollRef.current.scrollTo({
+              y: Math.max(0, targetY - 60),
+              animated: true,
+            });
+          }
+        }
+      }, 200);
+      return () => clearTimeout(timer);
+    }
+  }, [activeGameId, unlockedTowerGames]);
+
+  // Calculate dynamic snapping offsets for unlocked tower floor decks
   const computeInitialOffsets = useCallback(() => {
     const spireOffset = !ascendingSort ? 150 : 0;
     const offsets = [];
     if (!ascendingSort) {
       offsets.push(0);
     }
-    const count = displayedGames.length;
+    const count = unlockedTowerGames.length;
     for (let i = 0; i < count; i++) {
       offsets.push(spireOffset + i * 90);
     }
     return offsets;
-  }, [ascendingSort, displayedGames.length]);
+  }, [ascendingSort, unlockedTowerGames.length]);
 
   const [snapOffsets, setSnapOffsets] = useState(computeInitialOffsets);
   const layoutPositions = useRef({});
@@ -726,7 +898,7 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
   useEffect(() => {
     layoutPositions.current = {};
     setSnapOffsets(computeInitialOffsets());
-  }, [computeInitialOffsets, ascendingSort, selectedSector]);
+  }, [computeInitialOffsets, ascendingSort, selectedSector, unlockedTowerGames.length]);
 
   const handleDeckLayout = useCallback((index, event) => {
     const { y } = event.nativeEvent.layout;
@@ -870,8 +1042,9 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
           />
         );
       case 'tic_tac_toe':
+      case 'box_escape':
         return (
-          <TicTacToeGame
+          <BoxEscapeGame
             isPaused={isPaused}
             onBackToHub={requestExitToHub}
             onScoreUpdate={(s) => handleScoreUpdate('tic_tac_toe', s)}
@@ -1021,6 +1194,38 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
             onScoreUpdate={(s) => handleScoreUpdate('knife_hit', s)}
           />
         );
+      case 'cyber_pathfinder':
+        return (
+          <CyberPathGame
+            isPaused={isPaused}
+            onBackToHub={requestExitToHub}
+            onScoreUpdate={(s) => handleScoreUpdate('cyber_pathfinder', s)}
+          />
+        );
+      case 'cyber_screw':
+        return (
+          <CyberScrewGame
+            isPaused={isPaused}
+            onBackToHub={requestExitToHub}
+            onScoreUpdate={(s) => handleScoreUpdate('cyber_screw', s)}
+          />
+        );
+      case 'cyber_bomber':
+        return (
+          <CyberBomberGame
+            isPaused={isPaused}
+            onBackToHub={requestExitToHub}
+            onScoreUpdate={(s) => handleScoreUpdate('cyber_bomber', s)}
+          />
+        );
+      case 'thief_escape':
+        return (
+          <ThiefEscapeGame
+            isPaused={isPaused}
+            onBackToHub={requestExitToHub}
+            onScoreUpdate={(s) => handleScoreUpdate('thief_escape', s)}
+          />
+        );
       default:
         return null;
     }
@@ -1029,7 +1234,12 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
   if (activeGameId) {
     return (
       <View style={{ flex: 1, backgroundColor: '#03030A' }}>
-        {renderActiveGame()}
+        <View
+          style={{ flex: 1 }}
+          pointerEvents={showExitConfirm ? 'none' : 'auto'}
+        >
+          {renderActiveGame()}
+        </View>
 
         {showExitConfirm && (
           <Modal
@@ -1042,42 +1252,60 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
               triggerLightHaptic();
             }}
           >
-          <Animated.View
-            entering={FadeIn.duration(180)}
-            style={hubStyles.exitOverlay}
-          >
-            <Animated.View
-              entering={ZoomIn.duration(200)}
-              style={hubStyles.exitCard}
+            <Pressable
+              style={hubStyles.exitOverlay}
+              onPress={(e) => {
+                e.stopPropagation?.();
+              }}
+              onStartShouldSetResponder={() => true}
+              onMoveShouldSetResponder={() => true}
+              onResponderTerminationRequest={() => false}
             >
-              <Text style={hubStyles.exitWarnIcon}>⏸️</Text>
-              <Text style={hubStyles.exitTitle}>GAME PAUSED</Text>
-              <Text style={hubStyles.exitSubtitle}>
-                The game is paused. Tap RESUME to continue or EXIT to return to the tower hub.
-              </Text>
+              <Animated.View
+                entering={FadeIn.duration(180)}
+                style={StyleSheet.absoluteFillObject}
+                pointerEvents="none"
+              >
+                <View style={{ ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(3, 3, 10, 0.92)' }} />
+              </Animated.View>
 
-              <View style={hubStyles.exitBtnRow}>
+              <Animated.View
+                entering={ZoomIn.duration(200)}
+                style={hubStyles.exitCard}
+              >
                 <Pressable
-                  onPress={() => {
-                    setShowExitConfirm(false);
-                    triggerLightHaptic();
-                  }}
-                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-                  style={hubStyles.exitResumeBtn}
+                  onPress={(e) => e.stopPropagation?.()}
+                  style={{ width: '100%', alignItems: 'center' }}
                 >
-                  <Text style={hubStyles.exitResumeText}>RESUME</Text>
-                </Pressable>
+                  <Text style={hubStyles.exitWarnIcon}>⏸️</Text>
+                  <Text style={hubStyles.exitTitle}>GAME PAUSED</Text>
+                  <Text style={hubStyles.exitSubtitle}>
+                    The game is paused. Tap RESUME to continue or EXIT to return to the tower hub.
+                  </Text>
 
-                <Pressable
-                  onPress={performExitToHub}
-                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-                  style={hubStyles.exitConfirmBtn}
-                >
-                  <Text style={hubStyles.exitConfirmText}>EXIT TO MENU</Text>
+                  <View style={hubStyles.exitBtnRow}>
+                    <Pressable
+                      onPress={() => {
+                        setShowExitConfirm(false);
+                        triggerLightHaptic();
+                      }}
+                      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                      style={hubStyles.exitResumeBtn}
+                    >
+                      <Text style={hubStyles.exitResumeText}>RESUME</Text>
+                    </Pressable>
+
+                    <Pressable
+                      onPress={performExitToHub}
+                      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                      style={hubStyles.exitConfirmBtn}
+                    >
+                      <Text style={hubStyles.exitConfirmText}>EXIT TO MENU</Text>
+                    </Pressable>
+                  </View>
                 </Pressable>
-              </View>
-            </Animated.View>
-          </Animated.View>
+              </Animated.View>
+            </Pressable>
           </Modal>
         )}
       </View>
@@ -1107,6 +1335,9 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
       {/* Dynamic Cosmic Galaxy Background with Floating Project Tiles */}
       <TowerAnimatedBackground />
 
+      {/* Screen juice engine overlay for particle bursts, popups & screen flashes */}
+      <JuiceEngine ref={juiceRef} />
+
       {/* Top Sticky Sci-Fi HUD Header */}
       <View style={[hubStyles.hudHeader, { paddingTop: safeTop }]}>
           {/* Top Title & Quick Actions */}
@@ -1114,7 +1345,7 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
             <View style={hubStyles.arcadeOnlinePill}>
               <View style={hubStyles.greenDot} />
               <Text style={hubStyles.arcadeOnlineText}>
-                30-FLOOR CYBER MEGASTRUCTURE
+                31-FLOOR CYBER MEGASTRUCTURE
               </Text>
             </View>
 
@@ -1130,19 +1361,21 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
                 </Text>
               </Pressable>
 
-              {/* Direction Toggle */}
-              <Pressable
-                onPress={() => {
-                  triggerLightHaptic();
-                  playTapSound();
-                  setAscendingSort((prev) => !prev);
-                }}
-                style={hubStyles.directionBtn}
-              >
-                <Text style={hubStyles.directionBtnText}>
-                  {ascendingSort ? '⬆ BASE' : '⬇ APEX'}
-                </Text>
-              </Pressable>
+              {/* Direction Toggle (Active only in Tower Tab) */}
+              {activeTab === 'TOWER' && (
+                <Pressable
+                  onPress={() => {
+                    triggerLightHaptic();
+                    playTapSound();
+                    setAscendingSort((prev) => !prev);
+                  }}
+                  style={hubStyles.directionBtn}
+                >
+                  <Text style={hubStyles.directionBtnText}>
+                    {ascendingSort ? '⬆ BASE' : '⬇ APEX'}
+                  </Text>
+                </Pressable>
+              )}
             </View>
           </View>
 
@@ -1175,38 +1408,102 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
             </Pressable>
           </View>
 
-            {/* Arcade Telemetry HUD */}
-            <View style={hubStyles.telemetryBar}>
-              <View style={hubStyles.telemetryCell}>
-                <Text style={hubStyles.telemetrySub}>TOWER POWER</Text>
-                <Text style={[hubStyles.telemetryVal, { color: COLORS.cyan }]}>
-                  {totalTowerScore.toLocaleString()}
-                </Text>
-              </View>
-              <View style={hubStyles.telemetryDivider} />
-              <View style={hubStyles.telemetryCell}>
-                <Text style={hubStyles.telemetrySub}>FLOORS SECURED</Text>
-                <Text
-                  style={[hubStyles.telemetryVal, { color: COLORS.solarGold }]}
-                >
-                  {`${floorsPlayed} / ${TOWER_GAMES.length}`}
-                </Text>
-              </View>
-              <View style={hubStyles.telemetryDivider} />
-              <View style={hubStyles.telemetryCell}>
-                <Text style={hubStyles.telemetrySub}>RANK</Text>
+          {/* Arcade Telemetry HUD */}
+          <View style={hubStyles.telemetryBar}>
+            <View style={hubStyles.telemetryCell}>
+              <Text style={hubStyles.telemetrySub}>TOWER POWER</Text>
+              <Text style={[hubStyles.telemetryVal, { color: COLORS.cyan }]}>
+                {totalTowerScore.toLocaleString()}
+              </Text>
+            </View>
+            <View style={hubStyles.telemetryDivider} />
+            <View style={hubStyles.telemetryCell}>
+              <Text style={hubStyles.telemetrySub}>TOWER FLOORS</Text>
+              <Text
+                style={[hubStyles.telemetryVal, { color: COLORS.solarGold }]}
+              >
+                {`${unlockedCount} / ${TOWER_GAMES.length}`}
+              </Text>
+            </View>
+            <View style={hubStyles.telemetryDivider} />
+            <View style={hubStyles.telemetryCell}>
+              <Text style={hubStyles.telemetrySub}>RANK</Text>
+              <Text
+                style={[
+                  hubStyles.telemetryVal,
+                  { color: COLORS.matrixMint, fontSize: 11 },
+                ]}
+              >
+                {towerRank}
+              </Text>
+            </View>
+          </View>
+
+          {/* Screen Tab Switcher: 🗼 TOWER (Unlocked Only) vs 🎮 ALL GAMES (Grid Boxes) */}
+          <View style={hubStyles.tabSwitcherRow}>
+            <Pressable
+              onPress={() => {
+                triggerLightHaptic();
+                playTapSound();
+                setActiveTab('TOWER');
+              }}
+              style={[
+                hubStyles.tabSwitcherBtn,
+                activeTab === 'TOWER' && hubStyles.tabSwitcherBtnActiveTower,
+              ]}
+            >
+              <LinearGradient
+                colors={
+                  activeTab === 'TOWER'
+                    ? ['rgba(0, 245, 255, 0.28)', 'rgba(0, 245, 255, 0.08)']
+                    : ['rgba(255, 255, 255, 0.04)', 'rgba(255, 255, 255, 0.02)']
+                }
+                style={hubStyles.tabSwitcherGrad}
+              >
                 <Text
                   style={[
-                    hubStyles.telemetryVal,
-                    { color: COLORS.matrixMint, fontSize: 11 },
+                    hubStyles.tabSwitcherText,
+                    activeTab === 'TOWER' && hubStyles.tabSwitcherTextActiveTower,
                   ]}
                 >
-                  {towerRank}
+                  🗼 TOWER ({unlockedCount})
                 </Text>
-              </View>
-            </View>
+              </LinearGradient>
+            </Pressable>
 
-            {/* Sector Quick Filter Navigation */}
+            <Pressable
+              onPress={() => {
+                triggerLightHaptic();
+                playTapSound();
+                setActiveTab('ALL_GAMES');
+              }}
+              style={[
+                hubStyles.tabSwitcherBtn,
+                activeTab === 'ALL_GAMES' && hubStyles.tabSwitcherBtnActiveGrid,
+              ]}
+            >
+              <LinearGradient
+                colors={
+                  activeTab === 'ALL_GAMES'
+                    ? ['rgba(255, 0, 127, 0.28)', 'rgba(121, 40, 202, 0.16)']
+                    : ['rgba(255, 255, 255, 0.04)', 'rgba(255, 255, 255, 0.02)']
+                }
+                style={hubStyles.tabSwitcherGrad}
+              >
+                <Text
+                  style={[
+                    hubStyles.tabSwitcherText,
+                    activeTab === 'ALL_GAMES' && hubStyles.tabSwitcherTextActiveGrid,
+                  ]}
+                >
+                  🎮 ALL GAMES ({TOWER_GAMES.length})
+                </Text>
+              </LinearGradient>
+            </Pressable>
+          </View>
+
+          {/* Sub-Filters: Sector Filter for Tower, Category Filter for All Games Grid */}
+          {activeTab === 'TOWER' ? (
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -1239,374 +1536,860 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
                 );
               })}
             </ScrollView>
-          </View>
-
-          {/* Main 3D Skyscraper Tower Scroll Area with Magnetic Game Deck Snapping */}
-          <ScrollView
-            ref={scrollRef}
-            style={hubStyles.towerScroll}
-            contentContainerStyle={[
-              hubStyles.towerScrollContent,
-              { paddingBottom: safeBottom + 32 },
-            ]}
-            showsVerticalScrollIndicator={false}
-            snapToOffsets={snapOffsets.length > 0 ? snapOffsets : undefined}
-            snapToAlignment="start"
-            decelerationRate="fast"
-            onScroll={handleTowerScroll}
-            onMomentumScrollEnd={handleMomentumScrollEnd}
-            scrollEventThrottle={16}
-          >
-          {/* APEX ROOFTOP SPIRE (Visible when sorted Apex at top or ALL) */}
-          {!ascendingSort && (
-            <View style={hubStyles.apexSpireWrapper}>
-              <Svg width={180} height={120}>
-                <Defs>
-                  <SvgLinearGradient id="spireGrad" x1="0" y1="0" x2="0" y2="1">
-                    <Stop offset="0%" stopColor="#00F5FF" stopOpacity="1" />
-                    <Stop offset="50%" stopColor="#7928CA" stopOpacity="0.8" />
-                    <Stop offset="100%" stopColor="#FF007F" stopOpacity="0.3" />
-                  </SvgLinearGradient>
-                </Defs>
-                {/* Central Lightning Mast */}
-                <Line
-                  x1={90}
-                  y1={10}
-                  x2={90}
-                  y2={110}
-                  stroke="#00F5FF"
-                  strokeWidth={3}
-                />
-                {/* Warning Red Beacon Dot */}
-                <Circle cx={90} cy={10} r={5} fill="#FF0055" />
-                <Circle
-                  cx={90}
-                  cy={10}
-                  r={10}
-                  stroke="#FF0055"
-                  strokeWidth={1}
-                  opacity={0.6}
-                />
-                {/* Diagonal Guy-wire Cables */}
-                <Line
-                  x1={90}
-                  y1={30}
-                  x2={40}
-                  y2={115}
-                  stroke="rgba(0,245,255,0.4)"
-                  strokeWidth={1.2}
-                />
-                <Line
-                  x1={90}
-                  y1={30}
-                  x2={140}
-                  y2={115}
-                  stroke="rgba(0,245,255,0.4)"
-                  strokeWidth={1.2}
-                />
-                <Line
-                  x1={90}
-                  y1={65}
-                  x2={25}
-                  y2={115}
-                  stroke="rgba(255,0,127,0.4)"
-                  strokeWidth={1.2}
-                />
-                <Line
-                  x1={90}
-                  y1={65}
-                  x2={155}
-                  y2={115}
-                  stroke="rgba(255,0,127,0.4)"
-                  strokeWidth={1.2}
-                />
-                {/* Radar Spire Rings */}
-                <Circle
-                  cx={90}
-                  cy={50}
-                  r={18}
-                  stroke="url(#spireGrad)"
-                  strokeWidth={1.5}
-                  fill="none"
-                />
-                <Circle
-                  cx={90}
-                  cy={75}
-                  r={28}
-                  stroke="url(#spireGrad)"
-                  strokeWidth={1.5}
-                  fill="none"
-                />
-                {/* Spire Cap Base */}
-                <Polygon
-                  points="70,115 110,115 125,120 55,120"
-                  fill="#00F5FF"
-                  opacity={0.8}
-                />
-              </Svg>
-              <View style={hubStyles.spireLabelPill}>
-                <Text style={hubStyles.spireLabelText}>
-                  ▲ APEX SPIRE // ALTITUDE: 2,400M ▲
-                </Text>
-              </View>
-            </View>
-          )}
-
-          {/* Stepped Skyscraper Floor Decks (1 to 20) */}
-          {displayedGames.map((game, index) => {
-            const best = highScores[game.id] || 0;
-            const deckWidth = getDeckWidth(game.floorNum);
-            const isBaseTier = game.floorNum <= 5;
-
-            return (
-              <View
-                key={game.id}
-                onLayout={(e) => handleDeckLayout(index, e)}
-                style={[
-                  hubStyles.deckRowContainer,
-                  { width: '100%', alignItems: 'center' },
-                ]}
-              >
-                {/* Vertical Cable Connectors between floors */}
-                {index > 0 && (
-                  <View style={hubStyles.deckConduitBridge}>
-                    <View
-                      style={[
-                        hubStyles.conduitWire,
-                        { backgroundColor: `${game.accent}77` },
-                      ]}
-                    />
-                    <View style={hubStyles.conduitCenterBeam}>
-                      <Text style={hubStyles.conduitText}>❖</Text>
-                    </View>
-                    <View
-                      style={[
-                        hubStyles.conduitWire,
-                        { backgroundColor: `${game.accent}77` },
-                      ]}
-                    />
-                  </View>
-                )}
-
-                {/* 3D Physical Skyscraper Floor Platform */}
-                <Pressable
-                  onPress={() => handleSelectGame(game.id, game.accent)}
-                  style={({ pressed }) => [
-                    hubStyles.towerDeck,
-                    {
-                      width: deckWidth,
-                      borderColor: `${game.accent}66`,
-                      shadowColor: game.accent,
-                    },
-                    pressed && {
-                      transform: [{ scale: 0.97 }],
-                      borderColor: game.accent,
-                    },
-                  ]}
-                >
-                  <LinearGradient
-                    colors={[
-                      'rgba(18, 14, 38, 0.95)',
-                      'rgba(8, 6, 22, 0.98)',
-                    ]}
-                    style={StyleSheet.absoluteFillObject}
-                  />
-
-                  {/* 3D Top Bevel Ledge with Glowing Neon Edge */}
-                  <View
+          ) : (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={hubStyles.sectorScroll}
+            >
+              {CATEGORIES.map((cat) => {
+                const active = selectedCategory === cat.id;
+                const count =
+                  cat.id === 'ALL'
+                    ? TOWER_GAMES.length
+                    : TOWER_GAMES.filter((g) => GAME_CATEGORY_MAP[g.id] === cat.id).length;
+                return (
+                  <Pressable
+                    key={cat.id}
+                    onPress={() => {
+                      triggerLightHaptic();
+                      playTapSound();
+                      setSelectedCategory(cat.id);
+                    }}
                     style={[
-                      hubStyles.deckRoofBevel,
-                      { backgroundColor: game.accent },
-                    ]}
-                  />
-
-                  {/* Left Elevator / Structural Pylon Column */}
-                  <View
-                    style={[
-                      hubStyles.deckElevatorShaft,
-                      { borderColor: `${game.accent}44` },
+                      hubStyles.sectorTab,
+                      active && hubStyles.categoryTabActive,
                     ]}
                   >
-                    <View
-                      style={[
-                        hubStyles.elevatorNode,
-                        { backgroundColor: game.accent },
-                      ]}
-                    />
                     <Text
-                      style={[hubStyles.floorNumText, { color: game.accent }]}
-                    >
-                      {String(game.floorNum).padStart(2, '0')}
-                    </Text>
-                    <View
                       style={[
-                        hubStyles.elevatorNode,
-                        { backgroundColor: game.accent },
+                        hubStyles.sectorTabText,
+                        active && hubStyles.categoryTabTextActive,
                       ]}
-                    />
-                  </View>
+                    >
+                      {cat.icon} {cat.label} ({count})
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          )}
+        </View>
 
-                  {/* Holographic Icon Core Chamber */}
+          {/* MAIN VIEWPORT: TAB 1 TOWER vs TAB 2 ALL GAMES GRID */}
+          {activeTab === 'TOWER' ? (
+            <ScrollView
+              ref={scrollRef}
+              style={hubStyles.towerScroll}
+              contentContainerStyle={[
+                hubStyles.towerScrollContent,
+                { paddingBottom: safeBottom + 32 },
+              ]}
+              showsVerticalScrollIndicator={false}
+              snapToOffsets={snapOffsets.length > 0 ? snapOffsets : undefined}
+              snapToAlignment="start"
+              decelerationRate="fast"
+              onScroll={handleTowerScroll}
+              onMomentumScrollEnd={handleMomentumScrollEnd}
+              scrollEventThrottle={16}
+            >
+              {/* APEX ROOFTOP SPIRE (Visible when sorted Apex at top or ALL) */}
+              {!ascendingSort && (
+                <View style={hubStyles.apexSpireWrapper}>
+                  <Svg width={180} height={120}>
+                    <Defs>
+                      <SvgLinearGradient id="spireGrad" x1="0" y1="0" x2="0" y2="1">
+                        <Stop offset="0%" stopColor="#00F5FF" stopOpacity="1" />
+                        <Stop offset="50%" stopColor="#7928CA" stopOpacity="0.8" />
+                        <Stop offset="100%" stopColor="#FF007F" stopOpacity="0.3" />
+                      </SvgLinearGradient>
+                    </Defs>
+                    {/* Central Lightning Mast */}
+                    <Line
+                      x1={90}
+                      y1={10}
+                      x2={90}
+                      y2={110}
+                      stroke="#00F5FF"
+                      strokeWidth={3}
+                    />
+                    {/* Warning Red Beacon Dot */}
+                    <Circle cx={90} cy={10} r={5} fill="#FF0055" />
+                    <Circle
+                      cx={90}
+                      cy={10}
+                      r={10}
+                      stroke="#FF0055"
+                      strokeWidth={1}
+                      opacity={0.6}
+                    />
+                    {/* Diagonal Guy-wire Cables */}
+                    <Line
+                      x1={90}
+                      y1={30}
+                      x2={40}
+                      y2={115}
+                      stroke="rgba(0,245,255,0.4)"
+                      strokeWidth={1.2}
+                    />
+                    <Line
+                      x1={90}
+                      y1={30}
+                      x2={140}
+                      y2={115}
+                      stroke="rgba(0,245,255,0.4)"
+                      strokeWidth={1.2}
+                    />
+                    <Line
+                      x1={90}
+                      y1={65}
+                      x2={25}
+                      y2={115}
+                      stroke="rgba(255,0,127,0.4)"
+                      strokeWidth={1.2}
+                    />
+                    <Line
+                      x1={90}
+                      y1={65}
+                      x2={155}
+                      y2={115}
+                      stroke="rgba(255,0,127,0.4)"
+                      strokeWidth={1.2}
+                    />
+                    {/* Radar Spire Rings */}
+                    <Circle
+                      cx={90}
+                      cy={50}
+                      r={18}
+                      stroke="url(#spireGrad)"
+                      strokeWidth={1.5}
+                      fill="none"
+                    />
+                    <Circle
+                      cx={90}
+                      cy={75}
+                      r={28}
+                      stroke="url(#spireGrad)"
+                      strokeWidth={1.5}
+                      fill="none"
+                    />
+                    {/* Spire Cap Base */}
+                    <Polygon
+                      points="70,115 110,115 125,120 55,120"
+                      fill="#00F5FF"
+                      opacity={0.8}
+                    />
+                  </Svg>
+                  <View style={hubStyles.spireLabelPill}>
+                    <Text style={hubStyles.spireLabelText}>
+                      ▲ APEX SPIRE // ALTITUDE: 2,400M ▲
+                    </Text>
+                  </View>
+                </View>
+              )}
+
+              {/* Stepped Skyscraper Floor Decks (ONLY UNLOCKED GAMES ARE IN THE TOWER) */}
+              {unlockedTowerGames.map((game, index) => {
+                const best = highScores[game.id] || 0;
+                const deckWidth = getDeckWidth(game.floorNum);
+                const isBaseTier = game.floorNum <= 5;
+
+                return (
                   <View
+                    key={game.id}
+                    onLayout={(e) => handleDeckLayout(index, e)}
                     style={[
-                      hubStyles.iconCoreChamber,
-                      {
-                        borderColor: game.accent,
-                        backgroundColor: `${game.accent}14`,
-                      },
+                      hubStyles.deckRowContainer,
+                      { width: '100%', alignItems: 'center' },
                     ]}
                   >
-                    <Text style={hubStyles.iconEmoji}>{game.icon}</Text>
-                    <View
-                      style={[
-                        hubStyles.tierTag,
-                        { backgroundColor: `${game.accent}26` },
-                      ]}
-                    >
-                      <Text
-                        style={[hubStyles.tierTagText, { color: game.accent }]}
-                      >
-                        {game.tier}
-                      </Text>
-                    </View>
-                  </View>
-
-                  {/* Center Architectural Info & Badge */}
-                  <View style={hubStyles.deckCenterInfo}>
-                    <View style={hubStyles.deckHeaderLine}>
-                      <Text
-                        style={[hubStyles.floorTagLabel, { color: game.accent }]}
-                      >
-                        {game.floor}
-                      </Text>
-                      <View
-                        style={[
-                          hubStyles.badgeChip,
-                          { borderColor: `${game.accent}55` },
-                        ]}
-                      >
-                        <Text
+                    {/* Vertical Cable Connectors between floors */}
+                    {index > 0 && (
+                      <View style={hubStyles.deckConduitBridge}>
+                        <View
                           style={[
-                            hubStyles.badgeChipText,
-                            { color: game.accent },
+                            hubStyles.conduitWire,
+                            { backgroundColor: `${game.accent}77` },
                           ]}
-                        >
-                          {game.badge}
-                        </Text>
+                        />
+                        <View style={hubStyles.conduitCenterBeam}>
+                          <Text style={hubStyles.conduitText}>❖</Text>
+                        </View>
+                        <View
+                          style={[
+                            hubStyles.conduitWire,
+                            { backgroundColor: `${game.accent}77` },
+                          ]}
+                        />
                       </View>
-                    </View>
+                    )}
 
-                    <Text style={hubStyles.deckGameTitle} numberOfLines={1}>
-                      {game.title}
-                    </Text>
-                    <Text numberOfLines={2} style={hubStyles.deckDesc}>
-                      {game.desc}
-                    </Text>
-                  </View>
-
-                  {/* Right Launch Terminal & Score Status */}
-                  <View style={hubStyles.deckRightAction}>
-                    <View
-                      style={[
-                        hubStyles.scorePill,
+                    {/* 3D Physical Skyscraper Floor Platform */}
+                    <Pressable
+                      onPress={() => handleSelectGame(game.id, game.accent)}
+                      style={({ pressed }) => [
+                        hubStyles.towerDeck,
                         {
-                          borderColor:
-                            best > 0 ? COLORS.solarGold : 'rgba(255,255,255,0.15)',
+                          width: deckWidth,
+                          borderColor: `${game.accent}66`,
+                          shadowColor: game.accent,
+                        },
+                        pressed && {
+                          transform: [{ scale: 0.97 }],
+                          borderColor: game.accent,
                         },
                       ]}
                     >
-                      <Text style={hubStyles.scorePillLabel}>HI-SCORE</Text>
-                      <Text
+                      <LinearGradient
+                        colors={[
+                          'rgba(18, 14, 38, 0.95)',
+                          'rgba(8, 6, 22, 0.98)',
+                        ]}
+                        style={StyleSheet.absoluteFillObject}
+                      />
+
+                      {/* 3D Top Bevel Ledge with Glowing Neon Edge */}
+                      <View
                         style={[
-                          hubStyles.scorePillVal,
+                          hubStyles.deckRoofBevel,
+                          { backgroundColor: game.accent },
+                        ]}
+                      />
+
+                      {/* Left Elevator / Structural Pylon Column */}
+                      <View
+                        style={[
+                          hubStyles.deckElevatorShaft,
+                          { borderColor: `${game.accent}44` },
+                        ]}
+                      >
+                        <View
+                          style={[
+                            hubStyles.elevatorNode,
+                            { backgroundColor: game.accent },
+                          ]}
+                        />
+                        <Text
+                          style={[hubStyles.floorNumText, { color: game.accent }]}
+                        >
+                          {String(game.floorNum).padStart(2, '0')}
+                        </Text>
+                        <View
+                          style={[
+                            hubStyles.elevatorNode,
+                            { backgroundColor: game.accent },
+                          ]}
+                        />
+                      </View>
+
+                      {/* Holographic Icon Core Chamber */}
+                      <View
+                        style={[
+                          hubStyles.iconCoreChamber,
                           {
-                            color:
-                              best > 0
-                                ? COLORS.solarGold
-                                : COLORS.textSecondary,
+                            borderColor: game.accent,
+                            backgroundColor: `${game.accent}14`,
                           },
                         ]}
                       >
-                        {best > 0 ? best.toLocaleString() : '---'}
+                        <Text style={hubStyles.iconEmoji}>{game.icon}</Text>
+                        <View
+                          style={[
+                            hubStyles.tierTag,
+                            { backgroundColor: `${game.accent}26` },
+                          ]}
+                        >
+                          <Text
+                            style={[hubStyles.tierTagText, { color: game.accent }]}
+                          >
+                            {game.tier}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Center Architectural Info & Badge */}
+                      <View style={hubStyles.deckCenterInfo}>
+                        <View style={hubStyles.deckHeaderLine}>
+                          <Text
+                            style={[hubStyles.floorTagLabel, { color: game.accent }]}
+                          >
+                            {game.floor}
+                          </Text>
+                          <View
+                            style={[
+                              hubStyles.badgeChip,
+                              { borderColor: `${game.accent}55` },
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                hubStyles.badgeChipText,
+                                { color: game.accent },
+                              ]}
+                            >
+                              {game.badge}
+                            </Text>
+                          </View>
+                        </View>
+
+                        <Text style={hubStyles.deckGameTitle} numberOfLines={1}>
+                          {game.title}
+                        </Text>
+                        <Text numberOfLines={2} style={hubStyles.deckDesc}>
+                          {game.desc}
+                        </Text>
+                      </View>
+
+                      {/* Right Launch Terminal & Score Status */}
+                      <View style={hubStyles.deckRightAction}>
+                        <View
+                          style={[
+                            hubStyles.scorePill,
+                            {
+                              borderColor:
+                                best > 0 ? COLORS.solarGold : 'rgba(255,255,255,0.15)',
+                            },
+                          ]}
+                        >
+                          <Text style={hubStyles.scorePillLabel}>HI-SCORE</Text>
+                          <Text
+                            style={[
+                              hubStyles.scorePillVal,
+                              {
+                                color:
+                                  best > 0
+                                    ? COLORS.solarGold
+                                    : COLORS.textSecondary,
+                              },
+                            ]}
+                          >
+                            {best > 0 ? best.toLocaleString() : '---'}
+                          </Text>
+                        </View>
+
+                        <LinearGradient
+                          colors={[game.accent, game.secondary]}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 0 }}
+                          style={hubStyles.engageBtn}
+                        >
+                          <Text style={hubStyles.engageBtnText}>ENTER ▶</Text>
+                        </LinearGradient>
+                      </View>
+
+                      {/* Right Edge Hazard Striping for Citadel Base */}
+                      {isBaseTier && (
+                        <View style={hubStyles.hazardBaseStripes}>
+                          <Text style={hubStyles.hazardStripeText}>{'///'}</Text>
+                        </View>
+                      )}
+                    </Pressable>
+                  </View>
+                );
+              })}
+
+              {/* Expand Tower Card (Prompts to unlock more in All Games tab) */}
+              {unlockedCount < TOWER_GAMES.length && (
+                <Pressable
+                  onPress={() => {
+                    triggerLightHaptic();
+                    playTapSound();
+                    setActiveTab('ALL_GAMES');
+                  }}
+                  style={hubStyles.towerExpandCard}
+                >
+                  <LinearGradient
+                    colors={['rgba(255, 0, 127, 0.24)', 'rgba(121, 40, 202, 0.36)']}
+                    style={hubStyles.towerExpandGrad}
+                  >
+                    <Text style={hubStyles.towerExpandIcon}>🔒</Text>
+                    <View style={{ flex: 1, paddingRight: 6 }}>
+                      <Text style={hubStyles.towerExpandTitle}>
+                        {TOWER_GAMES.length - unlockedCount} MORE FLOORS ENCRYPTED
+                      </Text>
+                      <Text style={hubStyles.towerExpandSub}>
+                        Play games in each category to unlock new floors for your Tower. Tap to open missions ➔
                       </Text>
                     </View>
-
-                    <LinearGradient
-                      colors={[game.accent, game.secondary]}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 0 }}
-                      style={hubStyles.engageBtn}
-                    >
-                      <Text style={hubStyles.engageBtnText}>ENTER ▶</Text>
-                    </LinearGradient>
-                  </View>
-
-                  {/* Right Edge Hazard Striping for Citadel Base */}
-                  {isBaseTier && (
-                    <View style={hubStyles.hazardBaseStripes}>
-                      <Text style={hubStyles.hazardStripeText}>{'///'}</Text>
-                    </View>
-                  )}
+                    <Text style={hubStyles.towerExpandArrow}>➔</Text>
+                  </LinearGradient>
                 </Pressable>
+              )}
+
+              {/* CITADEL GROUND BASE FOUNDATION */}
+              <View style={hubStyles.citadelFoundation}>
+                <View style={hubStyles.foundationHazardRow}>
+                  <Text style={hubStyles.foundationHazardText}>
+                    ⚠️ HAZARD LEVEL 0 // CYBER ARCADE FOUNDATION PEDESTAL ⚠️
+                  </Text>
+                </View>
+
+                <Svg width={width - 24} height={60}>
+                  <Defs>
+                    <SvgLinearGradient id="baseGrad" x1="0" y1="0" x2="0" y2="1">
+                      <Stop offset="0%" stopColor="#1E0D3E" stopOpacity="0.9" />
+                      <Stop offset="100%" stopColor="#080315" stopOpacity="1" />
+                    </SvgLinearGradient>
+                  </Defs>
+                  {/* Massive Hydraulic Foundation Bastion */}
+                  <Polygon
+                    points={`20,0 ${width - 44},0 ${width - 24},50 0,50`}
+                    fill="url(#baseGrad)"
+                    stroke="#00F5FF"
+                    strokeWidth={1.5}
+                  />
+                  {/* Ground Anchor Shock Absorbers */}
+                  <Rect
+                    x={40}
+                    y={20}
+                    width={30}
+                    height={30}
+                    fill="#FF007F"
+                    opacity={0.3}
+                  />
+                  <Rect
+                    x={width - 94}
+                    y={20}
+                    width={30}
+                    height={30}
+                    fill="#00F5FF"
+                    opacity={0.3}
+                  />
+                  <Line
+                    x1={20}
+                    y1={35}
+                    x2={width - 44}
+                    y2={35}
+                    stroke="#FFD166"
+                    strokeWidth={1}
+                    strokeDasharray="4,4"
+                  />
+                </Svg>
+
+                <Text style={hubStyles.foundationFooterNote}>
+                  MEGASTRUCTURE ARCHITECTURE // VER 2.0 // ZERO LATENCY 60FPS
+                </Text>
               </View>
-            );
-          })}
+            </ScrollView>
+          ) : (
+            /* TAB 2: ALL GAMES CYBERPUNK 2-COLUMN GRID VIEW */
+            <ScrollView
+              style={hubStyles.gridScroll}
+              contentContainerStyle={[
+                hubStyles.gridScrollContent,
+                { paddingBottom: safeBottom + 36 },
+              ]}
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={hubStyles.gridRowWrap}>
+                {allGamesGridList.map((game) => {
+                  const unlocked = isGameCurrentUnlocked(game.id);
+                  const best = highScores[game.id] || 0;
+                  const req = UNLOCK_REQUIREMENTS[game.id];
+                  const progress = getUnlockProgress(game.id, highScores);
+                  const cardWidth = Math.floor((width - 34) / 2);
 
-          {/* CITADEL GROUND BASE FOUNDATION */}
-          <View style={hubStyles.citadelFoundation}>
-            <View style={hubStyles.foundationHazardRow}>
-              <Text style={hubStyles.foundationHazardText}>
-                ⚠️ HAZARD LEVEL 0 // CYBER ARCADE FOUNDATION PEDESTAL ⚠️
-              </Text>
-            </View>
+                  if (unlocked) {
+                    return (
+                      <Pressable
+                        key={game.id}
+                        onPress={() => handleSelectGame(game.id, game.accent)}
+                        style={({ pressed }) => [
+                          hubStyles.gridCard,
+                          {
+                            width: cardWidth,
+                            borderColor: `${game.accent}77`,
+                            shadowColor: game.accent,
+                          },
+                          pressed && {
+                            transform: [{ scale: 0.96 }],
+                            borderColor: game.accent,
+                          },
+                        ]}
+                      >
+                        <LinearGradient
+                          colors={[
+                            'rgba(22, 16, 46, 0.96)',
+                            'rgba(9, 6, 24, 0.98)',
+                          ]}
+                          style={StyleSheet.absoluteFillObject}
+                        />
+                        {/* Top glowing strip */}
+                        <View
+                          style={[
+                            hubStyles.gridTopBar,
+                            { backgroundColor: game.accent },
+                          ]}
+                        />
 
-            <Svg width={width - 24} height={60}>
-              <Defs>
-                <SvgLinearGradient id="baseGrad" x1="0" y1="0" x2="0" y2="1">
-                  <Stop offset="0%" stopColor="#1E0D3E" stopOpacity="0.9" />
-                  <Stop offset="100%" stopColor="#080315" stopOpacity="1" />
-                </SvgLinearGradient>
-              </Defs>
-              {/* Massive Hydraulic Foundation Bastion */}
-              <Polygon
-                points={`20,0 ${width - 44},0 ${width - 24},50 0,50`}
-                fill="url(#baseGrad)"
-                stroke="#00F5FF"
-                strokeWidth={1.5}
-              />
-              {/* Ground Anchor Shock Absorbers */}
-              <Rect
-                x={40}
-                y={20}
-                width={30}
-                height={30}
-                fill="#FF007F"
-                opacity={0.3}
-              />
-              <Rect
-                x={width - 94}
-                y={20}
-                width={30}
-                height={30}
-                fill="#00F5FF"
-                opacity={0.3}
-              />
-              <Line
-                x1={20}
-                y1={35}
-                x2={width - 44}
-                y2={35}
-                stroke="#FFD166"
-                strokeWidth={1}
-                strokeDasharray="4,4"
-              />
-            </Svg>
+                        {/* Floor and category header */}
+                        <View style={hubStyles.gridCardHeader}>
+                          <View
+                            style={[
+                              hubStyles.gridFloorBadge,
+                              { borderColor: `${game.accent}66` },
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                hubStyles.gridFloorText,
+                                { color: game.accent },
+                              ]}
+                            >
+                              FL {String(game.floorNum).padStart(2, '0')}
+                            </Text>
+                          </View>
+                          <Text style={hubStyles.gridCategoryTag}>
+                            {game.category}
+                          </Text>
+                        </View>
 
-            <Text style={hubStyles.foundationFooterNote}>
-              MEGASTRUCTURE ARCHITECTURE // VER 2.0 // ZERO LATENCY 60FPS
-            </Text>
-          </View>
-        </ScrollView>
+                        {/* Icon Chamber */}
+                        <View
+                          style={[
+                            hubStyles.gridIconWrapper,
+                            {
+                              borderColor: `${game.accent}66`,
+                              backgroundColor: `${game.accent}18`,
+                            },
+                          ]}
+                        >
+                          <Text style={hubStyles.gridIconEmoji}>{game.icon}</Text>
+                        </View>
+
+                        {/* Title */}
+                        <Text style={hubStyles.gridGameTitle} numberOfLines={1}>
+                          {game.title}
+                        </Text>
+
+                        {/* Score row */}
+                        <View style={hubStyles.gridScoreRow}>
+                          <Text style={hubStyles.gridScoreLabel}>BEST:</Text>
+                          <Text
+                            style={[
+                              hubStyles.gridScoreVal,
+                              {
+                                color:
+                                  best > 0
+                                    ? COLORS.solarGold
+                                    : COLORS.textSecondary,
+                              },
+                            ]}
+                          >
+                            {best > 0 ? best.toLocaleString() : '---'}
+                          </Text>
+                        </View>
+
+                        {/* Play CTA */}
+                        <LinearGradient
+                          colors={[game.accent, game.secondary]}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 0 }}
+                          style={hubStyles.gridPlayBtn}
+                        >
+                          <Text style={hubStyles.gridPlayBtnText}>PLAY ▶</Text>
+                        </LinearGradient>
+                      </Pressable>
+                    );
+                  }
+
+                  // Locked Game Grid Card
+                  return (
+                    <Pressable
+                      key={game.id}
+                      onPress={() => {
+                        triggerLightHaptic();
+                        playTapSound();
+                        setUnlockModalGame(game);
+                      }}
+                      style={({ pressed }) => [
+                        hubStyles.gridCard,
+                        hubStyles.gridCardLocked,
+                        { width: cardWidth },
+                        pressed && {
+                          transform: [{ scale: 0.97 }],
+                          borderColor: '#FF0055',
+                        },
+                      ]}
+                    >
+                      <LinearGradient
+                        colors={[
+                          'rgba(16, 12, 28, 0.94)',
+                          'rgba(8, 6, 18, 0.98)',
+                        ]}
+                        style={StyleSheet.absoluteFillObject}
+                      />
+                      {/* Top locked strip */}
+                      <View
+                        style={[
+                          hubStyles.gridTopBar,
+                          { backgroundColor: '#FF0055' },
+                        ]}
+                      />
+
+                      {/* Header */}
+                      <View style={hubStyles.gridCardHeader}>
+                        <View
+                          style={[
+                            hubStyles.gridFloorBadge,
+                            { borderColor: 'rgba(255,255,255,0.18)' },
+                          ]}
+                        >
+                          <Text
+                            style={[hubStyles.gridFloorText, { color: '#94A3B8' }]}
+                          >
+                            FL {String(game.floorNum).padStart(2, '0')}
+                          </Text>
+                        </View>
+                        <View style={hubStyles.gridLockBadge}>
+                          <Text style={hubStyles.gridLockBadgeText}>
+                            🔒 LOCKED
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Icon with lock overlay */}
+                      <View style={hubStyles.gridIconWrapperLocked}>
+                        <Text style={hubStyles.gridIconEmojiLocked}>
+                          {game.icon}
+                        </Text>
+                        <View style={hubStyles.lockOverlayCenter}>
+                          <Text style={{ fontSize: 16 }}>🔒</Text>
+                        </View>
+                      </View>
+
+                      {/* Title */}
+                      <Text
+                        style={hubStyles.gridGameTitleLocked}
+                        numberOfLines={1}
+                      >
+                        {game.title}
+                      </Text>
+
+                      {/* Requirement & Progress */}
+                      <View style={hubStyles.gridReqSnippet}>
+                        <Text
+                          style={hubStyles.gridReqSnippetText}
+                          numberOfLines={1}
+                        >
+                          {req?.desc || 'Locked Floor'}
+                        </Text>
+                        <View style={hubStyles.gridProgressBarBg}>
+                          <View
+                            style={[
+                              hubStyles.gridProgressBarFill,
+                              { width: `${Math.round(progress * 100)}%` },
+                            ]}
+                          />
+                        </View>
+                        <Text style={hubStyles.gridProgressPct}>
+                          {Math.round(progress * 100)}% UNLOCKED
+                        </Text>
+                      </View>
+
+                      {/* Mission Button */}
+                      <View style={hubStyles.gridUnlockBtn}>
+                        <Text style={hubStyles.gridUnlockBtnText}>
+                          MISSION ➔
+                        </Text>
+                      </View>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </ScrollView>
+          )}
+
+      {/* UNLOCK MISSION MODAL (Direct Prerequisite Game Launcher) */}
+      {unlockModalGame && (
+        <Modal
+          transparent
+          visible={!!unlockModalGame}
+          animationType="none"
+          statusBarTranslucent
+          onRequestClose={() => {
+            setUnlockModalGame(null);
+            triggerLightHaptic();
+          }}
+        >
+          <Pressable
+            style={hubStyles.unlockModalOverlay}
+            onPress={() => {
+              setUnlockModalGame(null);
+              triggerLightHaptic();
+            }}
+            onStartShouldSetResponder={() => true}
+            onMoveShouldSetResponder={() => true}
+            onResponderTerminationRequest={() => false}
+          >
+            <Animated.View
+              entering={FadeIn.duration(180)}
+              style={StyleSheet.absoluteFillObject}
+              pointerEvents="none"
+            >
+              <View
+                style={{
+                  ...StyleSheet.absoluteFillObject,
+                  backgroundColor: 'rgba(3, 3, 10, 0.94)',
+                }}
+              />
+            </Animated.View>
+
+            <Animated.View
+              entering={ZoomIn.duration(200)}
+              style={hubStyles.unlockModalCard}
+            >
+              <Pressable
+                onPress={(e) => e.stopPropagation?.()}
+                style={{ width: '100%', alignItems: 'center' }}
+              >
+                {/* Target Game Header */}
+                <View style={hubStyles.unlockModalIconRing}>
+                  <Text style={{ fontSize: 34 }}>{unlockModalGame.icon}</Text>
+                </View>
+                <Text style={hubStyles.unlockModalTitle}>
+                  {unlockModalGame.title}
+                </Text>
+                <Text style={hubStyles.unlockModalSubtitle}>
+                  {`FLOOR ${String(unlockModalGame.floorNum).padStart(2, '0')} • ${unlockModalGame.tier} SECTOR`}
+                </Text>
+
+                {/* Status Badge */}
+                <View style={hubStyles.unlockStatusBadge}>
+                  <Text style={hubStyles.unlockStatusBadgeText}>
+                    🔒 SYSTEM ENCRYPTED
+                  </Text>
+                </View>
+
+                {/* Mission Details */}
+                {(() => {
+                  const req = UNLOCK_REQUIREMENTS[unlockModalGame.id];
+                  const prereqGame = req
+                    ? TOWER_GAMES.find((g) => g.id === req.reqGame)
+                    : null;
+                  const currentScore = prereqGame
+                    ? highScores[prereqGame.id] || 0
+                    : 0;
+                  const targetScore = req ? req.targetScore : 0;
+                  const progress = req
+                    ? getUnlockProgress(unlockModalGame.id, highScores)
+                    : 0;
+
+                  return (
+                    <View style={hubStyles.unlockMissionCard}>
+                      <Text style={hubStyles.unlockMissionHeader}>
+                        ⚡ UNLOCK MISSION
+                      </Text>
+                      <Text style={hubStyles.unlockMissionDesc}>
+                        Play {prereqGame ? prereqGame.title : 'the prerequisite game'} to reach the required target score:
+                      </Text>
+
+                      {prereqGame && (
+                        <View style={hubStyles.prereqInfoRow}>
+                          <Text style={{ fontSize: 24 }}>{prereqGame.icon}</Text>
+                          <View style={{ flex: 1, marginLeft: 10 }}>
+                            <Text style={hubStyles.prereqName}>
+                              {prereqGame.title}
+                            </Text>
+                            <Text style={hubStyles.prereqCategory}>
+                              {prereqGame.category} CATEGORY
+                            </Text>
+                          </View>
+                        </View>
+                      )}
+
+                      <View style={hubStyles.scoreCompareRow}>
+                        <View style={hubStyles.scoreCompareCol}>
+                          <Text style={hubStyles.scoreCompareLabel}>
+                            YOUR BEST
+                          </Text>
+                          <Text
+                            style={[
+                              hubStyles.scoreCompareVal,
+                              { color: COLORS.cyan },
+                            ]}
+                          >
+                            {currentScore}
+                          </Text>
+                        </View>
+                        <Text style={hubStyles.scoreCompareSlash}>/</Text>
+                        <View style={hubStyles.scoreCompareCol}>
+                          <Text style={hubStyles.scoreCompareLabel}>
+                            TARGET GOAL
+                          </Text>
+                          <Text
+                            style={[
+                              hubStyles.scoreCompareVal,
+                              { color: COLORS.solarGold },
+                            ]}
+                          >
+                            {targetScore}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Big Progress Bar */}
+                      <View style={hubStyles.unlockBigBarBg}>
+                        <View
+                          style={[
+                            hubStyles.unlockBigBarFill,
+                            { width: `${Math.round(progress * 100)}%` },
+                          ]}
+                        />
+                      </View>
+                      <Text style={hubStyles.unlockBarPctText}>
+                        {Math.round(progress * 100)}% COMPLETED
+                      </Text>
+
+                      {/* Direct Launch CTA */}
+                      {prereqGame && (
+                        <Pressable
+                          onPress={() => {
+                            setUnlockModalGame(null);
+                            handleSelectGame(
+                              prereqGame.id,
+                              prereqGame.accent
+                            );
+                          }}
+                          style={({ pressed }) => [
+                            hubStyles.unlockLaunchBtn,
+                            pressed && {
+                              transform: [{ scale: 0.96 }],
+                              opacity: 0.9,
+                            },
+                          ]}
+                        >
+                          <LinearGradient
+                            colors={[prereqGame.accent, prereqGame.secondary]}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 0 }}
+                            style={hubStyles.unlockLaunchGrad}
+                          >
+                            <Text style={hubStyles.unlockLaunchText}>
+                              🚀 PLAY {prereqGame.title} NOW
+                            </Text>
+                          </LinearGradient>
+                        </Pressable>
+                      )}
+                    </View>
+                  );
+                })()}
+
+                {/* Dismiss button */}
+                <Pressable
+                  onPress={() => {
+                    setUnlockModalGame(null);
+                    triggerLightHaptic();
+                  }}
+                  style={hubStyles.unlockCloseBtn}
+                >
+                  <Text style={hubStyles.unlockCloseText}>CLOSE</Text>
+                </Pressable>
+              </Pressable>
+            </Animated.View>
+          </Pressable>
+        </Modal>
+      )}
     </View>
   );
 }
@@ -2032,10 +2815,12 @@ const hubStyles = StyleSheet.create({
     flex: 1,
     width: '100%',
     height: '100%',
-    backgroundColor: 'rgba(3, 3, 10, 0.88)',
+    backgroundColor: 'rgba(3, 3, 10, 0.92)',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 24,
+    zIndex: 999999,
+    elevation: 999999,
   },
   exitCard: {
     width: '100%',
@@ -2109,6 +2894,512 @@ const hubStyles = StyleSheet.create({
     fontFamily: monoFont,
     fontWeight: '900',
     color: '#FFFFFF',
+    letterSpacing: 1,
+  },
+
+  /* TAB SWITCHER */
+  tabSwitcherRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 8,
+    width: '100%',
+  },
+  tabSwitcherBtn: {
+    flex: 1,
+    borderRadius: 10,
+    overflow: 'hidden',
+    borderWidth: 1.2,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  tabSwitcherBtnActiveTower: {
+    borderColor: COLORS.cyan,
+    shadowColor: COLORS.cyan,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  tabSwitcherBtnActiveGrid: {
+    borderColor: '#FF007F',
+    shadowColor: '#FF007F',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  tabSwitcherGrad: {
+    paddingVertical: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tabSwitcherText: {
+    fontSize: 11,
+    fontFamily: monoFont,
+    fontWeight: '900',
+    color: '#94A3B8',
+    letterSpacing: 0.8,
+  },
+  tabSwitcherTextActiveTower: {
+    color: COLORS.cyan,
+  },
+  tabSwitcherTextActiveGrid: {
+    color: '#FF007F',
+  },
+
+  categoryTabActive: {
+    backgroundColor: 'rgba(255, 0, 127, 0.2)',
+    borderColor: '#FF007F',
+  },
+  categoryTabTextActive: {
+    color: '#FF007F',
+  },
+
+  /* TOWER EXPAND CARD */
+  towerExpandCard: {
+    width: '92%',
+    marginTop: 18,
+    marginBottom: 10,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 0, 127, 0.55)',
+    overflow: 'hidden',
+  },
+  towerExpandGrad: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+  },
+  towerExpandIcon: {
+    fontSize: 26,
+    marginRight: 12,
+  },
+  towerExpandTitle: {
+    fontSize: 11,
+    fontFamily: monoFont,
+    fontWeight: '900',
+    color: '#FF007F',
+    letterSpacing: 0.8,
+    marginBottom: 4,
+  },
+  towerExpandSub: {
+    fontSize: 9.5,
+    fontFamily: monoFont,
+    color: '#CBD5E1',
+    lineHeight: 14,
+  },
+  towerExpandArrow: {
+    fontSize: 18,
+    color: '#FF007F',
+    fontWeight: '900',
+  },
+
+  /* ALL GAMES GRID */
+  gridScroll: {
+    flex: 1,
+    zIndex: 10,
+    elevation: 10,
+  },
+  gridScrollContent: {
+    paddingTop: 12,
+    paddingHorizontal: 12,
+  },
+  gridRowWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  gridCard: {
+    borderRadius: 14,
+    borderWidth: 1.5,
+    marginBottom: 12,
+    padding: 10,
+    overflow: 'hidden',
+    alignItems: 'center',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  gridCardLocked: {
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  gridTopBar: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 3,
+  },
+  gridCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    width: '100%',
+    marginBottom: 8,
+  },
+  gridFloorBadge: {
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingHorizontal: 5,
+    paddingVertical: 1.5,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+  },
+  gridFloorText: {
+    fontSize: 8.5,
+    fontFamily: monoFont,
+    fontWeight: '900',
+  },
+  gridCategoryTag: {
+    fontSize: 8,
+    fontFamily: monoFont,
+    fontWeight: '800',
+    color: COLORS.textSecondary,
+    letterSpacing: 0.5,
+  },
+  gridIconWrapper: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  gridIconEmoji: {
+    fontSize: 24,
+  },
+  gridIconWrapperLocked: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+    position: 'relative',
+  },
+  gridIconEmojiLocked: {
+    fontSize: 24,
+    opacity: 0.25,
+  },
+  lockOverlayCenter: {
+    position: 'absolute',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  gridGameTitle: {
+    fontSize: 11,
+    fontFamily: monoFont,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+    textAlign: 'center',
+    marginBottom: 6,
+  },
+  gridGameTitleLocked: {
+    fontSize: 11,
+    fontFamily: monoFont,
+    fontWeight: '800',
+    color: '#94A3B8',
+    letterSpacing: 0.5,
+    textAlign: 'center',
+    marginBottom: 6,
+  },
+  gridScoreRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(0, 0, 0, 0.35)',
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    marginBottom: 8,
+  },
+  gridScoreLabel: {
+    fontSize: 8,
+    fontFamily: monoFont,
+    color: COLORS.textSecondary,
+  },
+  gridScoreVal: {
+    fontSize: 9,
+    fontFamily: monoFont,
+    fontWeight: '900',
+  },
+  gridPlayBtn: {
+    width: '100%',
+    paddingVertical: 6,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  gridPlayBtnText: {
+    fontSize: 10,
+    fontFamily: monoFont,
+    fontWeight: '900',
+    color: '#030208',
+    letterSpacing: 1,
+  },
+  gridLockBadge: {
+    backgroundColor: 'rgba(255, 0, 85, 0.18)',
+    borderWidth: 1,
+    borderColor: '#FF0055',
+    borderRadius: 6,
+    paddingHorizontal: 5,
+    paddingVertical: 1.5,
+  },
+  gridLockBadgeText: {
+    fontSize: 8,
+    fontFamily: monoFont,
+    fontWeight: '900',
+    color: '#FF0055',
+    letterSpacing: 0.5,
+  },
+  gridReqSnippet: {
+    width: '100%',
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    borderRadius: 6,
+    padding: 6,
+    marginBottom: 8,
+    alignItems: 'center',
+  },
+  gridReqSnippetText: {
+    fontSize: 8.5,
+    fontFamily: monoFont,
+    color: '#E2E8F0',
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  gridProgressBarBg: {
+    width: '100%',
+    height: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  gridProgressBarFill: {
+    height: '100%',
+    backgroundColor: COLORS.cyan,
+    borderRadius: 2,
+  },
+  gridProgressPct: {
+    fontSize: 7.5,
+    fontFamily: monoFont,
+    fontWeight: '800',
+    color: COLORS.cyan,
+    marginTop: 3,
+  },
+  gridUnlockBtn: {
+    width: '100%',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.16)',
+    paddingVertical: 6,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  gridUnlockBtnText: {
+    fontSize: 9,
+    fontFamily: monoFont,
+    fontWeight: '800',
+    color: '#CBD5E1',
+    letterSpacing: 0.8,
+  },
+
+  /* UNLOCK MISSION MODAL */
+  unlockModalOverlay: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+    backgroundColor: 'rgba(3, 3, 10, 0.94)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+    zIndex: 999999,
+    elevation: 999999,
+  },
+  unlockModalCard: {
+    width: '100%',
+    maxWidth: 350,
+    backgroundColor: 'rgba(14, 12, 32, 0.98)',
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: '#00F5FF',
+    padding: 20,
+    alignItems: 'center',
+    shadowColor: '#00F5FF',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.35,
+    shadowRadius: 18,
+    elevation: 35000,
+  },
+  unlockModalIconRing: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    borderWidth: 2,
+    borderColor: '#00F5FF',
+    backgroundColor: 'rgba(0, 245, 255, 0.14)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  unlockModalTitle: {
+    fontSize: 17,
+    fontFamily: monoFont,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    letterSpacing: 1.2,
+    textAlign: 'center',
+  },
+  unlockModalSubtitle: {
+    fontSize: 10,
+    fontFamily: monoFont,
+    color: COLORS.textSecondary,
+    letterSpacing: 0.8,
+    marginTop: 2,
+    marginBottom: 8,
+  },
+  unlockStatusBadge: {
+    backgroundColor: 'rgba(255, 0, 85, 0.18)',
+    borderWidth: 1,
+    borderColor: '#FF0055',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    marginBottom: 14,
+  },
+  unlockStatusBadgeText: {
+    fontSize: 9,
+    fontFamily: monoFont,
+    fontWeight: '900',
+    color: '#FF0055',
+    letterSpacing: 1,
+  },
+  unlockMissionCard: {
+    width: '100%',
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 245, 255, 0.25)',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 14,
+    alignItems: 'center',
+  },
+  unlockMissionHeader: {
+    fontSize: 11,
+    fontFamily: monoFont,
+    fontWeight: '900',
+    color: COLORS.solarGold,
+    letterSpacing: 1,
+    marginBottom: 6,
+  },
+  unlockMissionDesc: {
+    fontSize: 10,
+    fontFamily: monoFont,
+    color: '#CBD5E1',
+    textAlign: 'center',
+    lineHeight: 15,
+    marginBottom: 10,
+  },
+  prereqInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    width: '100%',
+    marginBottom: 12,
+  },
+  prereqName: {
+    fontSize: 12,
+    fontFamily: monoFont,
+    fontWeight: '900',
+    color: '#FFFFFF',
+  },
+  prereqCategory: {
+    fontSize: 8.5,
+    fontFamily: monoFont,
+    color: COLORS.cyan,
+  },
+  scoreCompareRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 16,
+    width: '100%',
+    marginBottom: 10,
+  },
+  scoreCompareCol: {
+    alignItems: 'center',
+  },
+  scoreCompareLabel: {
+    fontSize: 8,
+    fontFamily: monoFont,
+    color: COLORS.textSecondary,
+    marginBottom: 2,
+  },
+  scoreCompareVal: {
+    fontSize: 16,
+    fontFamily: monoFont,
+    fontWeight: '900',
+  },
+  scoreCompareSlash: {
+    fontSize: 16,
+    fontFamily: monoFont,
+    color: COLORS.textSecondary,
+  },
+  unlockBigBarBg: {
+    width: '100%',
+    height: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  unlockBigBarFill: {
+    height: '100%',
+    backgroundColor: '#00F5FF',
+    borderRadius: 4,
+  },
+  unlockBarPctText: {
+    fontSize: 9,
+    fontFamily: monoFont,
+    fontWeight: '900',
+    color: COLORS.cyan,
+    marginTop: 5,
+    marginBottom: 12,
+  },
+  unlockLaunchBtn: {
+    width: '100%',
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
+  unlockLaunchGrad: {
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  unlockLaunchText: {
+    fontSize: 11,
+    fontFamily: monoFont,
+    fontWeight: '900',
+    color: '#030208',
+    letterSpacing: 1,
+  },
+  unlockCloseBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  unlockCloseText: {
+    fontSize: 10,
+    fontFamily: monoFont,
+    fontWeight: '900',
+    color: '#94A3B8',
     letterSpacing: 1,
   },
 });

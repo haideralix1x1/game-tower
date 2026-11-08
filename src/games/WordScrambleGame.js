@@ -10,6 +10,7 @@ import {
   Animated,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS } from '../../styles';
 import MiniGameHeader from '../components/MiniGameHeader';
@@ -21,11 +22,13 @@ import {
   triggerMediumHaptic,
   triggerPerfectHaptic,
   triggerSliceHaptic,
+  triggerGameOverHaptic,
 } from '../utils/haptics';
 import {
   playTapSound,
   playSliceSound,
   playPerfectSound,
+  playGameOverSound,
 } from '../utils/sound';
 
 const monoFont = Platform.select({
@@ -37,55 +40,119 @@ const monoFont = Platform.select({
 const STORAGE_LEVEL_KEY = '@game_tower:level_scramble_v1';
 const STORAGE_BEST_KEY = '@game_tower:best_scramble_v1';
 
-// Curated 30+ Levels with rich anagram combinations
-const PRESET_LEVELS = [
-  { level: 1, letters: ['S', 'T', 'A', 'R', 'E'], goal: 5 },
-  { level: 2, letters: ['P', 'L', 'A', 'N', 'T'], goal: 5 },
-  { level: 3, letters: ['S', 'M', 'A', 'R', 'T'], goal: 5 },
-  { level: 4, letters: ['B', 'L', 'A', 'Z', 'E'], goal: 5 },
-  { level: 5, letters: ['C', 'R', 'O', 'W', 'N'], goal: 5 },
-  { level: 6, letters: ['C', 'L', 'O', 'U', 'D', 'S'], goal: 6 },
-  { level: 7, letters: ['S', 'P', 'R', 'I', 'N', 'G'], goal: 6 },
-  { level: 8, letters: ['F', 'L', 'I', 'G', 'H', 'T'], goal: 6 },
-  { level: 9, letters: ['P', 'L', 'A', 'N', 'E', 'T'], goal: 6 },
-  { level: 10, letters: ['S', 'T', 'R', 'E', 'A', 'M'], goal: 6 },
-  { level: 11, letters: ['S', 'P', 'A', 'R', 'K', 'S'], goal: 6 },
-  { level: 12, letters: ['C', 'A', 'S', 'T', 'L', 'E'], goal: 6 },
-  { level: 13, letters: ['S', 'I', 'L', 'V', 'E', 'R'], goal: 6 },
-  { level: 14, letters: ['W', 'I', 'N', 'T', 'E', 'R'], goal: 6 },
-  { level: 15, letters: ['M', 'A', 'R', 'K', 'E', 'T'], goal: 6 },
-  { level: 16, letters: ['C', 'R', 'Y', 'S', 'T', 'A', 'L'], goal: 7 },
-  { level: 17, letters: ['D', 'I', 'A', 'M', 'O', 'N', 'D'], goal: 7 },
-  { level: 18, letters: ['T', 'H', 'U', 'N', 'D', 'E', 'R'], goal: 7 },
-  { level: 19, letters: ['R', 'A', 'I', 'N', 'B', 'O', 'W'], goal: 7 },
-  { level: 20, letters: ['K', 'I', 'N', 'G', 'D', 'O', 'M'], goal: 7 },
-  { level: 21, letters: ['M', 'Y', 'S', 'T', 'E', 'R', 'Y'], goal: 7 },
-  { level: 22, letters: ['F', 'O', 'R', 'T', 'U', 'N', 'E'], goal: 7 },
-  { level: 23, letters: ['P', 'H', 'A', 'N', 'T', 'O', 'M'], goal: 7 },
-  { level: 24, letters: ['V', 'I', 'C', 'T', 'O', 'R', 'Y'], goal: 7 },
-  { level: 25, letters: ['C', 'H', 'A', 'M', 'P', 'I', 'O', 'N'], goal: 8 },
+// Rich, diverse anagram letter sets for dynamic, non-repeating gameplay
+const LETTER_SETS_5 = [
+  ['S', 'T', 'A', 'R', 'E'],
+  ['P', 'L', 'A', 'N', 'T'],
+  ['S', 'M', 'A', 'R', 'T'],
+  ['C', 'R', 'A', 'N', 'E'],
+  ['G', 'A', 'M', 'E', 'S'],
+  ['H', 'E', 'A', 'R', 'T'],
+  ['S', 'H', 'I', 'N', 'E'],
+  ['T', 'R', 'A', 'I', 'N'],
+  ['W', 'A', 'T', 'E', 'R'],
+  ['D', 'R', 'E', 'A', 'M'],
+  ['S', 'T', 'O', 'R', 'M'],
+  ['L', 'E', 'A', 'S', 'T'],
+  ['P', 'O', 'I', 'N', 'T'],
+  ['R', 'E', 'A', 'C', 'T'],
+  ['F', 'L', 'A', 'M', 'E'],
+  ['T', 'R', 'A', 'C', 'E'],
+  ['S', 'H', 'A', 'R', 'E'],
+  ['B', 'R', 'E', 'A', 'D'],
+  ['G', 'U', 'I', 'D', 'E'],
+  ['B', 'E', 'A', 'S', 'T'],
+  ['P', 'L', 'A', 'T', 'E'],
+  ['S', 'T', 'O', 'N', 'E'],
+  ['S', 'P', 'A', 'R', 'K'],
+  ['G', 'R', 'A', 'C', 'E'],
+  ['C', 'L', 'O', 'U', 'D'],
 ];
 
-function getLevelData(lvlNum) {
-  if (lvlNum <= PRESET_LEVELS.length) {
-    return PRESET_LEVELS[lvlNum - 1];
+const LETTER_SETS_6 = [
+  ['C', 'L', 'O', 'U', 'D', 'S'],
+  ['S', 'P', 'R', 'I', 'N', 'G'],
+  ['F', 'L', 'I', 'G', 'H', 'T'],
+  ['P', 'L', 'A', 'N', 'E', 'T'],
+  ['S', 'T', 'R', 'E', 'A', 'M'],
+  ['S', 'P', 'A', 'R', 'K', 'S'],
+  ['C', 'A', 'S', 'T', 'L', 'E'],
+  ['S', 'I', 'L', 'V', 'E', 'R'],
+  ['W', 'I', 'N', 'T', 'E', 'R'],
+  ['M', 'A', 'R', 'K', 'E', 'T'],
+  ['D', 'A', 'N', 'G', 'E', 'R'],
+  ['F', 'O', 'R', 'E', 'S', 'T'],
+  ['G', 'A', 'R', 'D', 'E', 'N'],
+  ['B', 'R', 'I', 'G', 'H', 'T'],
+  ['T', 'R', 'A', 'V', 'E', 'L'],
+  ['M', 'A', 'S', 'T', 'E', 'R'],
+  ['W', 'O', 'N', 'D', 'E', 'R'],
+  ['A', 'C', 'T', 'I', 'O', 'N'],
+  ['B', 'E', 'A', 'U', 'T', 'Y'],
+  ['F', 'R', 'I', 'E', 'N', 'D'],
+  ['B', 'R', 'I', 'D', 'G', 'E'],
+  ['N', 'A', 'T', 'U', 'R', 'E'],
+  ['S', 'I', 'L', 'E', 'N', 'T'],
+  ['G', 'O', 'L', 'D', 'E', 'N'],
+  ['S', 'T', 'R', 'O', 'N', 'G'],
+];
+
+const LETTER_SETS_7 = [
+  ['C', 'R', 'Y', 'S', 'T', 'A', 'L'],
+  ['D', 'I', 'A', 'M', 'O', 'N', 'D'],
+  ['T', 'H', 'U', 'N', 'D', 'E', 'R'],
+  ['R', 'A', 'I', 'N', 'B', 'O', 'W'],
+  ['K', 'I', 'N', 'G', 'D', 'O', 'M'],
+  ['M', 'Y', 'S', 'T', 'E', 'R', 'Y'],
+  ['F', 'O', 'R', 'T', 'U', 'N', 'E'],
+  ['P', 'H', 'A', 'N', 'T', 'O', 'M'],
+  ['V', 'I', 'C', 'T', 'O', 'R', 'Y'],
+  ['C', 'H', 'A', 'M', 'P', 'I', 'O', 'N'],
+  ['S', 'H', 'A', 'D', 'O', 'W', 'S'],
+  ['P', 'A', 'L', 'A', 'D', 'I', 'N'],
+  ['F', 'E', 'A', 'T', 'H', 'E', 'R'],
+  ['C', 'A', 'P', 'T', 'A', 'I', 'N'],
+  ['B', 'A', 'L', 'L', 'O', 'O', 'N'],
+  ['P', 'R', 'O', 'M', 'I', 'S', 'E'],
+  ['J', 'O', 'U', 'R', 'N', 'E', 'Y'],
+  ['H', 'O', 'R', 'I', 'Z', 'O', 'N'],
+  ['B', 'L', 'O', 'S', 'S', 'O', 'M'],
+  ['W', 'A', 'R', 'R', 'I', 'O', 'R'],
+];
+
+/**
+ * Picks a brand new letter set guaranteed to be DIFFERENT from the previous set!
+ */
+function pickNewLetterSet(lvlNum, previousLetters) {
+  let pool = LETTER_SETS_5;
+  let goal = 4;
+  let roundTime = 50;
+
+  if (lvlNum >= 6 && lvlNum <= 15) {
+    pool = LETTER_SETS_6;
+    goal = 5;
+    roundTime = 55;
+  } else if (lvlNum >= 16) {
+    pool = LETTER_SETS_7;
+    goal = 6;
+    roundTime = 60;
   }
-  // Procedural generator for endless high levels
-  const extraPools = [
-    ['S', 'H', 'A', 'D', 'O', 'W', 'S'],
-    ['P', 'A', 'L', 'A', 'D', 'I', 'N'],
-    ['F', 'E', 'A', 'T', 'H', 'E', 'R'],
-    ['C', 'A', 'P', 'T', 'A', 'I', 'N'],
-    ['B', 'A', 'L', 'L', 'O', 'O', 'N'],
-    ['P', 'R', 'O', 'M', 'I', 'S', 'E'],
-    ['S', 'U', 'N', 'S', 'H', 'I', 'N', 'E'],
-  ];
-  const idx = (lvlNum - PRESET_LEVELS.length - 1) % extraPools.length;
-  return {
-    level: lvlNum,
-    letters: extraPools[idx],
-    goal: 6,
-  };
+
+  // Filter out previous letters so next time the letters are NEVER the same!
+  const prevSignature = previousLetters ? [...previousLetters].sort().join('') : '';
+  const candidatePool = pool.filter((s) => [...s].sort().join('') !== prevSignature);
+  const finalPool = candidatePool.length > 0 ? candidatePool : pool;
+
+  const chosen = finalPool[Math.floor(Math.random() * finalPool.length)];
+
+  // Shuffle letters for circular dial
+  const letters = [...chosen];
+  for (let i = letters.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [letters[i], letters[j]] = [letters[j], letters[i]];
+  }
+
+  return { letters, goal, roundTime };
 }
 
 // Calculate score for a word based on length
@@ -100,25 +167,47 @@ function getWordScore(word) {
   return len * 60;
 }
 
-export default function WordScrambleGame({ onBackToHub, onScoreUpdate }) {
+export default function WordScrambleGame({ onBackToHub, onScoreUpdate, isPaused = false }) {
   const { width, height } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
 
   const juiceRef = useRef(null);
+  const lastLettersRef = useRef(null);
 
   const [level, setLevel] = useState(1);
   const [score, setScore] = useState(0);
   const [bestScore, setBestScore] = useState(0);
 
-  // Current level letter configuration
-  const currentLevelConfig = getLevelData(level);
-  const [shuffledLetters, setShuffledLetters] = useState(() => [...currentLevelConfig.letters]);
+  // Round configuration & letter setup
+  const [roundConfig, setRoundConfig] = useState(() => {
+    const initialCfg = pickNewLetterSet(1, null);
+    lastLettersRef.current = initialCfg.letters;
+    return initialCfg;
+  });
+
+  const [shuffledLetters, setShuffledLetters] = useState(() => roundConfig.letters);
   const [selectedIndices, setSelectedIndices] = useState([]);
   const [foundWords, setFoundWords] = useState([]);
   const [feedbackMsg, setFeedbackMsg] = useState(null);
-  const [levelClearedModal, setLevelClearedModal] = useState(false);
+
+  // Countdown timer state
+  const [timeLeft, setTimeLeft] = useState(roundConfig.roundTime);
+  const [isTimerRunning, setIsTimerRunning] = useState(true);
+
+  // Modal result state
+  const [modalVisible, setModalVisible] = useState(false);
+  const [modalType, setModalType] = useState('VICTORY'); // 'VICTORY' | 'GAME_OVER'
 
   // Rotation animation for shuffle button
   const shuffleSpin = useRef(new Animated.Value(0)).current;
+
+  // Latest state refs to eliminate timer stale closures
+  const foundWordsRef = useRef(foundWords);
+  foundWordsRef.current = foundWords;
+  const roundConfigRef = useRef(roundConfig);
+  roundConfigRef.current = roundConfig;
+  const levelRef = useRef(level);
+  levelRef.current = level;
 
   // Load saved level & score
   useEffect(() => {
@@ -128,7 +217,10 @@ export default function WordScrambleGame({ onBackToHub, onScoreUpdate }) {
         const savedScore = await AsyncStorage.getItem(STORAGE_BEST_KEY);
         if (savedLvl !== null) {
           const pLvl = parseInt(savedLvl, 10);
-          if (!isNaN(pLvl) && pLvl >= 1) setLevel(pLvl);
+          if (!isNaN(pLvl) && pLvl >= 1) {
+            setLevel(pLvl);
+            startRound(pLvl);
+          }
         }
         if (savedScore !== null) {
           const pScore = parseInt(savedScore, 10);
@@ -138,14 +230,61 @@ export default function WordScrambleGame({ onBackToHub, onScoreUpdate }) {
     })();
   }, []);
 
-  // Sync letter set when level changes
-  useEffect(() => {
-    const cfg = getLevelData(level);
-    setShuffledLetters([...cfg.letters]);
+  // Starts a fresh round with guaranteed DIFFERENT letters
+  const startRound = useCallback((lvl) => {
+    const nextCfg = pickNewLetterSet(lvl, lastLettersRef.current);
+    lastLettersRef.current = nextCfg.letters;
+
+    setRoundConfig(nextCfg);
+    setShuffledLetters(nextCfg.letters);
     setSelectedIndices([]);
     setFoundWords([]);
     setFeedbackMsg(null);
-  }, [level]);
+    setTimeLeft(nextCfg.roundTime);
+    setIsTimerRunning(true);
+    setModalVisible(false);
+  }, []);
+
+  // When time runs out: check if goal is met
+  const handleTimeUp = useCallback(() => {
+    setIsTimerRunning(false);
+    const goalReached = foundWordsRef.current.length >= roundConfigRef.current.goal;
+
+    if (goalReached) {
+      // VICTORY! Level cleared!
+      playPerfectSound(5);
+      triggerPerfectHaptic(5);
+      setModalType('VICTORY');
+      setModalVisible(true);
+    } else {
+      // FAILED / GAME OVER!
+      playGameOverSound();
+      triggerGameOverHaptic();
+      setModalType('GAME_OVER');
+      setModalVisible(true);
+    }
+  }, []);
+
+  // 1-second Countdown Timer
+  useEffect(() => {
+    if (!isTimerRunning || modalVisible || isPaused) return;
+
+    const interval = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          handleTimeUp();
+          return 0;
+        }
+        if (prev <= 6) {
+          triggerLightHaptic();
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [isTimerRunning, modalVisible, isPaused, handleTimeUp]);
 
   // Current word formed by selected letter indices
   const currentWord = selectedIndices.map((idx) => shuffledLetters[idx]).join('');
@@ -165,7 +304,7 @@ export default function WordScrambleGame({ onBackToHub, onScoreUpdate }) {
     setSelectedIndices((prev) => [...prev, idx]);
   };
 
-  // Backspace last letter
+  // Backspace last tapped letter
   const handleBackspace = () => {
     if (selectedIndices.length === 0) return;
     triggerLightHaptic();
@@ -199,7 +338,6 @@ export default function WordScrambleGame({ onBackToHub, onScoreUpdate }) {
       }),
     ]).start();
 
-    // Shuffle letters while maintaining selected word integrity
     const lettersWithIds = shuffledLetters.map((char, originalIdx) => ({
       char,
       originalIdx,
@@ -207,7 +345,6 @@ export default function WordScrambleGame({ onBackToHub, onScoreUpdate }) {
       selectedOrder: selectedIndices.indexOf(originalIdx),
     }));
 
-    // Fisher-Yates shuffle
     for (let i = lettersWithIds.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [lettersWithIds[i], lettersWithIds[j]] = [lettersWithIds[j], lettersWithIds[i]];
@@ -216,7 +353,6 @@ export default function WordScrambleGame({ onBackToHub, onScoreUpdate }) {
     const newShuffledLetters = lettersWithIds.map((item) => item.char);
     const newSelectedIndices = [];
 
-    // Reconstruct selected indices in their previous order
     const selectedItems = lettersWithIds
       .filter((item) => item.isSelected)
       .sort((a, b) => a.selectedOrder - b.selectedOrder);
@@ -230,7 +366,7 @@ export default function WordScrambleGame({ onBackToHub, onScoreUpdate }) {
     setSelectedIndices(newSelectedIndices);
   };
 
-  // Submit current word
+  // Submit current word: Wrong submissions cut -10 score!
   const handleSubmitWord = useCallback(() => {
     if (currentWord.length < 2) {
       setFeedbackMsg('AT LEAST 2 LETTERS REQUIRED!');
@@ -241,7 +377,10 @@ export default function WordScrambleGame({ onBackToHub, onScoreUpdate }) {
     }
 
     if (foundWords.includes(currentWord)) {
-      setFeedbackMsg(`ALREADY FOUND "${currentWord}"!`);
+      const penalizedScore = Math.max(0, score - 10);
+      setScore(penalizedScore);
+      onScoreUpdate?.(penalizedScore);
+      setFeedbackMsg(`ALREADY FOUND "${currentWord}"! (-10 PTS)`);
       playSliceSound();
       triggerSliceHaptic();
       if (juiceRef.current) juiceRef.current.shake(4, 2);
@@ -250,7 +389,10 @@ export default function WordScrambleGame({ onBackToHub, onScoreUpdate }) {
     }
 
     if (!isValidWord(currentWord)) {
-      setFeedbackMsg(`"${currentWord}" IS NOT A VALID WORD!`);
+      const penalizedScore = Math.max(0, score - 10);
+      setScore(penalizedScore);
+      onScoreUpdate?.(penalizedScore);
+      setFeedbackMsg(`"${currentWord}" IS NOT A VALID WORD! (-10 PTS)`);
       playSliceSound();
       triggerSliceHaptic();
       if (juiceRef.current) juiceRef.current.shake(5, 2);
@@ -285,28 +427,35 @@ export default function WordScrambleGame({ onBackToHub, onScoreUpdate }) {
       );
     }
 
-    // Check if level goal just achieved
-    if (newFound.length === currentLevelConfig.goal) {
+    // Celebrate milestone when goal reached
+    if (newFound.length === roundConfig.goal) {
       setTimeout(() => {
         if (juiceRef.current) {
           juiceRef.current.celebrate(
-            'GOAL ACHIEVED!',
-            `LEVEL ${level} CLEARED!`,
+            'GOAL REACHED!',
+            `LEVEL ${level} GOAL UNLOCKED!`,
             '#FFD166'
           );
         }
       }, 400);
     }
-  }, [bestScore, currentLevelConfig.goal, currentWord, foundWords, level, onScoreUpdate, score]);
+  }, [bestScore, currentWord, foundWords, level, onScoreUpdate, roundConfig.goal, score]);
 
-  // Advance to next level
+  // Advance to next level (guaranteed DIFFERENT letters)
   const handleNextLevel = () => {
     const nextLvl = level + 1;
     setLevel(nextLvl);
     AsyncStorage.setItem(STORAGE_LEVEL_KEY, String(nextLvl)).catch(() => {});
-    setLevelClearedModal(false);
     triggerMediumHaptic();
     playTapSound();
+    startRound(nextLvl);
+  };
+
+  // Retry level on fail (guaranteed DIFFERENT letters)
+  const handleRetry = () => {
+    triggerMediumHaptic();
+    playTapSound();
+    startRound(level);
   };
 
   const spinInterpolation = shuffleSpin.interpolate({
@@ -314,13 +463,14 @@ export default function WordScrambleGame({ onBackToHub, onScoreUpdate }) {
     outputRange: ['0deg', '360deg'],
   });
 
-  const isGoalReached = foundWords.length >= currentLevelConfig.goal;
+  const isGoalReached = foundWords.length >= roundConfig.goal;
 
-  // Geometry for circular letter dial
-  const dialSize = Math.min(240, Math.min(width - 40, height * 0.32));
-  const dialRadius = dialSize * 0.40;
+  // Geometry for circular letter dial (scaled with safe area to avoid any overflow)
+  const availableDialHeight = Math.max(160, Math.min(220, height * 0.28));
+  const dialSize = Math.min(availableDialHeight, width - 64);
+  const dialRadius = dialSize * 0.38;
   const letterCount = shuffledLetters.length;
-  const letterBtnSize = Math.max(40, Math.min(54, Math.floor((dialSize * 2.8) / (letterCount + 2))));
+  const letterBtnSize = Math.max(38, Math.min(50, Math.floor((dialSize * 2.6) / (letterCount + 2))));
 
   return (
     <JuiceEngine ref={juiceRef}>
@@ -339,33 +489,50 @@ export default function WordScrambleGame({ onBackToHub, onScoreUpdate }) {
           bestScore={bestScore}
           onBack={onBackToHub}
           onBackToHub={onBackToHub}
-          onReset={() => {
-            setSelectedIndices([]);
-            setFoundWords([]);
-            setFeedbackMsg(null);
-          }}
+          onReset={() => startRound(level)}
         />
 
-        {/* Top HUD: Level & Goal Progress Banner */}
+        {/* Top HUD: Level, Countdown Timer & Goal Progress */}
         <View style={styles.hudRow}>
           <View style={styles.levelBadge}>
             <Text style={styles.levelBadgeText}>LEVEL {level}</Text>
           </View>
 
+          {/* Glowing Countdown Timer */}
+          <View style={[styles.timerBadge, timeLeft <= 10 && styles.timerBadgeUrgent]}>
+            <Text style={[styles.timerText, timeLeft <= 10 && styles.timerTextUrgent]}>
+              ⏱️ {String(Math.floor(timeLeft / 60))}:{String(timeLeft % 60).padStart(2, '0')}
+            </Text>
+          </View>
+
+          {/* Goal Badge / Early Next Level Button */}
           <View style={styles.goalInfo}>
             <Text style={styles.goalLabel}>
-              GOAL: {foundWords.length}/{currentLevelConfig.goal} WORDS
+              GOAL: {foundWords.length}/{roundConfig.goal}
             </Text>
             {isGoalReached ? (
               <Pressable style={styles.nextLevelBtn} onPress={handleNextLevel}>
-                <Text style={styles.nextLevelBtnText}>NEXT LEVEL ➔</Text>
+                <Text style={styles.nextLevelBtnText}>NEXT ➔</Text>
               </Pressable>
             ) : (
               <Text style={styles.goalSub}>
-                FIND {currentLevelConfig.goal - foundWords.length} MORE TO UNLOCK
+                {roundConfig.goal - foundWords.length} MORE
               </Text>
             )}
           </View>
+        </View>
+
+        {/* Time Progress Gauge Bar */}
+        <View style={styles.timerGaugeTrack}>
+          <View
+            style={[
+              styles.timerGaugeFill,
+              {
+                width: `${Math.max(0, Math.min(100, (timeLeft / roundConfig.roundTime) * 100))}%`,
+                backgroundColor: timeLeft <= 10 ? '#FF0055' : timeLeft <= 20 ? '#FFE600' : '#00F5FF',
+              },
+            ]}
+          />
         </View>
 
         {/* Found Words Tray */}
@@ -494,8 +661,8 @@ export default function WordScrambleGame({ onBackToHub, onScoreUpdate }) {
           </View>
         </View>
 
-        {/* Submit Button */}
-        <View style={styles.bottomBar}>
+        {/* Submit Button (Padded safely above navigation buttons) */}
+        <View style={[styles.bottomBar, { paddingBottom: Math.max(20, insets.bottom + 14) }]}>
           <Pressable
             onPress={handleSubmitWord}
             disabled={currentWord.length < 2}
@@ -515,17 +682,22 @@ export default function WordScrambleGame({ onBackToHub, onScoreUpdate }) {
           </Pressable>
         </View>
 
-        {/* Level Complete Modal */}
+        {/* Victory / Game Over Modal */}
         <GameResultModal
-          visible={levelClearedModal}
-          type="VICTORY"
-          title="ANAGRAM MATRIX CRACKED!"
-          subtitle={`DISCOVERED ${foundWords.length} WORDS IN LEVEL ${level}!`}
+          visible={modalVisible}
+          type={modalType}
+          title={modalType === 'VICTORY' ? `LEVEL ${level} CLEARED!` : "TIME'S UP! LEVEL FAILED"}
+          subtitle={
+            modalType === 'VICTORY'
+              ? `DISCOVERED ${foundWords.length}/${roundConfig.goal} WORDS!`
+              : `ONLY FOUND ${foundWords.length} OF ${roundConfig.goal} REQUIRED WORDS!`
+          }
           score={score}
           bestScore={bestScore}
-          accentColor="#00F5FF"
-          onRetry={handleNextLevel}
-          retryLabel="NEXT LEVEL ➔"
+          accentColor={modalType === 'VICTORY' ? '#00F5FF' : '#FF0055'}
+          onRetry={modalType === 'VICTORY' ? handleNextLevel : handleRetry}
+          retryLabel={modalType === 'VICTORY' ? 'NEXT LEVEL ➔' : 'TRY AGAIN ⟳'}
+          buttonText={modalType === 'VICTORY' ? 'NEXT LEVEL ➔' : 'TRY AGAIN ⟳'}
           onBackToHub={onBackToHub}
         />
       </View>
@@ -549,19 +721,49 @@ const styles = StyleSheet.create({
     borderBottomColor: 'rgba(0, 245, 255, 0.18)',
   },
   levelBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     borderRadius: 8,
-    backgroundColor: 'rgba(0, 245, 255, 0.12)',
+    backgroundColor: 'rgba(0, 245, 255, 0.15)',
     borderWidth: 1,
-    borderColor: 'rgba(0, 245, 255, 0.35)',
+    borderColor: '#00F5FF',
   },
   levelBadgeText: {
     fontFamily: monoFont,
     fontSize: 11,
     fontWeight: '900',
     color: '#00F5FF',
-    letterSpacing: 1,
+    letterSpacing: 0.8,
+  },
+  timerBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: 'rgba(0, 245, 255, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 245, 255, 0.35)',
+  },
+  timerBadgeUrgent: {
+    backgroundColor: 'rgba(255, 0, 85, 0.18)',
+    borderColor: '#FF0055',
+  },
+  timerText: {
+    fontFamily: monoFont,
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#00F5FF',
+    letterSpacing: 0.8,
+  },
+  timerTextUrgent: {
+    color: '#FF0055',
+  },
+  timerGaugeTrack: {
+    height: 3,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    width: '100%',
+  },
+  timerGaugeFill: {
+    height: '100%',
   },
   goalInfo: {
     alignItems: 'flex-end',
@@ -570,41 +772,41 @@ const styles = StyleSheet.create({
     fontFamily: monoFont,
     fontSize: 10.5,
     fontWeight: '900',
-    color: '#E0AAFF',
-    letterSpacing: 0.6,
+    color: '#FFE600',
+    letterSpacing: 0.5,
   },
   goalSub: {
     fontFamily: monoFont,
-    fontSize: 9,
+    fontSize: 8.5,
     color: '#8A8F9E',
-    marginTop: 2,
     fontWeight: '700',
+    marginTop: 1,
   },
   nextLevelBtn: {
-    marginTop: 2,
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    backgroundColor: 'rgba(255, 209, 102, 0.2)',
-    borderRadius: 6,
+    backgroundColor: 'rgba(57, 255, 20, 0.2)',
     borderWidth: 1,
-    borderColor: '#FFD166',
+    borderColor: '#39FF14',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    marginTop: 2,
   },
   nextLevelBtnText: {
     fontFamily: monoFont,
-    fontSize: 10,
+    fontSize: 9.5,
     fontWeight: '900',
-    color: '#FFD166',
-    letterSpacing: 0.8,
+    color: '#39FF14',
+    letterSpacing: 0.6,
   },
   foundWordsContainer: {
-    height: 44,
-    backgroundColor: 'rgba(12, 10, 28, 0.85)',
+    height: 48,
+    backgroundColor: 'rgba(10, 8, 25, 0.85)',
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(157, 78, 221, 0.2)',
+    borderBottomColor: 'rgba(255, 255, 255, 0.06)',
     justifyContent: 'center',
   },
   foundWordsList: {
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     alignItems: 'center',
     gap: 8,
   },
@@ -617,26 +819,26 @@ const styles = StyleSheet.create({
   wordChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
+    gap: 5,
     backgroundColor: 'rgba(0, 245, 255, 0.12)',
     borderWidth: 1,
-    borderColor: 'rgba(0, 245, 255, 0.35)',
-    gap: 4,
+    borderColor: 'rgba(0, 245, 255, 0.4)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
   },
   wordChipText: {
     fontFamily: monoFont,
-    fontSize: 10.5,
+    fontSize: 11,
     fontWeight: '900',
     color: '#FFFFFF',
-    letterSpacing: 0.8,
+    letterSpacing: 0.6,
   },
   wordChipPts: {
     fontFamily: monoFont,
-    fontSize: 8.5,
-    fontWeight: '900',
-    color: '#00F5FF',
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#FFE600',
   },
   feedbackRow: {
     height: 22,
@@ -786,7 +988,6 @@ const styles = StyleSheet.create({
   },
   bottomBar: {
     paddingHorizontal: 24,
-    paddingBottom: 20,
     alignItems: 'center',
   },
   submitBtn: {

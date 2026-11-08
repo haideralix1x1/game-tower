@@ -9,7 +9,7 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={styles.rootContainer}>
       <SafeAreaProvider style={styles.rootContainer}>
-        <StatusBar style="light" />
+        <StatusBar hidden={true} style="light" />
         <Stack
           screenOptions={{
             headerShown: false,

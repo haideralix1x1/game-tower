@@ -10,6 +10,7 @@ import {
   PanResponder,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import Svg, { Line, Circle, G, Rect } from 'react-native-svg';
 import { COLORS } from '../../styles';
 import MiniGameHeader from '../components/MiniGameHeader';
 import GameResultModal from '../components/GameResultModal';
@@ -57,12 +58,55 @@ const JUICE_CALLOUTS = [
   'MEGA CRUNCH! ⚡',
 ];
 
+/**
+ * Pre-validates if swapping cellA and cellB produces a genuine match in memory.
+ * Prevents invalid swaps from ever touching board state or allowing illegal force-swipes!
+ */
+function canSwapMakeMatch(board, r1, c1, r2, c2) {
+  const itemA = board[r1]?.[c1];
+  const itemB = board[r2]?.[c2];
+  if (!itemA || !itemB) return false;
+  if (itemA.type === 'brick' || itemA.type === 'star' || itemB.type === 'brick' || itemB.type === 'star') {
+    return false;
+  }
+  // Special fruits (Bomb or Laser) always trigger valid detonations when swapped!
+  if (itemA.special || itemB.special) return true;
+
+  // In-memory simulation
+  const sim = board.map((row) => [...row]);
+  sim[r1][c1] = itemB;
+  sim[r2][c2] = itemA;
+
+  // Horizontal match check
+  for (let r = 0; r < GRID_SIZE; r++) {
+    for (let c = 0; c < GRID_SIZE - 2; c++) {
+      const t = sim[r][c]?.type;
+      if (t && t !== 'brick' && t !== 'star' && t === sim[r][c + 1]?.type && t === sim[r][c + 2]?.type) {
+        return true;
+      }
+    }
+  }
+
+  // Vertical match check
+  for (let c = 0; c < GRID_SIZE; c++) {
+    for (let r = 0; r < GRID_SIZE - 2; r++) {
+      const t = sim[r][c]?.type;
+      if (t && t !== 'brick' && t !== 'star' && t === sim[r + 1][c]?.type && t === sim[r + 2][c]?.type) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
 export default function Match3SagaGame({ onBackToHub, onScoreUpdate, isPaused = false }) {
   const isPausedRef = useRef(isPaused);
   isPausedRef.current = isPaused;
   const { width, height } = useWindowDimensions();
   const cellSize = Math.floor(Math.min((width - 48) / GRID_SIZE, (height - 310) / GRID_SIZE));
-  const boardWidth = GRID_SIZE * (cellSize + 4);
+  const cellStep = cellSize + 4;
+  const boardWidth = GRID_SIZE * cellStep;
 
   const [level, setLevel] = useState(1);
   const [bestScore, setBestScore] = useState(0);
@@ -83,6 +127,7 @@ export default function Match3SagaGame({ onBackToHub, onScoreUpdate, isPaused = 
       } catch {}
     })();
   }, []);
+
   const [score, setScore] = useState(0);
   const [timeLeft, setTimeLeft] = useState(60);
   const [bricksLeft, setBricksLeft] = useState(4);
@@ -92,6 +137,10 @@ export default function Match3SagaGame({ onBackToHub, onScoreUpdate, isPaused = 
   const [selectedCell, setSelectedCell] = useState(null);
   const [floatingJuice, setFloatingJuice] = useState(null);
 
+  // Visible neon swipe trajectory beam & localized tile blasts
+  const [swipeTrace, setSwipeTrace] = useState(null);
+  const [tileBlasts, setTileBlasts] = useState([]);
+
   // Result modal state
   const [modalVisible, setModalVisible] = useState(false);
   const [modalType, setModalType] = useState('win');
@@ -100,7 +149,9 @@ export default function Match3SagaGame({ onBackToHub, onScoreUpdate, isPaused = 
   const timerRef = useRef(null);
   const boardRef = useRef(null);
   const boardLayoutRef = useRef({ pageX: 0, pageY: 0, width: boardWidth, height: boardWidth });
-  const isSwappingRef = useRef(false);
+
+  // STRICT LOCK REF: Allows exactly ONE swipe at a time, completely preventing double/forced swiping!
+  const isLockedRef = useRef(false);
   const selectedCellRef = useRef(null);
   selectedCellRef.current = selectedCell;
   const executeSwapRef = useRef(null);
@@ -136,13 +187,15 @@ export default function Match3SagaGame({ onBackToHub, onScoreUpdate, isPaused = 
 
   // Initialize board with fruits & hurdles
   const initBoard = useCallback((lvl) => {
-    isSwappingRef.current = false;
+    isLockedRef.current = false;
     const targetBricks = Math.min(12, 3 + lvl);
     const targetStars = Math.min(8, 2 + (lvl % 3));
     setBricksLeft(targetBricks);
     setStarsLeft(targetStars);
     setTimeLeft(60);
     setSelectedCell(null);
+    setSwipeTrace(null);
+    setTileBlasts([]);
     setModalVisible(false);
 
     // Create 7x7 grid without initial 3-in-a-row matches
@@ -151,7 +204,6 @@ export default function Match3SagaGame({ onBackToHub, onScoreUpdate, isPaused = 
       const row = [];
       for (let c = 0; c < GRID_SIZE; c++) {
         let fruit = getRandomFruit();
-        // Prevent accidental matches on spawn
         while (
           (c >= 2 && row[c - 1]?.type === fruit.type && row[c - 2]?.type === fruit.type) ||
           (r >= 2 && newGrid[r - 1][c]?.type === fruit.type && newGrid[r - 2][c]?.type === fruit.type)
@@ -163,7 +215,7 @@ export default function Match3SagaGame({ onBackToHub, onScoreUpdate, isPaused = 
       newGrid.push(row);
     }
 
-    // Sugar Bricks 🧱
+    // Sugar Bricks
     let placedBricks = 0;
     while (placedBricks < targetBricks) {
       const r = Math.floor(Math.random() * (GRID_SIZE - 2)) + 1;
@@ -180,7 +232,7 @@ export default function Match3SagaGame({ onBackToHub, onScoreUpdate, isPaused = 
       }
     }
 
-    // Star Fruits ⭐
+    // Star Fruits
     let placedStars = 0;
     while (placedStars < targetStars) {
       const r = Math.floor(Math.random() * (GRID_SIZE - 2)) + 1;
@@ -240,7 +292,7 @@ export default function Match3SagaGame({ onBackToHub, onScoreUpdate, isPaused = 
   };
 
   /**
-   * Check matches, burst particles, drop tiles, and auto-cascade combos
+   * Check matches, burst particles directly on matched tiles, drop tiles, and auto-cascade combos
    */
   const checkAndClearMatches = useCallback(
     (board, comboCount = 1) => {
@@ -321,24 +373,22 @@ export default function Match3SagaGame({ onBackToHub, onScoreUpdate, isPaused = 
         }
       }
 
+      // No matches found -> Unlock input so player can swipe again!
       if (toClear.size === 0) {
-        isSwappingRef.current = false;
+        isLockedRef.current = false;
         return false;
       }
 
-      // Handle Special Fruit Activations (Striped lasers & Sugar Bombs)
+      // Special Fruit Activations (Striped lasers & Sugar Bombs)
       const expandedClear = new Set(toClear);
       toClear.forEach((key) => {
         const [r, c] = key.split(',').map(Number);
         const tile = board[r][c];
         if (tile?.special === 'STRIPED_H') {
-          // Clear entire row
           for (let sc = 0; sc < cols; sc++) expandedClear.add(`${r},${sc}`);
         } else if (tile?.special === 'STRIPED_V') {
-          // Clear entire column
           for (let sr = 0; sr < rows; sr++) expandedClear.add(`${sr},${c}`);
         } else if (tile?.special === 'BOMB') {
-          // Clear 3x3 blast area
           for (let dr = -1; dr <= 1; dr++) {
             for (let dc = -1; dc <= 1; dc++) {
               const nr = r + dr;
@@ -354,12 +404,33 @@ export default function Match3SagaGame({ onBackToHub, onScoreUpdate, isPaused = 
       const newBoard = board.map((row) => [...row]);
       let bricksDestroyed = 0;
       let starsPicked = 0;
-      let burstColor = '#FF0055';
 
-      // Clear tiles and damage adjacent sugar bricks
+      // LOCALIZED TILE BLASTS: Spawn blasts and particles directly on each matching tile!
+      const boardBox = boardLayoutRef.current;
+      const newBlasts = [];
+
       expandedClear.forEach((key) => {
         const [r, c] = key.split(',').map(Number);
-        if (newBoard[r][c]?.color) burstColor = newBoard[r][c].color;
+        const tile = newBoard[r][c];
+        const tileColor = tile?.color || '#00F5FF';
+
+        const centerTileX = c * cellStep + cellSize / 2;
+        const centerTileY = r * cellStep + cellSize / 2;
+
+        newBlasts.push({
+          id: `blast_${r}_${c}_${Date.now()}_${Math.random()}`,
+          x: centerTileX,
+          y: centerTileY,
+          color: tileColor,
+          size: cellSize,
+        });
+
+        // Global particle burst from JuiceEngine directly over that specific tile!
+        if (boardBox.pageX > 0 && boardBox.pageY > 0 && juiceRef.current) {
+          const globalX = boardBox.pageX + centerTileX;
+          const globalY = boardBox.pageY + centerTileY;
+          juiceRef.current.burst(globalX, globalY, tileColor, 12);
+        }
 
         // Damage adjacent bricks & collect stars
         const neighbors = [
@@ -387,7 +458,10 @@ export default function Match3SagaGame({ onBackToHub, onScoreUpdate, isPaused = 
         newBoard[r][c] = null;
       });
 
-      // Spawn any newly created special fruits at their epicenter
+      setTileBlasts(newBlasts);
+      setTimeout(() => setTileBlasts([]), 260);
+
+      // Spawn newly created special fruits at epicenter
       specialSpawnList.forEach(({ r, c, special, base }) => {
         if (r >= 0 && r < rows && c >= 0 && c < cols && base) {
           newBoard[r][c] = {
@@ -398,26 +472,9 @@ export default function Match3SagaGame({ onBackToHub, onScoreUpdate, isPaused = 
         }
       });
 
-      // Juice Engine Burst FX & Shake
-      const boardBox = boardLayoutRef.current;
-      const midR = Math.floor(rows / 2);
-      const midC = Math.floor(cols / 2);
-      const splashX = boardBox.x + (midC + 0.5) * (cellSize + 4);
-      const splashY = boardBox.y + (midR + 0.5) * (cellSize + 4);
-
+      // Haptic shake & callout
       if (juiceRef.current) {
-        juiceRef.current.burst(splashX, splashY, burstColor, Math.min(30, expandedClear.size * 5));
         juiceRef.current.shake(3 + comboCount * 2, 2 + comboCount * 2);
-
-        if (comboCount > 1) {
-          juiceRef.current.popup(
-            `COMBO x${comboCount}!`,
-            `+${expandedClear.size * 40 * comboCount} PTS`,
-            '#FFE600',
-            splashX,
-            splashY
-          );
-        }
       }
 
       const callout = JUICE_CALLOUTS[Math.floor(Math.random() * JUICE_CALLOUTS.length)];
@@ -473,22 +530,22 @@ export default function Match3SagaGame({ onBackToHub, onScoreUpdate, isPaused = 
         return true;
       }
 
-      // Check for cascading combos after gravity drops!
+      // Check cascading combos after gravity drops!
       setTimeout(() => {
         checkAndClearMatches(newBoard, comboCount + 1);
       }, 260);
 
       return true;
     },
-    [bricksLeft, cellSize, onScoreUpdate, starsLeft]
+    [bricksLeft, cellSize, cellStep, onScoreUpdate, starsLeft]
   );
 
   /**
-   * Swap two adjacent cells
+   * Swap two adjacent cells (strictly validated before committing!)
    */
   const executeSwap = useCallback(
     (cellA, cellB) => {
-      if (!cellA || !cellB || isSwappingRef.current || isPausedRef.current) return;
+      if (!cellA || !cellB || isLockedRef.current || isPausedRef.current) return;
       const { r: r1, c: c1 } = cellA;
       const { r: r2, c: c2 } = cellB;
 
@@ -503,58 +560,59 @@ export default function Match3SagaGame({ onBackToHub, onScoreUpdate, isPaused = 
       const itemA = currentBoard[r1]?.[c1];
       const itemB = currentBoard[r2]?.[c2];
 
-      // Cannot swap bricks or stars directly
       if (!itemA || !itemB || itemA.type === 'brick' || itemA.type === 'star' || itemB.type === 'brick' || itemB.type === 'star') {
         setSelectedCell(null);
         return;
       }
 
-      isSwappingRef.current = true;
+      // PRE-VALIDATE IN MEMORY: Will this swap create a match?
+      const isValid = canSwapMakeMatch(currentBoard, r1, c1, r2, c2);
+
+      if (!isValid) {
+        // INVALID SWAP: Lock briefly, shake, and DO NOT alter the board!
+        // This stops players from double-swiping or forcing illegal matches!
+        isLockedRef.current = true;
+        setSelectedCell(null);
+        playTapSound();
+        triggerLightHaptic();
+        if (juiceRef.current) juiceRef.current.shake(3, 2);
+
+        setTimeout(() => {
+          isLockedRef.current = false;
+        }, 180);
+        return;
+      }
+
+      // VALID SWAP: Lock board, perform swap, and clear matches!
+      isLockedRef.current = true;
       setSelectedCell(null);
       playTapSound();
       triggerLightHaptic();
 
-      // Perform optimistic swap
       const nextGrid = currentBoard.map((row) => [...row]);
       nextGrid[r1][c1] = itemB;
       nextGrid[r2][c2] = itemA;
       setGrid(nextGrid);
 
-      // Check if match was created
-      const cleared = checkAndClearMatches(nextGrid, 1);
-      if (!cleared) {
-        // Swap back with juice rejection
-        setTimeout(() => {
-          setGrid((g) => {
-            const reverted = g.map((row) => [...row]);
-            reverted[r1][c1] = itemA;
-            reverted[r2][c2] = itemB;
-            return reverted;
-          });
-          if (juiceRef.current) juiceRef.current.shake(4, 2);
-          playTapSound();
-          isSwappingRef.current = false;
-        }, 220);
-      }
+      checkAndClearMatches(nextGrid, 1);
     },
     [checkAndClearMatches]
   );
   executeSwapRef.current = executeSwap;
 
   /**
-   * PanResponder for Direct Finger Swiping across the Grid
+   * PanResponder with Visible Neon Trajectory Line & Strict Single-Swipe Locking
    */
   const panStartRef = useRef({ r: -1, c: -1, startX: 0, startY: 0, hasSwapped: false });
 
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponder: () => !isLockedRef.current && !isPausedRef.current,
       onMoveShouldSetPanResponder: (_, gesture) =>
-        Math.hypot(gesture.dx, gesture.dy) > 6,
+        !isLockedRef.current && !isPausedRef.current && Math.hypot(gesture.dx, gesture.dy) > 5,
       onPanResponderGrant: (evt) => {
-        if (isSwappingRef.current || isPausedRef.current) return;
+        if (isLockedRef.current || isPausedRef.current) return;
         const { pageX, pageY, locationX, locationY } = evt.nativeEvent;
-        const cellStep = cellSize + 4;
 
         let relX = locationX;
         let relY = locationY;
@@ -566,23 +624,50 @@ export default function Match3SagaGame({ onBackToHub, onScoreUpdate, isPaused = 
         const c = Math.max(0, Math.min(GRID_SIZE - 1, Math.floor(relX / cellStep)));
         const r = Math.max(0, Math.min(GRID_SIZE - 1, Math.floor(relY / cellStep)));
 
+        const tileCenterX = c * cellStep + cellSize / 2;
+        const tileCenterY = r * cellStep + cellSize / 2;
+
         panStartRef.current = {
           r,
           c,
-          startX: pageX,
-          startY: pageY,
+          startX: tileCenterX,
+          startY: tileCenterY,
           hasSwapped: false,
         };
+
+        // Initialize neon swipe beam starting from tile center
+        setSwipeTrace({
+          startX: tileCenterX,
+          startY: tileCenterY,
+          curX: relX,
+          curY: relY,
+        });
       },
-      onPanResponderMove: (_, gesture) => {
-        const { r, c, hasSwapped } = panStartRef.current;
-        if (hasSwapped || r < 0 || c < 0 || isSwappingRef.current || isPausedRef.current) return;
+      onPanResponderMove: (evt, gesture) => {
+        const { r, c, startX, startY, hasSwapped } = panStartRef.current;
+        if (hasSwapped || r < 0 || c < 0 || isLockedRef.current || isPausedRef.current) {
+          setSwipeTrace(null);
+          return;
+        }
 
         const { dx, dy } = gesture;
-        const SWIPE_THRESHOLD = 16;
+        const curX = startX + dx;
+        const curY = startY + dy;
+
+        // Render visible electric neon trajectory line following finger!
+        setSwipeTrace({
+          startX,
+          startY,
+          curX,
+          curY,
+        });
+
+        const SWIPE_THRESHOLD = 18;
 
         if (Math.hypot(dx, dy) >= SWIPE_THRESHOLD) {
           panStartRef.current.hasSwapped = true;
+          setSwipeTrace(null);
+
           let targetR = r;
           let targetC = c;
 
@@ -599,8 +684,10 @@ export default function Match3SagaGame({ onBackToHub, onScoreUpdate, isPaused = 
         }
       },
       onPanResponderRelease: () => {
+        setSwipeTrace(null);
         const { r, c, hasSwapped } = panStartRef.current;
-        if (!hasSwapped && r >= 0 && c >= 0 && !isSwappingRef.current && !isPausedRef.current) {
+
+        if (!hasSwapped && r >= 0 && c >= 0 && !isLockedRef.current && !isPausedRef.current) {
           const prev = selectedCellRef.current;
           if (prev) {
             const isAdjacent = Math.abs(r - prev.r) + Math.abs(c - prev.c) === 1;
@@ -743,6 +830,81 @@ export default function Match3SagaGame({ onBackToHub, onScoreUpdate, isPaused = 
                 </View>
               ))}
             </View>
+
+            {/* SVG OVERLAY: Visible Neon Trajectory Line & Tile Blasts */}
+            <Svg
+              style={StyleSheet.absoluteFillObject}
+              width={boardWidth}
+              height={boardWidth}
+              pointerEvents="none"
+            >
+              {/* VISIBLE NEON SWIPE LINE BEAM */}
+              {swipeTrace && (
+                <G>
+                  {/* Outer Diffuse Glow */}
+                  <Line
+                    x1={swipeTrace.startX}
+                    y1={swipeTrace.startY}
+                    x2={swipeTrace.curX}
+                    y2={swipeTrace.curY}
+                    stroke="rgba(0, 245, 255, 0.35)"
+                    strokeWidth={8}
+                    strokeLinecap="round"
+                  />
+                  {/* Inner Crisp Neon Beam */}
+                  <Line
+                    x1={swipeTrace.startX}
+                    y1={swipeTrace.startY}
+                    x2={swipeTrace.curX}
+                    y2={swipeTrace.curY}
+                    stroke="#00F5FF"
+                    strokeWidth={3}
+                    strokeLinecap="round"
+                  />
+                  {/* Origin Tile Anchor Ring */}
+                  <Circle
+                    cx={swipeTrace.startX}
+                    cy={swipeTrace.startY}
+                    r={cellSize * 0.35}
+                    fill="rgba(0, 245, 255, 0.15)"
+                    stroke="#00F5FF"
+                    strokeWidth={1.8}
+                  />
+                  {/* Finger Spark Dot */}
+                  <Circle
+                    cx={swipeTrace.curX}
+                    cy={swipeTrace.curY}
+                    r={5}
+                    fill="#FFE600"
+                    stroke="#FFFFFF"
+                    strokeWidth={1.2}
+                  />
+                </G>
+              )}
+
+              {/* LOCALIZED BLASTS DIRECTLY ON MATCHED TILES */}
+              {tileBlasts.map((blast) => (
+                <G key={blast.id}>
+                  {/* Inner Core Flash */}
+                  <Circle
+                    cx={blast.x}
+                    cy={blast.y}
+                    r={blast.size * 0.55}
+                    fill={blast.color}
+                    opacity={0.7}
+                  />
+                  {/* Expanding Shockwave Ring */}
+                  <Circle
+                    cx={blast.x}
+                    cy={blast.y}
+                    r={blast.size * 0.7}
+                    fill="none"
+                    stroke="#FFFFFF"
+                    strokeWidth={2.5}
+                  />
+                </G>
+              ))}
+            </Svg>
           </View>
         </View>
 
@@ -829,6 +991,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 0, 127, 0.35)',
     justifyContent: 'center',
     alignItems: 'center',
+    overflow: 'hidden',
   },
   boardInner: {
     width: '100%',

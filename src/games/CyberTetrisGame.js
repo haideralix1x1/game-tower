@@ -6,15 +6,14 @@ import {
   Pressable,
   useWindowDimensions,
   Platform,
-  PanResponder,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS } from '../../styles';
 import MiniGameHeader from '../components/MiniGameHeader';
 import GameResultModal from '../components/GameResultModal';
 import JuiceEngine from '../components/JuiceEngine';
-import { playTapSound, playSliceSound, playGameOverSound } from '../utils/sound';
-import { triggerLightHaptic, triggerMediumHaptic, triggerGameOverHaptic } from '../utils/haptics';
+import { playTapSound, playSliceSound, playGameOverSound, playPerfectSound } from '../utils/sound';
+import { triggerLightHaptic, triggerMediumHaptic, triggerPerfectHaptic, triggerGameOverHaptic } from '../utils/haptics';
 
 const monoFont = Platform.select({
   ios: 'Menlo',
@@ -25,15 +24,15 @@ const monoFont = Platform.select({
 const COLS = 10;
 const ROWS = 18;
 
-// Tetromino Definitions & Neon Colors
+// Juicy Neon Jewel Tetrominoes
 const TETROMINOES = {
-  I: { shape: [[1, 1, 1, 1]], color: '#00F5FF' },
-  O: { shape: [[1, 1], [1, 1]], color: '#FFD166' },
-  T: { shape: [[0, 1, 0], [1, 1, 1]], color: '#9D4EDD' },
-  S: { shape: [[0, 1, 1], [1, 1, 0]], color: '#39FF14' },
-  Z: { shape: [[1, 1, 0], [0, 1, 1]], color: '#FF0055' },
-  J: { shape: [[1, 0, 0], [1, 1, 1]], color: '#0088FF' },
-  L: { shape: [[0, 0, 1], [1, 1, 1]], color: '#FF6D00' },
+  I: { shape: [[1, 1, 1, 1]], color: '#00F5FF' }, // Electric Cyan
+  O: { shape: [[1, 1], [1, 1]], color: '#FFE600' }, // Solar Gold
+  T: { shape: [[0, 1, 0], [1, 1, 1]], color: '#9D4EDD' }, // Neon Violet
+  S: { shape: [[0, 1, 1], [1, 1, 0]], color: '#39FF14' }, // Emerald Green
+  Z: { shape: [[1, 1, 0], [0, 1, 1]], color: '#FF007F' }, // Candy Pink / Magenta
+  J: { shape: [[1, 0, 0], [1, 1, 1]], color: '#0070F3' }, // Royal Blue
+  L: { shape: [[0, 0, 1], [1, 1, 1]], color: '#FF5E00' }, // Plasma Orange
 };
 
 const TETRO_KEYS = Object.keys(TETROMINOES);
@@ -52,51 +51,151 @@ function rotateMatrix(matrix) {
   return result;
 }
 
+const getInitialTetrisPiece = () => {
+  const first = TETRO_KEYS[Math.floor(Math.random() * TETRO_KEYS.length)];
+  const second = TETRO_KEYS[Math.floor(Math.random() * TETRO_KEYS.length)];
+  const template = TETROMINOES[first];
+  const startCol = Math.floor((COLS - template.shape[0].length) / 2);
+  return {
+    piece: { type: first, shape: template.shape, color: template.color },
+    pos: { r: 0, c: startCol },
+    nextType: second,
+  };
+};
+
+/**
+ * 3D Glossy Candy/Jewel Block with Specular Shine & Bevel
+ */
+function JuicyBlock({ color, size, isGhost = false, isActive = false }) {
+  if (isGhost) {
+    return (
+      <View
+        style={{
+          width: size - 2,
+          height: size - 2,
+          margin: 1,
+          borderRadius: 4,
+          borderWidth: 1.5,
+          borderColor: `${color}99`,
+          borderStyle: 'dashed',
+          backgroundColor: `${color}22`,
+        }}
+      />
+    );
+  }
+
+  return (
+    <View
+      style={{
+        width: size - 2,
+        height: size - 2,
+        margin: 1,
+        borderRadius: 4.5,
+        backgroundColor: color,
+        borderTopWidth: 2.2,
+        borderTopColor: 'rgba(255, 255, 255, 0.7)',
+        borderLeftWidth: 1.8,
+        borderLeftColor: 'rgba(255, 255, 255, 0.45)',
+        borderRightWidth: 1.8,
+        borderRightColor: 'rgba(0, 0, 0, 0.35)',
+        borderBottomWidth: 3,
+        borderBottomColor: 'rgba(0, 0, 0, 0.55)',
+        overflow: 'hidden',
+        shadowColor: color,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: isActive ? 0.95 : 0.5,
+        shadowRadius: isActive ? 7 : 3,
+        elevation: isActive ? 7 : 3,
+      }}
+    >
+      {/* Top Gloss Specular Shine Reflection */}
+      <View
+        style={{
+          position: 'absolute',
+          top: 1.5,
+          left: 1.5,
+          right: 1.5,
+          height: (size - 2) * 0.36,
+          backgroundColor: 'rgba(255, 255, 255, 0.4)',
+          borderTopLeftRadius: 3,
+          borderTopRightRadius: 3,
+        }}
+      />
+      {/* Top-Left Glistening Sparkle Dot */}
+      <View
+        style={{
+          position: 'absolute',
+          top: 2.5,
+          left: 2.5,
+          width: 3.5,
+          height: 3.5,
+          borderRadius: 2,
+          backgroundColor: '#FFFFFF',
+          opacity: 0.9,
+        }}
+      />
+    </View>
+  );
+}
+
 export default function CyberTetrisGame({ onBackToHub, onScoreUpdate, isPaused = false }) {
   const isPausedRef = useRef(isPaused);
-  isPausedRef.current = isPaused;
+  useEffect(() => {
+    isPausedRef.current = isPaused;
+  }, [isPaused]);
+
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
-  const maxAvailableHeight = height - (insets.top + insets.bottom + 220);
-  const cellSize = Math.max(16, Math.floor(Math.min((width - 130) / COLS, maxAvailableHeight / ROWS)));
+  const juiceRef = useRef(null);
 
-  const [grid, setGrid] = useState(() =>
-    Array.from({ length: ROWS }, () => Array(COLS).fill(null))
-  );
+  const maxAvailableHeight = height - (insets.top + insets.bottom + 210);
+  const cellSizeByHeight = Math.floor(maxAvailableHeight / ROWS);
+  const cellSizeByWidth = Math.floor((width - 150) / COLS);
+  const cellSize = Math.max(16, Math.min(cellSizeByHeight, cellSizeByWidth, 24));
 
+  const [initialData] = useState(() => getInitialTetrisPiece());
+  const [grid, setGrid] = useState(() => Array.from({ length: ROWS }, () => Array(COLS).fill(null)));
+  const [currentPiece, setCurrentPiece] = useState(initialData.piece);
+  const [pos, setPos] = useState(initialData.pos);
+  const [nextPieceType, setNextPieceType] = useState(initialData.nextType);
+  const [holdPieceType, setHoldPieceType] = useState(null);
+  const [canHold, setCanHold] = useState(true);
   const [score, setScore] = useState(0);
+  const [highScore, setHighScore] = useState(0);
   const [linesCleared, setLinesCleared] = useState(0);
   const [level, setLevel] = useState(1);
   const [isGameOver, setIsGameOver] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
 
-  // Current falling piece
-  const [currentPiece, setCurrentPiece] = useState(null);
-  const [pos, setPos] = useState({ r: 0, c: 3 });
-  const [nextPieceType, setNextPieceType] = useState('T');
-  const [holdPieceType, setHoldPieceType] = useState(null);
-  const [canHold, setCanHold] = useState(true);
-
   const gridRef = useRef(grid);
-  gridRef.current = grid;
+  useEffect(() => {
+    gridRef.current = grid;
+  }, [grid]);
+
   const pieceRef = useRef(currentPiece);
-  pieceRef.current = currentPiece;
+  useEffect(() => {
+    pieceRef.current = currentPiece;
+  }, [currentPiece]);
+
   const posRef = useRef(pos);
-  posRef.current = pos;
+  useEffect(() => {
+    posRef.current = pos;
+  }, [pos]);
 
   const dropTimerRef = useRef(null);
 
-  // Check collision with walls or placed blocks
-  const checkCollision = useCallback((pieceMatrix, row, col, curGrid = gridRef.current) => {
-    for (let r = 0; r < pieceMatrix.length; r++) {
-      for (let c = 0; c < pieceMatrix[r].length; c++) {
-        if (pieceMatrix[r][c]) {
-          const newR = row + r;
-          const newC = col + c;
-          if (newR < 0 || newR >= ROWS || newC < 0 || newC >= COLS) {
+  // Check collision against grid boundaries and locked blocks
+  const checkCollision = useCallback((shape, r, c, customGrid = null) => {
+    const targetGrid = customGrid || gridRef.current;
+    for (let row = 0; row < shape.length; row++) {
+      for (let col = 0; col < shape[row].length; col++) {
+        if (shape[row][col]) {
+          const newR = r + row;
+          const newC = c + col;
+          if (newC < 0 || newC >= COLS || newR >= ROWS) {
             return true;
           }
-          if (curGrid[newR] && curGrid[newR][newC] !== null) {
+          if (newR >= 0 && targetGrid[newR][newC] !== null) {
             return true;
           }
         }
@@ -110,6 +209,8 @@ export default function CyberTetrisGame({ onBackToHub, onScoreUpdate, isPaused =
     if (dropTimerRef.current) clearInterval(dropTimerRef.current);
     playGameOverSound();
     triggerGameOverHaptic();
+    juiceRef.current?.shake(10, 10);
+    juiceRef.current?.flash(COLORS.danger);
     setModalVisible(true);
   }, []);
 
@@ -148,8 +249,9 @@ export default function CyberTetrisGame({ onBackToHub, onScoreUpdate, isPaused =
     [checkCollision, nextPieceType, handleGameOver]
   );
 
-  // Initialize Game
+  // Initialize / Restart Game
   const initGame = useCallback(() => {
+    const data = getInitialTetrisPiece();
     setGrid(Array.from({ length: ROWS }, () => Array(COLS).fill(null)));
     setScore(0);
     setLinesCleared(0);
@@ -158,43 +260,31 @@ export default function CyberTetrisGame({ onBackToHub, onScoreUpdate, isPaused =
     setModalVisible(false);
     setHoldPieceType(null);
     setCanHold(true);
-
-    const firstType = TETRO_KEYS[Math.floor(Math.random() * TETRO_KEYS.length)];
-    const secondType = TETRO_KEYS[Math.floor(Math.random() * TETRO_KEYS.length)];
-    setNextPieceType(secondType);
-
-    const template = TETROMINOES[firstType];
-    const startCol = Math.floor((COLS - template.shape[0].length) / 2);
-    setCurrentPiece({
-      type: firstType,
-      shape: template.shape,
-      color: template.color,
-    });
-    setPos({ r: 0, c: startCol });
+    setNextPieceType(data.nextType);
+    setCurrentPiece(data.piece);
+    setPos(data.pos);
+    playTapSound();
   }, []);
 
-  useEffect(() => {
-    initGame();
-  }, [initGame]);
-
-  // Lock piece into grid and check line clears
+  // Lock piece into grid & clear lines with juice
   const lockPiece = useCallback(() => {
     const piece = pieceRef.current;
-    const { r: curR, c: curC } = posRef.current;
+    const p = posRef.current;
     if (!piece) return;
 
-    let lockedAtTop = false;
     const newGrid = gridRef.current.map((row) => [...row]);
+    let lockedAtTop = false;
+
     for (let r = 0; r < piece.shape.length; r++) {
       for (let c = 0; c < piece.shape[r].length; c++) {
         if (piece.shape[r][c]) {
-          const targetR = curR + r;
-          const targetC = curC + c;
-          if (targetR <= 0) {
+          const boardR = p.r + r;
+          const boardC = p.c + c;
+          if (boardR <= 0) {
             lockedAtTop = true;
           }
-          if (targetR >= 0 && targetR < ROWS && targetC >= 0 && targetC < COLS) {
-            newGrid[targetR][targetC] = piece.color;
+          if (boardR >= 0 && boardR < ROWS && boardC >= 0 && boardC < COLS) {
+            newGrid[boardR][boardC] = piece.color;
           }
         }
       }
@@ -203,9 +293,12 @@ export default function CyberTetrisGame({ onBackToHub, onScoreUpdate, isPaused =
     // Check full rows
     const survivingRows = [];
     let lines = 0;
+    const clearedRowIndices = [];
+
     for (let r = 0; r < ROWS; r++) {
       if (newGrid[r].every((cell) => cell !== null)) {
         lines++;
+        clearedRowIndices.push(r);
       } else {
         survivingRows.push(newGrid[r]);
       }
@@ -219,6 +312,14 @@ export default function CyberTetrisGame({ onBackToHub, onScoreUpdate, isPaused =
     if (lines > 0) {
       playSliceSound();
       triggerMediumHaptic();
+
+      // Screen shake and spark bursts
+      juiceRef.current?.shake(lines * 3, lines * 3);
+
+      clearedRowIndices.forEach((r) => {
+        juiceRef.current?.burst(width / 2, r * cellSize + 150, piece.color, 14);
+      });
+
       const points =
         lines === 4
           ? 1000 // TETRIS!
@@ -229,14 +330,22 @@ export default function CyberTetrisGame({ onBackToHub, onScoreUpdate, isPaused =
               : 100;
 
       if (lines === 4) {
-        JuiceEngine.celebrate(width / 2, height / 2);
+        triggerPerfectHaptic();
+        playPerfectSound();
+        juiceRef.current?.celebrate('⚡ TETRIS OVERDRIVE!', '+1000 PTS', COLORS.solarGold);
+      } else if (lines === 3) {
+        juiceRef.current?.popup('TRIPLE CLEAR!', `+${points * level} PTS`, COLORS.cyan);
+      } else if (lines === 2) {
+        juiceRef.current?.popup('DOUBLE CLEAR!', `+${points * level} PTS`, COLORS.matrixMint);
       }
 
       setScore((s) => {
         const ns = s + points * level;
+        if (ns > highScore) setHighScore(ns);
         onScoreUpdate?.(ns);
         return ns;
       });
+
       setLinesCleared((l) => {
         const nextLines = l + lines;
         setLevel(Math.floor(nextLines / 8) + 1);
@@ -249,7 +358,7 @@ export default function CyberTetrisGame({ onBackToHub, onScoreUpdate, isPaused =
     setGrid(survivingRows);
     gridRef.current = survivingRows;
 
-    // Game Over if blocks reached the top and were not cleared, or row 0 is occupied
+    // Game Over if blocks reached top
     if (lockedAtTop && lines === 0) {
       handleGameOver();
       return;
@@ -260,7 +369,7 @@ export default function CyberTetrisGame({ onBackToHub, onScoreUpdate, isPaused =
     }
 
     spawnPiece();
-  }, [level, spawnPiece, width, height, onScoreUpdate, handleGameOver]);
+  }, [level, spawnPiece, width, cellSize, highScore, onScoreUpdate, handleGameOver]);
 
   // Drop step tick
   const dropStep = useCallback(() => {
@@ -278,264 +387,349 @@ export default function CyberTetrisGame({ onBackToHub, onScoreUpdate, isPaused =
   // Auto gravity timer
   useEffect(() => {
     if (isGameOver) return;
-    const interval = Math.max(450, 950 - (level - 1) * 35);
-    dropTimerRef.current = setInterval(dropStep, interval);
+    const speed = Math.max(120, 800 - (level - 1) * 75);
+    dropTimerRef.current = setInterval(dropStep, speed);
+    return () => clearInterval(dropTimerRef.current);
+  }, [level, isGameOver, dropStep]);
 
-    return () => {
-      if (dropTimerRef.current) clearInterval(dropTimerRef.current);
-    };
-  }, [dropStep, level, isGameOver]);
-
-  // Player controls
+  // Player Controls
   const moveLeft = () => {
-    if (isPausedRef.current || !currentPiece) return;
+    if (!currentPiece || isGameOver || isPaused) return;
     if (!checkCollision(currentPiece.shape, pos.r, pos.c - 1)) {
       setPos((p) => ({ ...p, c: p.c - 1 }));
+      posRef.current = { ...pos, c: pos.c - 1 };
       playTapSound();
+      triggerLightHaptic();
     }
   };
 
   const moveRight = () => {
-    if (isPausedRef.current || !currentPiece) return;
+    if (!currentPiece || isGameOver || isPaused) return;
     if (!checkCollision(currentPiece.shape, pos.r, pos.c + 1)) {
       setPos((p) => ({ ...p, c: p.c + 1 }));
+      posRef.current = { ...pos, c: pos.c + 1 };
       playTapSound();
+      triggerLightHaptic();
     }
   };
 
   const rotatePiece = () => {
-    if (isPausedRef.current || !currentPiece) return;
+    if (!currentPiece || isGameOver || isPaused) return;
     const rotated = rotateMatrix(currentPiece.shape);
-    // Wall kick attempts
-    if (!checkCollision(rotated, pos.r, pos.c)) {
-      setCurrentPiece((p) => ({ ...p, shape: rotated }));
-      playTapSound();
-    } else if (!checkCollision(rotated, pos.r, pos.c - 1)) {
-      setCurrentPiece((p) => ({ ...p, shape: rotated }));
-      setPos((p) => ({ ...p, c: p.c - 1 }));
-      playTapSound();
-    } else if (!checkCollision(rotated, pos.r, pos.c + 1)) {
-      setCurrentPiece((p) => ({ ...p, shape: rotated }));
-      setPos((p) => ({ ...p, c: p.c + 1 }));
-      playTapSound();
+
+    // Wall-kick assist: test normal, left kick, right kick
+    let kickCol = pos.c;
+    if (checkCollision(rotated, pos.r, kickCol)) {
+      if (!checkCollision(rotated, pos.r, kickCol - 1)) {
+        kickCol -= 1;
+      } else if (!checkCollision(rotated, pos.r, kickCol + 1)) {
+        kickCol += 1;
+      } else if (!checkCollision(rotated, pos.r, kickCol - 2)) {
+        kickCol -= 2;
+      } else if (!checkCollision(rotated, pos.r, kickCol + 2)) {
+        kickCol += 2;
+      } else {
+        return; // Rotation blocked
+      }
     }
+
+    const updated = { ...currentPiece, shape: rotated };
+    setCurrentPiece(updated);
+    setPos((p) => ({ ...p, c: kickCol }));
+    pieceRef.current = updated;
+    posRef.current = { ...pos, c: kickCol };
+    playSliceSound();
+    triggerLightHaptic();
   };
 
   const softDrop = () => {
+    if (!currentPiece || isGameOver || isPaused) return;
     dropStep();
+    triggerLightHaptic();
   };
 
   const hardDrop = () => {
-    if (isPausedRef.current || !currentPiece) return;
+    if (!currentPiece || isGameOver || isPaused) return;
     let targetR = pos.r;
     while (!checkCollision(currentPiece.shape, targetR + 1, pos.c)) {
       targetR++;
     }
+    setPos((p) => ({ ...p, r: targetR }));
     posRef.current = { ...pos, r: targetR };
-    setPos({ ...pos, r: targetR });
-    lockPiece();
-    playSliceSound();
     triggerMediumHaptic();
+    playTapSound();
+    juiceRef.current?.shake(4, 4);
+    lockPiece();
   };
 
   const holdPiece = () => {
-    if (!canHold || !currentPiece) return;
-    setCanHold(false);
-    const curType = currentPiece.type;
+    if (!currentPiece || !canHold || isGameOver || isPaused) return;
+    const currentType = currentPiece.type;
+    playSliceSound();
+    triggerMediumHaptic();
 
-    if (holdPieceType) {
-      spawnPiece(holdPieceType);
-    } else {
+    if (!holdPieceType) {
+      setHoldPieceType(currentType);
       spawnPiece();
+    } else {
+      const prevHold = holdPieceType;
+      setHoldPieceType(currentType);
+      spawnPiece(prevHold);
     }
-    setHoldPieceType(curType);
-    playTapSound();
+    setCanHold(false);
   };
 
-  // Next rotation shape preview for side panel
+  // Next rotation preview shape
   const nextRotationShape = currentPiece ? rotateMatrix(currentPiece.shape) : null;
 
-  const matrixPanResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, gesture) =>
-        Math.hypot(gesture.dx, gesture.dy) > 10,
-      onPanResponderRelease: (_, gesture) => {
-        if (isPausedRef.current || isGameOver) return;
-        const { dx, dy, vy } = gesture;
-        if (dy > 45 || vy > 0.8) {
-          hardDrop();
-        } else if (dy > 20) {
-          softDrop();
-        } else if (dx < -20) {
-          moveLeft();
-        } else if (dx > 20) {
-          moveRight();
-        } else if (Math.hypot(dx, dy) < 10) {
-          rotatePiece();
-        }
-      },
-    })
-  ).current;
+  // Swipe & Tap Touch Gestures on Board
+  const touchStartRef = useRef({ x: 0, y: 0, time: 0 });
 
-  
+  const handleTouchStart = (e) => {
+    touchStartRef.current = {
+      x: e.nativeEvent.pageX,
+      y: e.nativeEvent.pageY,
+      time: Date.now(),
+    };
+  };
+
+  const handleTouchEnd = (e) => {
+    if (isGameOver || isPaused) return;
+    const dx = e.nativeEvent.pageX - touchStartRef.current.x;
+    const dy = e.nativeEvent.pageY - touchStartRef.current.y;
+    const dt = Date.now() - touchStartRef.current.time;
+
+    if (Math.abs(dx) < 12 && Math.abs(dy) < 12 && dt < 280) {
+      rotatePiece();
+    } else if (Math.abs(dx) > Math.abs(dy)) {
+      if (dx > 25) moveRight();
+      else if (dx < -25) moveLeft();
+    } else {
+      if (dy > 40) hardDrop();
+      else if (dy > 15) softDrop();
+    }
+  };
+
+  // Calculate ghost drop row for piece landing preview
+  let ghostR = pos.r;
+  if (currentPiece) {
+    while (!checkCollision(currentPiece.shape, ghostR + 1, pos.c)) {
+      ghostR++;
+    }
+  }
+
   return (
     <View style={styles.container}>
-      <MiniGameHeader
-        floorNum={26}
-        gameTitle="TETRIS NEO"
-        category="ARCADE BLOCKS"
-        accentColor="#00F5FF"
-        score={score}
-        onBackToHub={onBackToHub}
-      />
+      <JuiceEngine ref={juiceRef}>
+        <View style={{ flex: 1 }} pointerEvents={modalVisible ? 'none' : 'auto'}>
+          <MiniGameHeader
+            floorNum={26}
+            gameTitle="TETRIS NEO"
+            category="ARCADE BLOCKS"
+            accentColor="#00F5FF"
+            score={score}
+            onBackToHub={onBackToHub}
+            disabled={modalVisible}
+          />
 
-      {/* Main Playfield with Sidebars */}
-      <View style={styles.mainPlayfield}>
-        {/* Left Side: Hold Container */}
-        <View style={styles.sideCol}>
-          <Text style={styles.sideLabel}>HOLD</Text>
-          <View style={styles.sideBox}>
-            {holdPieceType && (
-              <View style={styles.miniPieceGrid}>
-                {TETROMINOES[holdPieceType].shape.map((row, r) => (
-                  <View key={`hr_${r}`} style={styles.miniRow}>
-                    {row.map((val, c) => (
-                      <View
-                        key={`hc_${c}`}
-                        style={[
-                          styles.miniCell,
-                          val ? { backgroundColor: TETROMINOES[holdPieceType].color } : null,
-                        ]}
-                      />
-                    ))}
-                  </View>
-                ))}
-              </View>
-            )}
-          </View>
-
-          <Text style={[styles.sideLabel, { marginTop: 14 }]}>LVL</Text>
-          <Text style={[styles.sideVal, { color: COLORS.cyan }]}>{level}</Text>
-
-          <Text style={[styles.sideLabel, { marginTop: 10 }]}>LINES</Text>
-          <Text style={[styles.sideVal, { color: COLORS.solarGold }]}>{linesCleared}</Text>
-        </View>
-
-        {/* Center: Tetris Matrix Grid */}
-        <View
-          {...matrixPanResponder.panHandlers}
-          style={[
-            { width: COLS * cellSize + 4, height: ROWS * cellSize + 4 },
-          ]}
-        >
-          {Array.from({ length: ROWS }).map((_, r) => (
-            <View key={`r_${r}`} style={{ flexDirection: 'row' }}>
-              {Array.from({ length: COLS }).map((_, c) => {
-                // Determine block color
-                let color = grid[r][c];
-
-                // Active falling piece
-                if (
-                  currentPiece &&
-                  r >= pos.r &&
-                  r < pos.r + currentPiece.shape.length &&
-                  c >= pos.c &&
-                  c < pos.c + currentPiece.shape[0].length &&
-                  currentPiece.shape[r - pos.r][c - pos.c]
-                ) {
-                  color = currentPiece.color;
-                }
-
-                return (
-                  <View
-                    key={`c_${c}`}
-                    style={[
-                      styles.cell,
-                      { width: cellSize, height: cellSize },
-                      color
-                        ? {
-                            backgroundColor: color,
-                            borderColor: '#FFFFFF',
-                            borderWidth: 0.8,
-                          }
-                        : null,
-                    ]}
-                  />
-                );
-              })}
+          {/* Subheader Status Strip */}
+          <View style={styles.statusStrip}>
+            <View style={styles.badgeRow}>
+              <Text style={styles.crownIcon}>👑</Text>
+              <Text style={styles.badgeDim}>BEST</Text>
+              <Text style={styles.badgeBright}>{highScore}</Text>
             </View>
-          ))}
-        </View>
 
-        {/* Right Side: Next Piece Preview & Rotation Preview */}
-        <View style={styles.sideCol}>
-          <Text style={styles.sideLabel}>NEXT</Text>
-          <View style={styles.sideBox}>
-            {nextPieceType && (
-              <View style={styles.miniPieceGrid}>
-                {TETROMINOES[nextPieceType].shape.map((row, r) => (
-                  <View key={`nr_${r}`} style={styles.miniRow}>
-                    {row.map((val, c) => (
-                      <View
-                        key={`nc_${c}`}
-                        style={[
-                          styles.miniCell,
-                          val ? { backgroundColor: TETROMINOES[nextPieceType].color } : null,
-                        ]}
-                      />
-                    ))}
-                  </View>
-                ))}
-              </View>
-            )}
+            <View style={styles.badgeRow}>
+              <Text style={styles.badgeDim}>LINES</Text>
+              <Text style={[styles.badgeBright, { color: '#00F5FF' }]}>{linesCleared}</Text>
+            </View>
+
+            <View style={styles.badgeRow}>
+              <Text style={styles.badgeDim}>LEVEL</Text>
+              <Text style={[styles.badgeBright, { color: '#FFE600' }]}>{level}</Text>
+            </View>
           </View>
 
-          {/* Next Rotation Preview in the side space */}
-          <Text style={[styles.sideLabel, { marginTop: 14 }]}>ROTATE ↷</Text>
-          <View style={styles.sideBox}>
-            {nextRotationShape && currentPiece && (
-              <View style={styles.miniPieceGrid}>
-                {nextRotationShape.map((row, r) => (
-                  <View key={`rr_${r}`} style={styles.miniRow}>
-                    {row.map((val, c) => (
-                      <View
-                        key={`rc_${c}`}
-                        style={[
-                          styles.miniCell,
-                          val ? { backgroundColor: currentPiece.color } : null,
-                        ]}
-                      />
+          {/* Main Playfield with Sidebars */}
+          <View style={styles.mainPlayfield}>
+            {/* Left Side: Hold Container */}
+            <View style={styles.sideCol}>
+              <Text style={styles.sideLabel}>HOLD</Text>
+              <Pressable style={styles.sideBox} onPress={holdPiece} disabled={!canHold}>
+                {holdPieceType && (
+                  <View style={styles.miniPieceGrid}>
+                    {TETROMINOES[holdPieceType].shape.map((row, r) => (
+                      <View key={`hr_${r}`} style={styles.miniRow}>
+                        {row.map((val, c) => (
+                          <View
+                            key={`hc_${c}`}
+                            style={[
+                              styles.miniCell,
+                              val ? { backgroundColor: TETROMINOES[holdPieceType].color } : null,
+                            ]}
+                          />
+                        ))}
+                      </View>
                     ))}
                   </View>
-                ))}
+                )}
+              </Pressable>
+
+              <Text style={[styles.sideLabel, { marginTop: 14 }]}>LINES</Text>
+              <Text style={[styles.sideVal, { color: '#00F5FF' }]}>{linesCleared}</Text>
+            </View>
+
+            {/* Central Matrix Grid with Juicy 3D Blocks */}
+            <View
+              onTouchStart={handleTouchStart}
+              onTouchEnd={handleTouchEnd}
+              style={[
+                styles.gridBorder,
+                { width: COLS * cellSize + 6, height: ROWS * cellSize + 6 },
+              ]}
+            >
+              {Array.from({ length: ROWS }).map((_, r) => (
+                <View key={`r_${r}`} style={{ flexDirection: 'row' }}>
+                  {Array.from({ length: COLS }).map((_, c) => {
+                    // Determine block color
+                    let color = grid[r][c];
+                    let isActive = false;
+
+                    // Active falling piece
+                    if (
+                      currentPiece &&
+                      r >= pos.r &&
+                      r < pos.r + currentPiece.shape.length &&
+                      c >= pos.c &&
+                      c < pos.c + currentPiece.shape[0].length &&
+                      currentPiece.shape[r - pos.r][c - pos.c]
+                    ) {
+                      color = currentPiece.color;
+                      isActive = true;
+                    }
+
+                    // Ghost piece landing preview
+                    let isGhost = false;
+                    if (
+                      !color &&
+                      currentPiece &&
+                      r >= ghostR &&
+                      r < ghostR + currentPiece.shape.length &&
+                      c >= pos.c &&
+                      c < pos.c + currentPiece.shape[0].length &&
+                      currentPiece.shape[r - ghostR][c - pos.c]
+                    ) {
+                      isGhost = true;
+                    }
+
+                    if (color) {
+                      return (
+                        <JuicyBlock
+                          key={`c_${c}`}
+                          color={color}
+                          size={cellSize}
+                          isActive={isActive}
+                        />
+                      );
+                    }
+
+                    if (isGhost) {
+                      return (
+                        <JuicyBlock
+                          key={`c_${c}`}
+                          color={currentPiece.color}
+                          size={cellSize}
+                          isGhost={true}
+                        />
+                      );
+                    }
+
+                    // Empty recessed slot
+                    return (
+                      <View
+                        key={`c_${c}`}
+                        style={[
+                          styles.emptySlot,
+                          { width: cellSize - 2, height: cellSize - 2 },
+                        ]}
+                      />
+                    );
+                  })}
+                </View>
+              ))}
+            </View>
+
+            {/* Right Side: Next Piece Preview & Rotation Preview */}
+            <View style={styles.sideCol}>
+              <Text style={styles.sideLabel}>NEXT</Text>
+              <View style={styles.sideBox}>
+                {nextPieceType && (
+                  <View style={styles.miniPieceGrid}>
+                    {TETROMINOES[nextPieceType].shape.map((row, r) => (
+                      <View key={`nr_${r}`} style={styles.miniRow}>
+                        {row.map((val, c) => (
+                          <View
+                            key={`nc_${c}`}
+                            style={[
+                              styles.miniCell,
+                              val ? { backgroundColor: TETROMINOES[nextPieceType].color } : null,
+                            ]}
+                          />
+                        ))}
+                      </View>
+                    ))}
+                  </View>
+                )}
               </View>
-            )}
+
+              {/* Next Rotation Preview */}
+              <Text style={[styles.sideLabel, { marginTop: 14 }]}>ROTATE ↷</Text>
+              <View style={styles.sideBox}>
+                {nextRotationShape && currentPiece && (
+                  <View style={styles.miniPieceGrid}>
+                    {nextRotationShape.map((row, r) => (
+                      <View key={`rr_${r}`} style={styles.miniRow}>
+                        {row.map((val, c) => (
+                          <View
+                            key={`rc_${c}`}
+                            style={[
+                              styles.miniCell,
+                              val ? { backgroundColor: currentPiece.color } : null,
+                            ]}
+                          />
+                        ))}
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </View>
+            </View>
+          </View>
+
+          {/* Cyber Arcade D-Pad Controls */}
+          <View style={[styles.controlsRow, { paddingBottom: Math.max(insets.bottom, 12) + 6 }]}>
+            <Pressable hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }} style={styles.ctrlBtn} onPress={moveLeft}>
+              <Text style={styles.ctrlText}>◀</Text>
+            </Pressable>
+            <Pressable hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }} style={styles.ctrlBtn} onPress={rotatePiece}>
+              <Text style={[styles.ctrlText, { color: COLORS.solarGold }]}>⟳</Text>
+            </Pressable>
+            <Pressable hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }} style={styles.ctrlBtn} onPress={moveRight}>
+              <Text style={styles.ctrlText}>▶</Text>
+            </Pressable>
+            <Pressable hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }} style={styles.ctrlBtn} onPress={softDrop}>
+              <Text style={styles.ctrlText}>▼</Text>
+            </Pressable>
+            <Pressable hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }} style={[styles.ctrlBtn, styles.hardDropBtn]} onPress={hardDrop}>
+              <Text style={[styles.ctrlText, { color: '#00F5FF' }]}>⚡</Text>
+            </Pressable>
+            <Pressable hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }} style={styles.ctrlBtn} onPress={holdPiece}>
+              <Text style={[styles.ctrlText, { fontSize: 10 }]}>HOLD</Text>
+            </Pressable>
           </View>
         </View>
-      </View>
-
-      {/* Cyber D-Pad Controls */}
-      <View style={[styles.controlsRow, { paddingBottom: Math.max(insets.bottom, 14) + 10 }]}>
-        <Pressable hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }} style={styles.ctrlBtn} onPress={moveLeft}>
-          <Text style={styles.ctrlText}>◀</Text>
-        </Pressable>
-        <Pressable hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }} style={styles.ctrlBtn} onPress={rotatePiece}>
-          <Text style={[styles.ctrlText, { color: COLORS.solarGold }]}>⟳</Text>
-        </Pressable>
-        <Pressable hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }} style={styles.ctrlBtn} onPress={moveRight}>
-          <Text style={styles.ctrlText}>▶</Text>
-        </Pressable>
-        <Pressable hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }} style={styles.ctrlBtn} onPress={softDrop}>
-          <Text style={styles.ctrlText}>▼</Text>
-        </Pressable>
-        <Pressable hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }} style={[styles.ctrlBtn, styles.hardDropBtn]} onPress={hardDrop}>
-          <Text style={[styles.ctrlText, { color: '#00F5FF' }]}>⚡</Text>
-        </Pressable>
-        <Pressable hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }} style={styles.ctrlBtn} onPress={holdPiece}>
-          <Text style={[styles.ctrlText, { fontSize: 10 }]}>HOLD</Text>
-        </Pressable>
-      </View>
+      </JuiceEngine>
 
       <GameResultModal
         visible={modalVisible}
@@ -553,19 +747,49 @@ export default function CyberTetrisGame({ onBackToHub, onScoreUpdate, isPaused =
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#040114',
+    backgroundColor: '#050414',
+  },
+  statusStrip: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+    backgroundColor: 'rgba(12, 10, 26, 0.85)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0, 245, 255, 0.12)',
+  },
+  badgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  crownIcon: {
+    fontSize: 14,
+  },
+  badgeDim: {
+    fontFamily: monoFont,
+    fontSize: 10,
+    color: 'rgba(255, 255, 255, 0.5)',
+    fontWeight: '700',
+  },
+  badgeBright: {
+    fontFamily: monoFont,
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
   mainPlayfield: {
     flex: 1,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 8,
+    paddingHorizontal: 6,
   },
   sideCol: {
-    width: 60,
+    width: 62,
     alignItems: 'center',
-    marginHorizontal: 8,
+    marginHorizontal: 6,
   },
   sideLabel: {
     fontFamily: monoFont,
@@ -575,15 +799,18 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   sideBox: {
-    width: 54,
-    height: 54,
-    backgroundColor: 'rgba(15, 10, 35, 0.8)',
-    borderWidth: 1,
+    width: 56,
+    height: 56,
+    backgroundColor: 'rgba(12, 14, 28, 0.85)',
+    borderWidth: 1.5,
     borderColor: 'rgba(0, 245, 255, 0.25)',
-    borderRadius: 8,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 4,
+    shadowColor: '#00F5FF',
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
   },
   sideVal: {
     fontFamily: monoFont,
@@ -602,47 +829,56 @@ const styles = StyleSheet.create({
     width: 9,
     height: 9,
     margin: 1,
-    borderRadius: 1.5,
+    borderRadius: 2,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.5)',
   },
   gridBorder: {
-    backgroundColor: 'rgba(10, 6, 26, 0.95)',
-    borderWidth: 2,
-    borderColor: '#00F5FF',
-    borderRadius: 8,
+    backgroundColor: '#080918',
+    borderWidth: 2.5,
+    borderColor: '#7928CA',
+    borderRadius: 10,
     overflow: 'hidden',
-    shadowColor: '#00F5FF',
-    shadowRadius: 10,
-    shadowOpacity: 0.5,
-    elevation: 4,
+    shadowColor: '#7928CA',
+    shadowOffset: { width: 0, height: 0 },
+    shadowRadius: 16,
+    shadowOpacity: 0.75,
+    elevation: 10,
+    padding: 1,
   },
-  cell: {
-    borderWidth: 0.5,
-    borderColor: 'rgba(255, 255, 255, 0.04)',
-    borderRadius: 2,
+  emptySlot: {
+    margin: 1,
+    borderRadius: 4,
+    backgroundColor: '#0E1022',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 245, 255, 0.06)',
   },
   controlsRow: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
     paddingHorizontal: 8,
-    paddingTop: 10,
-    backgroundColor: 'rgba(10, 6, 28, 0.95)',
+    paddingTop: 8,
+    backgroundColor: 'rgba(8, 6, 20, 0.96)',
     borderTopWidth: 1,
-    borderTopColor: 'rgba(0, 245, 255, 0.2)',
+    borderTopColor: 'rgba(0, 245, 255, 0.18)',
   },
   ctrlBtn: {
     width: 48,
     height: 48,
     borderRadius: 24,
     backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.25)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(0, 245, 255, 0.25)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   hardDropBtn: {
     borderColor: '#00F5FF',
-    backgroundColor: 'rgba(0, 245, 255, 0.15)',
+    backgroundColor: 'rgba(0, 245, 255, 0.18)',
+    shadowColor: '#00F5FF',
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
   },
   ctrlText: {
     fontFamily: monoFont,

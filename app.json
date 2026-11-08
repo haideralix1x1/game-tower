@@ -19,6 +19,15 @@
       "permissions": [
         "VIBRATE"
       ],
+      "androidNavigationBar": {
+        "visible": "sticky-immersive",
+        "backgroundColor": "#00000000"
+      },
+      "androidStatusBar": {
+        "hidden": true,
+        "translucent": true,
+        "backgroundColor": "#00000000"
+      },
       "adaptiveIcon": {
         "backgroundColor": "#030308",
         "foregroundImage": "./assets/android-icon-foreground.png",

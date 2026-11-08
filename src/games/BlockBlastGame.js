@@ -7,7 +7,6 @@ import {
   Platform,
   useWindowDimensions,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS } from '../../styles';
 import MiniGameHeader from '../components/MiniGameHeader';
@@ -21,7 +20,6 @@ import {
 } from '../utils/haptics';
 import {
   playTapSound,
-  playSliceSound,
   playPerfectSound,
   playGameOverSound,
 } from '../utils/sound';
@@ -30,14 +28,16 @@ const STORAGE_KEY = '@game_tower:best_blockblast_v1';
 const GRID_SIZE = 8;
 
 const SHAPES = [
-  { cells: [[0, 0]], color: '#00F5FF', name: 'DOT' },
-  { cells: [[0, 0], [0, 1]], color: '#00F5D4', name: 'DUO-H' },
-  { cells: [[0, 0], [1, 0]], color: '#00F5D4', name: 'DUO-V' },
+  { cells: [[0, 0]], color: '#FFE600', name: 'DOT' }, // Single yellow dot (matches screenshot!)
+  { cells: [[0, 0], [0, 1]], color: '#00F5FF', name: 'DUO-H' },
+  { cells: [[0, 0], [1, 0]], color: '#00F5FF', name: 'DUO-V' },
   { cells: [[0, 0], [0, 1], [0, 2]], color: '#FF007F', name: 'BAR-3H' },
   { cells: [[0, 0], [1, 0], [2, 0]], color: '#FF007F', name: 'BAR-3V' },
-  { cells: [[0, 0], [0, 1], [1, 0], [1, 1]], color: '#FFD166', name: 'QUAD' },
-  { cells: [[0, 0], [1, 0], [1, 1]], color: '#C77DFF', name: 'CORNER' },
-  { cells: [[0, 0], [0, 1], [0, 2], [1, 1]], color: '#FF5E00', name: 'T-CORE' },
+  { cells: [[0, 0], [0, 1], [1, 0], [1, 1]], color: '#FF5E00', name: 'QUAD' },
+  { cells: [[0, 0], [1, 0], [1, 1]], color: '#9D4EDD', name: 'CORNER' },
+  { cells: [[0, 0], [0, 1], [0, 2], [1, 1]], color: '#FF007F', name: 'T-CORE' },
+  { cells: [[0, 0], [1, 0], [2, 0], [2, 1]], color: '#0070F3', name: 'L-SHAPE' },
+  { cells: [[0, 0], [0, 1], [0, 2], [0, 3]], color: '#00F5D4', name: 'LONG-4' },
 ];
 
 const monoFont = Platform.select({
@@ -48,15 +48,76 @@ const monoFont = Platform.select({
 
 const randomHand = () =>
   Array.from({ length: 3 }, (_, i) => ({
-    id: `piece_${i}_${Math.random()}`,
     ...SHAPES[Math.floor(Math.random() * SHAPES.length)],
+    id: `piece_${Date.now()}_${i}_${Math.random()}`,
     used: false,
   }));
 
-export default function BlockBlastGame({ onBackToHub, onScoreUpdate }) {
+/**
+ * 3D Glossy Candy/Jewel Block with Specular Shine & Bevel
+ */
+function JuicyBlock({ color, size, isPreview = false }) {
+  return (
+    <View
+      style={{
+        width: size - 2,
+        height: size - 2,
+        margin: 1,
+        borderRadius: 5,
+        backgroundColor: color,
+        borderTopWidth: 2.2,
+        borderTopColor: 'rgba(255, 255, 255, 0.7)',
+        borderLeftWidth: 1.8,
+        borderLeftColor: 'rgba(255, 255, 255, 0.45)',
+        borderRightWidth: 1.8,
+        borderRightColor: 'rgba(0, 0, 0, 0.35)',
+        borderBottomWidth: 3,
+        borderBottomColor: 'rgba(0, 0, 0, 0.55)',
+        overflow: 'hidden',
+        opacity: isPreview ? 0.75 : 1,
+        shadowColor: color,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.65,
+        shadowRadius: 5,
+        elevation: 4,
+      }}
+    >
+      {/* Top Gloss Reflection */}
+      <View
+        style={{
+          position: 'absolute',
+          top: 1.5,
+          left: 1.5,
+          right: 1.5,
+          height: (size - 2) * 0.38,
+          backgroundColor: 'rgba(255, 255, 255, 0.4)',
+          borderTopLeftRadius: 3.5,
+          borderTopRightRadius: 3.5,
+        }}
+      />
+      {/* Top-Left Sparkle */}
+      <View
+        style={{
+          position: 'absolute',
+          top: 2.5,
+          left: 2.5,
+          width: 3.5,
+          height: 3.5,
+          borderRadius: 2,
+          backgroundColor: '#FFFFFF',
+          opacity: 0.9,
+        }}
+      />
+    </View>
+  );
+}
+
+export default function BlockBlastGame({
+  onScoreUpdate,
+  onBackToHub,
+  isPaused = false,
+}) {
   const { width } = useWindowDimensions();
-  const boardSize = Math.min(352, width - 28);
-  const cellSize = Math.floor((boardSize - 24) / GRID_SIZE);
   const juiceRef = useRef(null);
 
   const [grid, setGrid] = useState(() =>
@@ -68,13 +129,15 @@ export default function BlockBlastGame({ onBackToHub, onScoreUpdate }) {
   const [bestScore, setBestScore] = useState(0);
   const [isGameOver, setIsGameOver] = useState(false);
 
+  const boardSize = Math.min(width - 32, 360);
+  const cellSize = Math.floor((boardSize - 16) / GRID_SIZE);
+
   useEffect(() => {
-    (async () => {
-      try {
-        const saved = await AsyncStorage.getItem(STORAGE_KEY);
-        if (saved) setBestScore(parseInt(saved, 10) || 0);
-      } catch {}
-    })();
+    AsyncStorage.getItem(STORAGE_KEY)
+      .then((val) => {
+        if (val) setBestScore(parseInt(val, 10) || 0);
+      })
+      .catch(() => {});
   }, []);
 
   const updateBest = useCallback(
@@ -121,7 +184,7 @@ export default function BlockBlastGame({ onBackToHub, onScoreUpdate }) {
 
   const handleCellTap = useCallback(
     (r, c) => {
-      if (isGameOver) return;
+      if (isGameOver || isPaused) return;
       const piece = hand[selectedIdx];
       if (!piece || piece.used) return;
 
@@ -142,89 +205,111 @@ export default function BlockBlastGame({ onBackToHub, onScoreUpdate }) {
         }
       }
 
+      // Valid placement!
+      triggerLightHaptic();
+      playTapSound();
+
       const nextGrid = grid.map((row) => [...row]);
       for (const [dr, dc] of piece.cells) {
         nextGrid[r + dr][c + dc] = piece.color;
       }
 
-      // Check full rows and columns to blast
+      let placedPoints = piece.cells.length * 10;
+
+      // Detect full rows
       const fullRows = [];
+      for (let rowIdx = 0; rowIdx < GRID_SIZE; rowIdx += 1) {
+        if (nextGrid[rowIdx].every((cell) => cell !== null)) {
+          fullRows.push(rowIdx);
+        }
+      }
+
+      // Detect full cols
       const fullCols = [];
-      for (let rr = 0; rr < GRID_SIZE; rr += 1) {
-        if (nextGrid[rr].every((v) => v !== null)) fullRows.push(rr);
+      for (let colIdx = 0; colIdx < GRID_SIZE; colIdx += 1) {
+        let isFull = true;
+        for (let rowIdx = 0; rowIdx < GRID_SIZE; rowIdx += 1) {
+          if (nextGrid[rowIdx][colIdx] === null) {
+            isFull = false;
+            break;
+          }
+        }
+        if (isFull) fullCols.push(colIdx);
       }
-      for (let cc = 0; cc < GRID_SIZE; cc += 1) {
-        if (nextGrid.every((row) => row[cc] !== null)) fullCols.push(cc);
-      }
 
-      fullRows.forEach((rr) => {
-        for (let cc = 0; cc < GRID_SIZE; cc += 1) nextGrid[rr][cc] = null;
-      });
-      fullCols.forEach((cc) => {
-        for (let rr = 0; rr < GRID_SIZE; rr += 1) nextGrid[rr][cc] = null;
-      });
-
-      const linesCleared = fullRows.length + fullCols.length;
-      const gained =
-        piece.cells.length * 10 + linesCleared * linesCleared * 60;
-      const nextScore = score + gained;
-
-      const nextHand = hand.map((h, idx) =>
-        idx === selectedIdx ? { ...h, used: true } : h
-      );
-      const finalHand = nextHand.every((h) => h.used)
-        ? randomHand()
-        : nextHand;
-      const nextValidIdx = finalHand.findIndex((h) => !h.used);
-
-      setGrid(nextGrid);
-      setHand(finalHand);
-      setSelectedIdx(nextValidIdx >= 0 ? nextValidIdx : 0);
-      setScore(nextScore);
-      updateBest(nextScore);
-
-      if (linesCleared > 0) {
-        triggerPerfectHaptic(linesCleared);
-        playPerfectSound(Math.min(8, linesCleared + 3));
+      const totalLines = fullRows.length + fullCols.length;
+      if (totalLines > 0) {
+        triggerPerfectHaptic();
+        playPerfectSound();
         if (juiceRef.current) {
-          juiceRef.current.celebrate(
-            `${linesCleared}x LINE BLAST!`,
-            `+${gained} PTS`,
+          juiceRef.current.flash(piece.color);
+          juiceRef.current.shake(6 * totalLines, 6 * totalLines);
+          juiceRef.current.burst(width / 2, 260, piece.color, 16 * totalLines);
+          juiceRef.current.popup(
+            totalLines > 1 ? `COMBO x${totalLines}!` : 'LINE CLEARED!',
+            `+${totalLines * 120} PTS`,
             piece.color
           );
         }
-      } else {
-        triggerLightHaptic();
-        playSliceSound();
+
+        fullRows.forEach((rowIdx) => {
+          for (let col = 0; col < GRID_SIZE; col += 1) {
+            nextGrid[rowIdx][col] = null;
+          }
+        });
+        fullCols.forEach((colIdx) => {
+          for (let row = 0; row < GRID_SIZE; row += 1) {
+            nextGrid[row][colIdx] = null;
+          }
+        });
+
+        placedPoints += totalLines * 120;
       }
 
-      // Check if any remaining unused piece can fit anywhere
-      const remainingPieces = finalHand.filter((h) => !h.used);
-      const anyCanFit = remainingPieces.some((p) => canPieceFitAnywhere(nextGrid, p));
+      const nextScore = score + placedPoints;
+      setScore(nextScore);
+      updateBest(nextScore);
+      setGrid(nextGrid);
+
+      // Mark piece used
+      const nextHand = hand.map((p, idx) =>
+        idx === selectedIdx ? { ...p, used: true } : p
+      );
+
+      // If all pieces used, deal 3 new pieces
+      const allUsed = nextHand.every((p) => p.used);
+      const activeHand = allUsed ? randomHand() : nextHand;
+      setHand(activeHand);
+
+      // Select next available piece
+      const firstAvailable = activeHand.findIndex((p) => !p.used);
+      setSelectedIdx(firstAvailable !== -1 ? firstAvailable : 0);
+
+      // Check Game Over
+      const anyCanFit = activeHand.some(
+        (p) => !p.used && canPieceFitAnywhere(nextGrid, p)
+      );
+
       if (!anyCanFit) {
         setIsGameOver(true);
         triggerGameOverHaptic();
         playGameOverSound();
         if (juiceRef.current) {
-          juiceRef.current.shake(12, 8);
           juiceRef.current.flash(COLORS.danger);
+          juiceRef.current.popup('NO MOVES LEFT', 'GRID IS FULL', COLORS.danger);
         }
       }
     },
-    [isGameOver, hand, selectedIdx, grid, score, updateBest]
+    [isGameOver, isPaused, hand, selectedIdx, grid, score, updateBest, width]
   );
 
   return (
     <JuiceEngine ref={juiceRef}>
       <View style={localStyles.container}>
-        <LinearGradient
-          colors={['#03030A', '#0B0924', '#1A0B38']}
-          style={StyleSheet.absoluteFillObject}
-        />
-
         <MiniGameHeader
-          title="BLOCK BLAST 8x8"
-          floorLabel="FLOOR 14 // GRID BLASTER"
+          floorNum={13}
+          gameTitle="BLOCK BLAST 8x8"
+          category="PUZZLE"
           score={score}
           bestScore={bestScore}
           accentColor="#FFD166"
@@ -233,10 +318,21 @@ export default function BlockBlastGame({ onBackToHub, onScoreUpdate }) {
         />
 
         <View style={localStyles.body}>
-          <Text style={localStyles.hintBanner}>
-            SELECT A MODULE BELOW & TAP GRID TO PLACE
-          </Text>
+          {/* Subheader Status Strip */}
+          <View style={localStyles.statusStrip}>
+            <View style={localStyles.badgeRow}>
+              <Text style={{ fontSize: 13 }}>👑</Text>
+              <Text style={localStyles.badgeDim}>BEST</Text>
+              <Text style={localStyles.badgeBright}>{bestScore}</Text>
+            </View>
 
+            <View style={localStyles.badgeRow}>
+              <Text style={localStyles.badgeDim}>SCORE</Text>
+              <Text style={[localStyles.badgeBright, { color: '#00F5FF' }]}>{score}</Text>
+            </View>
+          </View>
+
+          {/* 8x8 Board with Juicy 3D Blocks */}
           <View
             style={[
               localStyles.board,
@@ -245,28 +341,37 @@ export default function BlockBlastGame({ onBackToHub, onScoreUpdate }) {
           >
             {grid.map((row, rIdx) => (
               <View key={`brow_${rIdx}`} style={localStyles.row}>
-                {row.map((color, cIdx) => (
-                  <Pressable
-                    key={`bcell_${rIdx}_${cIdx}`}
-                    onPress={() => handleCellTap(rIdx, cIdx)}
-                    style={[
-                      localStyles.cell,
-                      {
-                        width: cellSize,
-                        height: cellSize,
-                        backgroundColor: color || 'rgba(255, 255, 255, 0.05)',
-                        borderColor: color
-                          ? '#FFFFFF'
-                          : 'rgba(255, 255, 255, 0.12)',
-                      },
-                    ]}
-                  />
-                ))}
+                {row.map((color, cIdx) => {
+                  if (color) {
+                    return (
+                      <Pressable
+                        key={`bcell_${rIdx}_${cIdx}`}
+                        onPress={() => handleCellTap(rIdx, cIdx)}
+                      >
+                        <JuicyBlock color={color} size={cellSize} />
+                      </Pressable>
+                    );
+                  }
+
+                  return (
+                    <Pressable
+                      key={`bcell_${rIdx}_${cIdx}`}
+                      onPress={() => handleCellTap(rIdx, cIdx)}
+                      style={[
+                        localStyles.emptySlot,
+                        {
+                          width: cellSize - 2,
+                          height: cellSize - 2,
+                        },
+                      ]}
+                    />
+                  );
+                })}
               </View>
             ))}
           </View>
 
-          {/* 3-Piece Dock */}
+          {/* 3-Piece Dock at Bottom */}
           <View style={[localStyles.dockRow, { width: boardSize }]}>
             {hand.map((piece, idx) => {
               const selected = idx === selectedIdx && !piece.used;
@@ -283,18 +388,35 @@ export default function BlockBlastGame({ onBackToHub, onScoreUpdate }) {
                     localStyles.dockCard,
                     selected && {
                       borderColor: piece.color,
-                      backgroundColor: `${piece.color}22`,
+                      backgroundColor: `${piece.color}25`,
+                      shadowColor: piece.color,
+                      shadowOpacity: 0.8,
+                      shadowRadius: 10,
+                      elevation: 8,
+                      transform: [{ scale: 1.05 }],
                     },
-                    piece.used && { opacity: 0.25 },
+                    piece.used && { opacity: 0.2 },
                   ]}
                 >
-                  <Text
-                    style={[localStyles.dockName, { color: piece.color }]}
-                  >
+                  {/* Visual Mini Representation of the actual piece */}
+                  <View style={localStyles.miniPieceContainer}>
+                    {piece.cells.map(([r, c], cIdx) => (
+                      <View
+                        key={`cell_preview_${cIdx}`}
+                        style={[
+                          localStyles.miniPieceDot,
+                          {
+                            left: c * 13,
+                            top: r * 13,
+                            backgroundColor: piece.color,
+                          },
+                        ]}
+                      />
+                    ))}
+                  </View>
+
+                  <Text style={[localStyles.dockName, { color: piece.color }]}>
                     {piece.name}
-                  </Text>
-                  <Text style={localStyles.dockSub}>
-                    {`${piece.cells.length} CELLS`}
                   </Text>
                 </Pressable>
               );
@@ -320,62 +442,102 @@ export default function BlockBlastGame({ onBackToHub, onScoreUpdate }) {
 }
 
 const localStyles = StyleSheet.create({
-  container: { flex: 1 },
+  container: { flex: 1, backgroundColor: '#050414' },
   body: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingBottom: 16,
   },
-  hintBanner: {
-    fontSize: 10,
+  statusStrip: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '90%',
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+    backgroundColor: 'rgba(12, 10, 26, 0.85)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 245, 255, 0.15)',
+    marginBottom: 12,
+  },
+  badgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  badgeDim: {
     fontFamily: monoFont,
+    fontSize: 10,
+    color: 'rgba(255, 255, 255, 0.55)',
+    fontWeight: '700',
+  },
+  badgeBright: {
+    fontFamily: monoFont,
+    fontSize: 14,
     fontWeight: '900',
-    color: COLORS.solarGold,
-    letterSpacing: 1,
-    marginBottom: 10,
+    color: '#FFFFFF',
   },
   board: {
-    backgroundColor: 'rgba(8, 8, 22, 0.92)',
-    borderRadius: 18,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 209, 102, 0.4)',
-    padding: 8,
+    backgroundColor: '#080918',
+    borderRadius: 16,
+    borderWidth: 2.5,
+    borderColor: '#7928CA',
+    padding: 6,
     justifyContent: 'space-between',
+    shadowColor: '#7928CA',
+    shadowOpacity: 0.6,
+    shadowRadius: 16,
+    elevation: 10,
   },
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
-  cell: {
-    borderRadius: 6,
+  emptySlot: {
+    margin: 1,
+    borderRadius: 4.5,
+    backgroundColor: '#0E1022',
     borderWidth: 1,
+    borderColor: 'rgba(0, 245, 255, 0.08)',
   },
   dockRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 16,
+    marginTop: 18,
     gap: 10,
   },
   dockCard: {
     flex: 1,
-    height: 68,
+    height: 78,
+    backgroundColor: 'rgba(12, 14, 28, 0.85)',
     borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.16)',
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderColor: 'rgba(0, 245, 255, 0.25)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 6,
+  },
+  miniPieceContainer: {
+    width: 44,
+    height: 38,
+    position: 'relative',
     alignItems: 'center',
     justifyContent: 'center',
   },
+  miniPieceDot: {
+    position: 'absolute',
+    width: 11,
+    height: 11,
+    borderRadius: 2.5,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.6)',
+  },
   dockName: {
-    fontSize: 13,
+    fontSize: 10,
     fontFamily: monoFont,
     fontWeight: '900',
-  },
-  dockSub: {
-    fontSize: 9.5,
-    fontFamily: monoFont,
-    color: COLORS.textSecondary,
-    marginTop: 3,
+    letterSpacing: 0.5,
+    marginTop: 4,
   },
 });

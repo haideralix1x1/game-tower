@@ -66,78 +66,95 @@ export default function GameResultModal({
       statusBarTranslucent
       onRequestClose={handleBack || handleRetry}
     >
-    <Animated.View
-      entering={FadeIn.duration(200)}
-      style={localStyles.overlay}
-      pointerEvents="auto"
-    >
-      <Animated.View
-        entering={ZoomIn.duration(240)}
-        style={[localStyles.card, { borderColor: accent }]}
+      <Pressable
+        style={localStyles.overlay}
+        onPress={(e) => {
+          e.stopPropagation?.();
+        }}
+        onStartShouldSetResponder={() => true}
+        onMoveShouldSetResponder={() => true}
+        onResponderTerminationRequest={() => false}
       >
-        <Text style={localStyles.icon}>{icon}</Text>
-        <Text style={[localStyles.title, { color: accent }]}>
-          {displayTitle}
-        </Text>
+        <Animated.View
+          entering={FadeIn.duration(200)}
+          style={StyleSheet.absoluteFillObject}
+          pointerEvents="none"
+        >
+          <View style={localStyles.backdropTint} />
+        </Animated.View>
 
-        {subtitle ? (
-          <Text style={localStyles.subtitle}>{subtitle}</Text>
-        ) : null}
+        <Animated.View
+          entering={ZoomIn.duration(240)}
+          style={[localStyles.card, { borderColor: accent }]}
+        >
+          <Pressable
+            onPress={(e) => e.stopPropagation?.()}
+            style={{ width: '100%', alignItems: 'center' }}
+          >
+            <Text style={localStyles.icon}>{icon}</Text>
+            <Text style={[localStyles.title, { color: accent }]}>
+              {displayTitle}
+            </Text>
 
-        {typeof score === 'number' ? (
-          <View style={localStyles.statsContainer}>
-            <View style={localStyles.statBox}>
-              <Text style={localStyles.statLabel}>FINAL SCORE</Text>
-              <Text style={[localStyles.statVal, { color: accent }]}>
-                {score}
-              </Text>
-            </View>
-            {typeof bestScore === 'number' && bestScore > 0 ? (
-              <View style={localStyles.statBox}>
-                <Text style={localStyles.statLabel}>BEST RECORD</Text>
-                <Text style={[localStyles.statVal, { color: COLORS.solarGold }]}>
-                  {bestScore}
-                </Text>
+            {subtitle ? (
+              <Text style={localStyles.subtitle}>{subtitle}</Text>
+            ) : null}
+
+            {typeof score === 'number' ? (
+              <View style={localStyles.statsContainer}>
+                <View style={localStyles.statBox}>
+                  <Text style={localStyles.statLabel}>FINAL SCORE</Text>
+                  <Text style={[localStyles.statVal, { color: accent }]}>
+                    {score}
+                  </Text>
+                </View>
+                {typeof bestScore === 'number' && bestScore > 0 ? (
+                  <View style={localStyles.statBox}>
+                    <Text style={localStyles.statLabel}>BEST RECORD</Text>
+                    <Text style={[localStyles.statVal, { color: COLORS.solarGold }]}>
+                      {bestScore}
+                    </Text>
+                  </View>
+                ) : null}
               </View>
             ) : null}
-          </View>
-        ) : null}
 
-        <View style={localStyles.btnRow}>
-          {onBackToHub ? (
-            <Pressable
-              onPress={handleBack}
-              hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
-              style={({ pressed }) => [
-                localStyles.backBtn,
-                pressed && { opacity: 0.7, transform: [{ scale: 0.95 }] },
-              ]}
-            >
-              <Text style={localStyles.backBtnText}>HUB</Text>
-            </Pressable>
-          ) : null}
+            <View style={localStyles.btnRow}>
+              {onBackToHub ? (
+                <Pressable
+                  onPress={handleBack}
+                  hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
+                  style={({ pressed }) => [
+                    localStyles.backBtn,
+                    pressed && { opacity: 0.7, transform: [{ scale: 0.95 }] },
+                  ]}
+                >
+                  <Text style={localStyles.backBtnText}>HUB</Text>
+                </Pressable>
+              ) : null}
 
-          <Pressable
-            onPress={handleRetry}
-            hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
-            style={({ pressed }) => [
-              localStyles.retryBtn,
-              { backgroundColor: accent },
-              pressed && { opacity: 0.85, transform: [{ scale: 0.96 }] },
-            ]}
-          >
-            <Text
-              style={[
-                localStyles.retryBtnText,
-                { color: isWin ? '#04040E' : '#FFFFFF' },
-              ]}
-            >
-              {displayRetryText}
-            </Text>
+              <Pressable
+                onPress={handleRetry}
+                hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
+                style={({ pressed }) => [
+                  localStyles.retryBtn,
+                  { backgroundColor: accent },
+                  pressed && { opacity: 0.85, transform: [{ scale: 0.96 }] },
+                ]}
+              >
+                <Text
+                  style={[
+                    localStyles.retryBtnText,
+                    { color: isWin ? '#04040E' : '#FFFFFF' },
+                  ]}
+                >
+                  {displayRetryText}
+                </Text>
+              </Pressable>
+            </View>
           </Pressable>
-        </View>
-            </Animated.View>
-    </Animated.View>
+        </Animated.View>
+      </Pressable>
     </Modal>
   );
 }
@@ -147,10 +164,16 @@ const localStyles = StyleSheet.create({
     flex: 1,
     width: '100%',
     height: '100%',
-    backgroundColor: 'rgba(3, 3, 10, 0.88)',
+    backgroundColor: 'rgba(3, 3, 10, 0.92)',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 20,
+    zIndex: 999999,
+    elevation: 999999,
+  },
+  backdropTint: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(3, 3, 10, 0.92)',
   },
   card: {
     width: '100%',
