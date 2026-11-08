@@ -8,7 +8,6 @@ import {
   Animated,
   Easing,
   Platform,
-  Pressable,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle, Line, Defs, RadialGradient, Stop } from 'react-native-svg';
@@ -142,7 +141,7 @@ export default function CompanySplashScreen({ onFinish }) {
       if (eased < 25) {
         setStatusText('INITIALIZING QUANTUM CORE...');
       } else if (eased < 55) {
-        setStatusText('CALIBRATING 34 CYBER TOWERS...');
+        setStatusText('CALIBRATING 34 GAME TOWERS...');
       } else if (eased < 85) {
         setStatusText('SYNCHRONIZING AUDIO CHANNELS...');
       } else {
@@ -167,13 +166,13 @@ export default function CompanySplashScreen({ onFinish }) {
 
   return (
     <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
-      <Pressable style={StyleSheet.absoluteFill} onPress={finishEarly}>
+      <View style={[StyleSheet.absoluteFill, styles.contentWrap]}>
         <LinearGradient
           colors={['#02010A', '#080518', '#03010C']}
           style={StyleSheet.absoluteFill}
         />
 
-        {/* Ambient Cyber Particles & Nebula Glow Backdrop */}
+        {/* Ambient Particles & Nebula Glow Backdrop */}
         <Svg width={width} height={height} style={StyleSheet.absoluteFill} pointerEvents="none">
           <Defs>
             <RadialGradient id="splashGlow" cx="50%" cy="50%" rx="50%" ry="50%">
@@ -183,7 +182,7 @@ export default function CompanySplashScreen({ onFinish }) {
             </RadialGradient>
           </Defs>
 
-          <Circle cx={width * 0.5} cy={height * 0.44} r={170} fill="url(#splashGlow)" />
+          <Circle cx={width * 0.5} cy={height * 0.5} r={180} fill="url(#splashGlow)" />
 
           {particles.map((pt) => (
             <Circle
@@ -196,7 +195,7 @@ export default function CompanySplashScreen({ onFinish }) {
             />
           ))}
 
-          {/* Framing Cyber Grid Guideways */}
+          {/* Framing Guideways */}
           <Line x1={20} y1={height * 0.25} x2={20} y2={height * 0.75} stroke="rgba(0, 245, 255, 0.15)" strokeWidth={1} />
           <Line x1={width - 20} y1={height * 0.25} x2={width - 20} y2={height * 0.75} stroke="rgba(0, 245, 255, 0.15)" strokeWidth={1} />
         </Svg>
@@ -224,7 +223,7 @@ export default function CompanySplashScreen({ onFinish }) {
           {/* Studio Title */}
           <Text style={styles.presentedByText}>A NAMELESS FORGE PRODUCTION</Text>
 
-          {/* Cyber Loading Bar Section */}
+          {/* Loading Bar Section */}
           <View style={[styles.loadingSection, { width: maxBarWidth }]}>
             <View style={styles.loadingTrack}>
               <View
@@ -250,16 +249,11 @@ export default function CompanySplashScreen({ onFinish }) {
           </View>
         </View>
 
-        {/* Quick Tap-To-Skip Prompt */}
-        <View style={styles.skipPrompt} pointerEvents="none">
-          <Text style={styles.skipPromptText}>TAP TO SKIP ▶</Text>
-        </View>
-
-        {/* Cyber Footer Mark */}
+        {/* Footer Mark */}
         <View style={styles.footerMark} pointerEvents="none">
           <Text style={styles.footerText}>NEO GAME TOWER // SYSTEM BOOT</Text>
         </View>
-      </Pressable>
+      </View>
     </Animated.View>
   );
 }
@@ -269,8 +263,6 @@ const styles = StyleSheet.create({
     flex: 1,
     width: '100%',
     height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
     backgroundColor: '#02010A',
     position: 'absolute',
     top: 0,
@@ -278,6 +270,13 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     zIndex: 99999,
+  },
+  contentWrap: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   centerBox: {
     alignItems: 'center',
@@ -366,23 +365,5 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: 'rgba(255, 255, 255, 0.35)',
     letterSpacing: 1.5,
-  },
-  skipPrompt: {
-    position: 'absolute',
-    top: 50,
-    right: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 14,
-    backgroundColor: 'rgba(0, 245, 255, 0.1)',
-    borderWidth: 1,
-    borderColor: 'rgba(0, 245, 255, 0.35)',
-  },
-  skipPromptText: {
-    fontFamily: monoFont,
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#00F5FF',
-    letterSpacing: 1.2,
   },
 });

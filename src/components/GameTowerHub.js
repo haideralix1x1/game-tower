@@ -157,7 +157,7 @@ export const TOWER_GAMES = [
     title: 'WORD SCRAMBLE',
     category: 'ANAGRAM MATRIX',
     badge: 'LETTER DIAL',
-    desc: 'Unscramble cyber letter dials to forge 2 to 7+ letter words. Find more and more words to crack levels.',
+    desc: 'Unscramble glowing letter dials to forge 2 to 7+ letter words. Find more and more words to crack levels.',
     accent: '#00F5FF',
     secondary: '#7928CA',
     icon: '🔠',
@@ -171,7 +171,7 @@ export const TOWER_GAMES = [
     title: 'SPIRE ASCENT',
     category: 'ARCADE',
     badge: 'FIRE & TURRETS',
-    desc: 'Ascend the infinite cyber spire. Dodge incinerating fire platforms, outrun homing sentry bombs, and evade defense turrets.',
+    desc: 'Ascend the infinite neo spire. Dodge incinerating fire platforms, outrun homing sentry bombs, and evade defense turrets.',
     accent: '#00F5FF',
     secondary: '#FF0055',
     icon: '🧗',
@@ -311,7 +311,7 @@ export const TOWER_GAMES = [
     title: 'SPACE SHOOTER NEO',
     category: 'ARCADE',
     badge: '60FPS AUTO-LASER',
-    desc: 'Pilot the cyber starfighter through plasma asteroid belts & enemy cruiser wings.',
+    desc: 'Pilot the quantum starfighter through plasma asteroid belts & enemy cruiser wings.',
     accent: '#00F5FF',
     secondary: '#7928CA',
     icon: '🚀',
@@ -381,7 +381,7 @@ export const TOWER_GAMES = [
     title: 'WHACK-A-BOT',
     category: 'ARCADE',
     badge: '16 & 25 HOLES',
-    desc: 'Smash rogue drones across 16 (4x4) or 25 (5x5) cyber holes with multi-target reflex speed.',
+    desc: 'Smash rogue drones across 16 (4x4) or 25 (5x5) grid holes with multi-target reflex speed.',
     accent: '#FF2A85',
     secondary: '#FF9E00',
     icon: '🤖',
@@ -423,7 +423,7 @@ export const TOWER_GAMES = [
     title: 'NEON FLAPPY',
     category: 'ARCADE',
     badge: 'PULSE JET',
-    desc: 'Navigate the cyber drone through lethal laser gates with rhythmic tap pulses.',
+    desc: 'Navigate the quantum drone through lethal laser gates with rhythmic tap pulses.',
     accent: '#FFD166',
     secondary: '#EF476F',
     icon: '🛸',
@@ -437,7 +437,7 @@ export const TOWER_GAMES = [
     title: 'SNAKE',
     category: 'ARCADE',
     badge: 'RETRO 15x15',
-    desc: 'Slither through cyberspace, devour golden energy orbs, and grow your light trail.',
+    desc: 'Slither through the grid arena, devour golden energy orbs, and grow your light trail.',
     accent: '#80FF72',
     secondary: '#00F5FF',
     icon: '🐍',
@@ -451,7 +451,7 @@ export const TOWER_GAMES = [
     title: 'BRICK BREAKER NEO',
     category: 'ARCADE',
     badge: 'ARKANOID 60FPS',
-    desc: 'Deflect the plasma ball with your cyber paddle to shatter armored brick barriers.',
+    desc: 'Deflect the plasma ball with your neon paddle to shatter armored brick barriers.',
     accent: '#00F5FF',
     secondary: '#00BBF9',
     icon: '🏓',
@@ -549,7 +549,7 @@ export const TOWER_GAMES = [
     title: 'WORDLY NEO',
     category: 'WORD',
     badge: '5-LETTER CIPHER',
-    desc: 'Crack the 5-letter cyber password in 6 tries with live keyboard feedback.',
+    desc: 'Crack the 5-letter secret word in 6 tries with live keyboard feedback.',
     accent: '#06D6A0',
     secondary: '#047857',
     icon: '🟩',
@@ -814,7 +814,7 @@ export default function GameTowerHub({ initialGameId = null, isSplashActive = fa
   );
   const towerRank =
     totalTowerScore >= 10000
-      ? 'CYBER LEGEND'
+      ? 'TOWER LEGEND'
       : totalTowerScore >= 5000
         ? 'APEX OVERLORD'
         : totalTowerScore >= 2000
@@ -1810,7 +1810,7 @@ export default function GameTowerHub({ initialGameId = null, isSplashActive = fa
               <View style={hubStyles.citadelFoundation}>
                 <View style={hubStyles.foundationHazardRow}>
                   <Text style={hubStyles.foundationHazardText}>
-                    ⚠️ HAZARD LEVEL 0 // CYBER ARCADE FOUNDATION PEDESTAL ⚠️
+                    ⚠️ HAZARD LEVEL 0 // ARCADE FOUNDATION PEDESTAL ⚠️
                   </Text>
                 </View>
 

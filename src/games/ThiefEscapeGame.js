@@ -68,8 +68,8 @@ const getNearestWindowX = (playerX) => {
 };
 
 /**
- * Curated Levels with Escalating Guards, Petrol Missions, Rival Thieves & Safe Ladder Corridors
- * Guard patrol boundaries (minX, maxX) keep guard beams safely away from ladder zones (x: 75 & x: 265).
+ * Curated Levels with Escalating Guards, Petrol Missions, Rival Thieves & Full-Floor Patrols
+ * Guards patrol the full floor (minX: 45 to maxX: 295), bypassing ladders to give clear stealth timing windows.
  */
 const CURATED_LEVELS = [
   // Level 1: Tutorial Infiltration (3 Floors, 1 Guard, Straight Heist)
@@ -83,7 +83,7 @@ const CURATED_LEVELS = [
       { fromFloor: 1, toFloor: 2, x: 75 },  // Left stair to floor 2
     ],
     guards: [
-      { id: 'g0', floor: 1, minX: 140, maxX: 195, x: 170, dir: 1, speed: 1.1, pauseTimer: 0, alertTimer: 0 },
+      { id: 'g0', floor: 1, minX: 45, maxX: 295, x: 60, dir: 1, speed: 1.1, pauseTimer: 0, alertTimer: 0 },
     ],
     diamond: { floor: 2, x: 250 },
     petrol: null,
@@ -102,8 +102,8 @@ const CURATED_LEVELS = [
       { fromFloor: 1, toFloor: 2, x: 265 },
     ],
     guards: [
-      { id: 'g0', floor: 1, minX: 140, maxX: 195, x: 170, dir: -1, speed: 1.2, pauseTimer: 0, alertTimer: 0 },
-      { id: 'g1', floor: 2, minX: 140, maxX: 195, x: 170, dir: 1, speed: 1.25, pauseTimer: 0, alertTimer: 0 },
+      { id: 'g0', floor: 1, minX: 45, maxX: 295, x: 60, dir: 1, speed: 1.15, pauseTimer: 0, alertTimer: 0 },
+      { id: 'g1', floor: 2, minX: 45, maxX: 295, x: 280, dir: -1, speed: 1.2, pauseTimer: 0, alertTimer: 0 },
     ],
     diamond: { floor: 2, x: 70 },
     petrol: { floor: 1, x: 285 },
@@ -123,8 +123,8 @@ const CURATED_LEVELS = [
       { fromFloor: 2, toFloor: 3, x: 75 },
     ],
     guards: [
-      { id: 'g0', floor: 1, minX: 140, maxX: 195, x: 170, dir: 1, speed: 1.3, pauseTimer: 0, alertTimer: 0 },
-      { id: 'g1', floor: 2, minX: 140, maxX: 195, x: 170, dir: -1, speed: 1.35, pauseTimer: 0, alertTimer: 0 },
+      { id: 'g0', floor: 1, minX: 45, maxX: 295, x: 60, dir: 1, speed: 1.2, pauseTimer: 0, alertTimer: 0 },
+      { id: 'g1', floor: 2, minX: 45, maxX: 295, x: 280, dir: -1, speed: 1.25, pauseTimer: 0, alertTimer: 0 },
     ],
     diamond: { floor: 3, x: 265 },
     petrol: null,
@@ -144,9 +144,9 @@ const CURATED_LEVELS = [
       { fromFloor: 2, toFloor: 3, x: 265 },
     ],
     guards: [
-      { id: 'g0', floor: 1, minX: 140, maxX: 195, x: 160, dir: 1, speed: 1.35, pauseTimer: 0, alertTimer: 0 },
-      { id: 'g1', floor: 2, minX: 140, maxX: 195, x: 180, dir: -1, speed: 1.4, pauseTimer: 0, alertTimer: 0 },
-      { id: 'g2', floor: 3, minX: 140, maxX: 195, x: 170, dir: 1, speed: 1.45, pauseTimer: 0, alertTimer: 0 },
+      { id: 'g0', floor: 1, minX: 45, maxX: 295, x: 60, dir: 1, speed: 1.25, pauseTimer: 0, alertTimer: 0 },
+      { id: 'g1', floor: 2, minX: 45, maxX: 295, x: 280, dir: -1, speed: 1.3, pauseTimer: 0, alertTimer: 0 },
+      { id: 'g2', floor: 3, minX: 45, maxX: 295, x: 60, dir: 1, speed: 1.35, pauseTimer: 0, alertTimer: 0 },
     ],
     diamond: { floor: 3, x: 70 },
     petrol: { floor: 1, x: 65 },
@@ -167,10 +167,10 @@ const CURATED_LEVELS = [
       { fromFloor: 3, toFloor: 4, x: 265 },
     ],
     guards: [
-      { id: 'g0', floor: 1, minX: 140, maxX: 195, x: 170, dir: 1, speed: 1.45, pauseTimer: 0, alertTimer: 0 },
-      { id: 'g1', floor: 2, minX: 140, maxX: 195, x: 170, dir: -1, speed: 1.5, pauseTimer: 0, alertTimer: 0 },
-      { id: 'g2', floor: 3, minX: 140, maxX: 195, x: 170, dir: 1, speed: 1.55, pauseTimer: 0, alertTimer: 0 },
-      { id: 'g3', floor: 4, minX: 140, maxX: 195, x: 170, dir: -1, speed: 1.6, pauseTimer: 0, alertTimer: 0 },
+      { id: 'g0', floor: 1, minX: 45, maxX: 295, x: 60, dir: 1, speed: 1.3, pauseTimer: 0, alertTimer: 0 },
+      { id: 'g1', floor: 2, minX: 45, maxX: 295, x: 280, dir: -1, speed: 1.35, pauseTimer: 0, alertTimer: 0 },
+      { id: 'g2', floor: 3, minX: 45, maxX: 295, x: 60, dir: 1, speed: 1.4, pauseTimer: 0, alertTimer: 0 },
+      { id: 'g3', floor: 4, minX: 45, maxX: 295, x: 280, dir: -1, speed: 1.45, pauseTimer: 0, alertTimer: 0 },
     ],
     diamond: { floor: 4, x: 70 },
     petrol: { floor: 2, x: 65 },

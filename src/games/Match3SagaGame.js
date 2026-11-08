@@ -798,13 +798,12 @@ export default function Match3SagaGame({ onBackToHub, onScoreUpdate, isPaused = 
         {/* Main 7x7 Juicy Grid with Direct Finger Swiping */}
         <View style={styles.gridContainer}>
           <View
-            ref={boardRef}
-            {...panResponder.panHandlers}
-            onLayout={updateBoardPosition}
-            style={[styles.boardWrapper, { width: boardWidth, height: boardWidth }]}
+            style={[styles.boardWrapper, { width: boardWidth + 12, height: boardWidth + 12 }]}
           >
             <View
-              pointerEvents="none"
+              ref={boardRef}
+              {...panResponder.panHandlers}
+              onLayout={updateBoardPosition}
               style={[styles.boardInner, { width: boardWidth, height: boardWidth }]}
             >
               {grid.map((row, r) => (
@@ -860,82 +859,82 @@ export default function Match3SagaGame({ onBackToHub, onScoreUpdate, isPaused = 
                   })}
                 </View>
               ))}
-            </View>
 
-            {/* SVG OVERLAY: Visible Neon Trajectory Line & Tile Blasts */}
-            <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
-              <Svg
-                width={boardWidth}
-                height={boardWidth}
-                pointerEvents="none"
-              >
-              {/* VISIBLE NEON SWIPE LINE BEAM */}
-              {swipeTrace && (
-                <G>
-                  {/* Outer Diffuse Glow */}
-                  <Line
-                    x1={swipeTrace.startX}
-                    y1={swipeTrace.startY}
-                    x2={swipeTrace.curX}
-                    y2={swipeTrace.curY}
-                    stroke="rgba(0, 245, 255, 0.35)"
-                    strokeWidth={8}
-                    strokeLinecap="round"
-                  />
-                  {/* Inner Crisp Neon Beam */}
-                  <Line
-                    x1={swipeTrace.startX}
-                    y1={swipeTrace.startY}
-                    x2={swipeTrace.curX}
-                    y2={swipeTrace.curY}
-                    stroke="#00F5FF"
-                    strokeWidth={3}
-                    strokeLinecap="round"
-                  />
-                  {/* Origin Tile Anchor Ring */}
-                  <Circle
-                    cx={swipeTrace.startX}
-                    cy={swipeTrace.startY}
-                    r={cellSize * 0.35}
-                    fill="rgba(0, 245, 255, 0.15)"
-                    stroke="#00F5FF"
-                    strokeWidth={1.8}
-                  />
-                  {/* Finger Spark Dot */}
-                  <Circle
-                    cx={swipeTrace.curX}
-                    cy={swipeTrace.curY}
-                    r={5}
-                    fill="#FFE600"
-                    stroke="#FFFFFF"
-                    strokeWidth={1.2}
-                  />
-                </G>
-              )}
+              {/* SVG OVERLAY: Visible Neon Trajectory Line & Tile Blasts */}
+              <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
+                <Svg
+                  width={boardWidth}
+                  height={boardWidth}
+                  pointerEvents="none"
+                >
+                {/* VISIBLE NEON SWIPE LINE BEAM */}
+                {swipeTrace && (
+                  <G>
+                    {/* Outer Diffuse Glow */}
+                    <Line
+                      x1={swipeTrace.startX}
+                      y1={swipeTrace.startY}
+                      x2={swipeTrace.curX}
+                      y2={swipeTrace.curY}
+                      stroke="rgba(0, 245, 255, 0.35)"
+                      strokeWidth={8}
+                      strokeLinecap="round"
+                    />
+                    {/* Inner Crisp Neon Beam */}
+                    <Line
+                      x1={swipeTrace.startX}
+                      y1={swipeTrace.startY}
+                      x2={swipeTrace.curX}
+                      y2={swipeTrace.curY}
+                      stroke="#00F5FF"
+                      strokeWidth={3}
+                      strokeLinecap="round"
+                    />
+                    {/* Origin Tile Anchor Ring */}
+                    <Circle
+                      cx={swipeTrace.startX}
+                      cy={swipeTrace.startY}
+                      r={cellSize * 0.35}
+                      fill="rgba(0, 245, 255, 0.15)"
+                      stroke="#00F5FF"
+                      strokeWidth={1.8}
+                    />
+                    {/* Finger Spark Dot */}
+                    <Circle
+                      cx={swipeTrace.curX}
+                      cy={swipeTrace.curY}
+                      r={5}
+                      fill="#FFE600"
+                      stroke="#FFFFFF"
+                      strokeWidth={1.2}
+                    />
+                  </G>
+                )}
 
-              {/* LOCALIZED BLASTS DIRECTLY ON MATCHED TILES */}
-              {tileBlasts.map((blast) => (
-                <G key={blast.id}>
-                  {/* Inner Core Flash */}
-                  <Circle
-                    cx={blast.x}
-                    cy={blast.y}
-                    r={blast.size * 0.55}
-                    fill={blast.color}
-                    opacity={0.7}
-                  />
-                  {/* Expanding Shockwave Ring */}
-                  <Circle
-                    cx={blast.x}
-                    cy={blast.y}
-                    r={blast.size * 0.7}
-                    fill="none"
-                    stroke="#FFFFFF"
-                    strokeWidth={2.5}
-                  />
-                </G>
-              ))}
-            </Svg>
+                {/* LOCALIZED BLASTS DIRECTLY ON MATCHED TILES */}
+                {tileBlasts.map((blast) => (
+                  <G key={blast.id}>
+                    {/* Inner Core Flash */}
+                    <Circle
+                      cx={blast.x}
+                      cy={blast.y}
+                      r={blast.size * 0.55}
+                      fill={blast.color}
+                      opacity={0.7}
+                    />
+                    {/* Expanding Shockwave Ring */}
+                    <Circle
+                      cx={blast.x}
+                      cy={blast.y}
+                      r={blast.size * 0.7}
+                      fill="none"
+                      stroke="#FFFFFF"
+                      strokeWidth={2.5}
+                    />
+                  </G>
+                ))}
+              </Svg>
+              </View>
             </View>
           </View>
         </View>
@@ -1023,7 +1022,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 0, 127, 0.35)',
     justifyContent: 'center',
     alignItems: 'center',
-    overflow: 'hidden',
+    padding: 6,
   },
   boardInner: {
     justifyContent: 'center',
