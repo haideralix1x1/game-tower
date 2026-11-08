@@ -1330,7 +1330,7 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
       <TowerAnimatedBackground />
 
       {/* Screen juice engine overlay for particle bursts, popups & screen flashes */}
-      <JuiceEngine ref={juiceRef} />
+      <JuiceEngine ref={juiceRef} pointerEvents="none" />
 
       {/* Top Sticky Sci-Fi HUD Header */}
       <View style={[hubStyles.hudHeader, { paddingTop: safeTop }]}>

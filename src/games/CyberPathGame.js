@@ -727,15 +727,14 @@ export default function CyberPathGame({
   const gridHeight = cellSize * levelConfig.rows;
 
   return (
-    <View style={styles.container}>
-      <MiniGameHeader
-        title="CYBER PATHFINDER"
-        score={totalScore}
-        bestScore={highScore}
-        onBackToHub={onBackToHub}
-      />
-
-      <JuiceEngine ref={juiceRef} />
+    <JuiceEngine ref={juiceRef}>
+      <View style={styles.container}>
+        <MiniGameHeader
+          title="CYBER PATHFINDER"
+          score={totalScore}
+          bestScore={highScore}
+          onBackToHub={onBackToHub}
+        />
 
       {/* Level Info Bar */}
       <View style={styles.telemetryBar}>
@@ -1241,17 +1240,18 @@ export default function CyberPathGame({
         </View>
       </View>
 
-      <GameResultModal
-        visible={modalVisible}
-        type="victory"
-        score={totalScore}
-        level={currentLevel}
-        onRetry={() => initLevel(1)}
-        onBackToHub={onBackToHub}
-        buttonText="RE-RUN CIRCUITS"
-        subtitle={`ALL ${CURATED_LEVELS.length} PATHFINDER SECTORS CLEARED!`}
-      />
-    </View>
+        <GameResultModal
+          visible={modalVisible}
+          type="victory"
+          score={totalScore}
+          level={currentLevel}
+          onRetry={() => initLevel(1)}
+          onBackToHub={onBackToHub}
+          buttonText="RE-RUN CIRCUITS"
+          subtitle={`ALL ${CURATED_LEVELS.length} PATHFINDER SECTORS CLEARED!`}
+        />
+      </View>
+    </JuiceEngine>
   );
 }
 

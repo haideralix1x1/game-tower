@@ -287,7 +287,11 @@ const JuiceEngine = forwardRef(({ children }, ref) => {
   return (
     <Animated.View
       entering={FadeIn.duration(240)}
-      style={[localStyles.root, shakeStyle]}
+      style={[
+        children ? localStyles.root : localStyles.overlay,
+        shakeStyle,
+      ]}
+      pointerEvents={children ? 'box-none' : 'none'}
     >
       {children}
 
@@ -373,9 +377,16 @@ const JuiceEngine = forwardRef(({ children }, ref) => {
   );
 });
 
+JuiceEngine.displayName = 'JuiceEngine';
+
 const localStyles = StyleSheet.create({
   root: {
     flex: 1,
+  },
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 9999,
+    elevation: 9999,
   },
   ring: {
     position: 'absolute',

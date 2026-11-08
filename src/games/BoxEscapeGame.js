@@ -619,15 +619,14 @@ export default function BoxEscapeGame({
   const lasersDeactivated = areLasersOpen();
 
   return (
-    <View style={styles.container}>
-      <MiniGameHeader
-        title="BOX ESCAPE"
-        score={totalScore}
-        bestScore={highScore}
-        onBackToHub={onBackToHub}
-      />
-
-      <JuiceEngine ref={juiceRef} />
+    <JuiceEngine ref={juiceRef}>
+      <View style={styles.container}>
+        <MiniGameHeader
+          title="BOX ESCAPE"
+          score={totalScore}
+          bestScore={highScore}
+          onBackToHub={onBackToHub}
+        />
 
       {/* Top Level Telemetry */}
       <View style={styles.telemetryBar}>
@@ -998,17 +997,18 @@ export default function BoxEscapeGame({
         </View>
       </View>
 
-      <GameResultModal
-        visible={modalVisible}
-        type="victory"
-        score={totalScore}
-        level={currentLevel}
-        onRetry={handleRestart}
-        onBackToHub={onBackToHub}
-        buttonText="RE-RUN SYSTEM"
-        subtitle={`ALL ${CURATED_LEVELS.length} SECTORS COMPLETED!`}
-      />
-    </View>
+        <GameResultModal
+          visible={modalVisible}
+          type="victory"
+          score={totalScore}
+          level={currentLevel}
+          onRetry={handleRestart}
+          onBackToHub={onBackToHub}
+          buttonText="RE-RUN SYSTEM"
+          subtitle={`ALL ${CURATED_LEVELS.length} SECTORS COMPLETED!`}
+        />
+      </View>
+    </JuiceEngine>
   );
 }
 
