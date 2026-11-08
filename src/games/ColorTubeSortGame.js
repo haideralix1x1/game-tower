@@ -837,8 +837,10 @@ export default function ColorTubeSortGame({ onBackToHub, onScoreUpdate, isPaused
         visible={modalVisible}
         type={modalType}
         score={score}
+        onRetry={handleRetry}
         onRestart={handleRetry}
         onNext={handleNextLevel}
+        onNextLevel={handleNextLevel}
         onBackToHub={onBackToHub}
       />
     </View>

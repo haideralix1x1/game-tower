@@ -1,6 +1,12 @@
 import React from 'react';
-import { View, Text, Pressable, StyleSheet, Platform, Modal } from 'react-native';
-import Animated, { FadeIn, ZoomIn } from 'react-native-reanimated';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  Platform,
+  Modal,
+} from 'react-native';
 import { COLORS } from '../../styles';
 import { triggerLightHaptic } from '../utils/haptics';
 import { playTapSound } from '../utils/sound';
@@ -13,22 +19,41 @@ const monoFont = Platform.select({
 
 export default function GameResultModal({
   visible,
-  type = 'GAME_OVER', // 'GAME_OVER' | 'VICTORY' | 'DRAW' | 'win' | 'gameover'
+  type = 'GAME_OVER', // 'GAME_OVER' | 'VICTORY' | 'DRAW' | 'win' | 'gameover' | 'retry'
   title,
   subtitle,
+  message,
+  desc,
+  description,
   score,
+  level,
   bestScore,
+  highScore,
   accentColor,
   onRetry,
+  onRestart,
+  onNext,
+  onNextLevel,
+  onPlayAgain,
+  onReset,
   onBackToHub,
+  onReturnHome,
+  onBack,
+  onExit,
   retryLabel,
   buttonText,
+  nextLabel,
+  actionLabel,
 }) {
   if (!visible) return null;
 
   const normalizedType = String(type).toUpperCase();
-  const isWin = normalizedType === 'VICTORY' || normalizedType === 'WIN';
+  const isWin =
+    normalizedType === 'VICTORY' ||
+    normalizedType === 'WIN' ||
+    normalizedType === 'CLEARED';
   const isDraw = normalizedType === 'DRAW';
+
   const defaultAccent = isWin
     ? COLORS.matrixMint
     : isDraw
@@ -39,112 +64,127 @@ export default function GameResultModal({
   const displayTitle =
     title || (isWin ? 'VICTORY' : isDraw ? 'DRAW' : 'GAME OVER');
   const icon = isWin ? '🏆' : isDraw ? '🤝' : '⚠️';
-  const displayRetryText =
-    buttonText || retryLabel || (isWin ? 'NEXT LEVEL' : 'PLAY AGAIN');
 
-  const handleRetry = () => {
+  const displaySubtitle = subtitle || message || desc || description || '';
+
+  const finalScore =
+    typeof score === 'number'
+      ? score
+      : typeof level === 'number'
+        ? level
+        : undefined;
+
+  const finalBest =
+    typeof bestScore === 'number'
+      ? bestScore
+      : typeof highScore === 'number'
+        ? highScore
+        : undefined;
+
+  const displayActionText =
+    buttonText ||
+    retryLabel ||
+    nextLabel ||
+    actionLabel ||
+    (isWin ? 'NEXT LEVEL ▶' : 'PLAY AGAIN ⟳');
+
+  const handleAction = () => {
     try {
       triggerLightHaptic();
       playTapSound();
     } catch {}
-    if (onRetry) onRetry();
+
+    const primaryFn = isWin
+      ? onNextLevel || onNext || onRetry || onRestart || onPlayAgain || onReset
+      : onRetry || onRestart || onPlayAgain || onReset || onNextLevel || onNext;
+
+    if (primaryFn) {
+      primaryFn();
+    }
   };
+
+  const backFn = onBackToHub || onReturnHome || onBack || onExit;
 
   const handleBack = () => {
     try {
       triggerLightHaptic();
       playTapSound();
     } catch {}
-    if (onBackToHub) onBackToHub();
+
+    if (backFn) {
+      backFn();
+    }
   };
 
   return (
     <Modal
       transparent
       visible={visible}
-      animationType="none"
+      animationType="fade"
       statusBarTranslucent
-      onRequestClose={handleBack || handleRetry}
+      onRequestClose={handleBack || handleAction}
     >
       <View style={localStyles.overlay}>
-        {/* Backdrop Tint */}
-        <Animated.View
-          entering={FadeIn.duration(180)}
-          style={StyleSheet.absoluteFillObject}
-          pointerEvents="none"
-        >
-          <View style={localStyles.backdropTint} />
-        </Animated.View>
-
         {/* Modal Card */}
-        <Animated.View
-          entering={ZoomIn.duration(220)}
-          style={[localStyles.card, { borderColor: accent }]}
-        >
-          <View style={{ width: '100%', alignItems: 'center' }}>
-            <Text style={localStyles.icon}>{icon}</Text>
-            <Text style={[localStyles.title, { color: accent }]}>
-              {displayTitle}
-            </Text>
+        <View style={[localStyles.card, { borderColor: accent }]}>
+          <Text style={localStyles.icon}>{icon}</Text>
+          <Text style={[localStyles.title, { color: accent }]}>
+            {displayTitle}
+          </Text>
 
-            {subtitle ? (
-              <Text style={localStyles.subtitle}>{subtitle}</Text>
-            ) : null}
+          {displaySubtitle ? (
+            <Text style={localStyles.subtitle}>{displaySubtitle}</Text>
+          ) : null}
 
-            {typeof score === 'number' ? (
-              <View style={localStyles.statsContainer}>
+          {typeof finalScore === 'number' ? (
+            <View style={localStyles.statsContainer}>
+              <View style={localStyles.statBox}>
+                <Text style={localStyles.statLabel}>FINAL SCORE</Text>
+                <Text style={[localStyles.statVal, { color: accent }]}>
+                  {finalScore}
+                </Text>
+              </View>
+              {typeof finalBest === 'number' && finalBest > 0 ? (
                 <View style={localStyles.statBox}>
-                  <Text style={localStyles.statLabel}>FINAL SCORE</Text>
-                  <Text style={[localStyles.statVal, { color: accent }]}>
-                    {score}
+                  <Text style={localStyles.statLabel}>BEST RECORD</Text>
+                  <Text style={[localStyles.statVal, { color: COLORS.solarGold }]}>
+                    {finalBest}
                   </Text>
                 </View>
-                {typeof bestScore === 'number' && bestScore > 0 ? (
-                  <View style={localStyles.statBox}>
-                    <Text style={localStyles.statLabel}>BEST RECORD</Text>
-                    <Text style={[localStyles.statVal, { color: COLORS.solarGold }]}>
-                      {bestScore}
-                    </Text>
-                  </View>
-                ) : null}
-              </View>
-            ) : null}
-
-            <View style={localStyles.btnRow}>
-              {onBackToHub ? (
-                <Pressable
-                  onPress={handleBack}
-                  hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
-                  style={({ pressed }) => [
-                    localStyles.backBtn,
-                    pressed && { opacity: 0.7, transform: [{ scale: 0.95 }] },
-                  ]}
-                >
-                  <Text style={localStyles.backBtnText}>HUB</Text>
-                </Pressable>
               ) : null}
+            </View>
+          ) : null}
 
-              <Pressable
-                onPress={handleRetry}
+          {/* Action Buttons Row */}
+          <View style={localStyles.btnRow}>
+            {Boolean(backFn) && (
+              <TouchableOpacity
+                onPress={handleBack}
+                activeOpacity={0.72}
                 hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
-                style={({ pressed }) => [
-                  localStyles.retryBtn,
-                  { backgroundColor: accent },
-                  pressed && { opacity: 0.85, transform: [{ scale: 0.96 }] },
+                style={localStyles.backBtn}
+              >
+                <Text style={localStyles.backBtnText}>HUB</Text>
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity
+              onPress={handleAction}
+              activeOpacity={0.8}
+              hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
+              style={[localStyles.retryBtn, { backgroundColor: accent }]}
+            >
+              <Text
+                style={[
+                  localStyles.retryBtnText,
+                  { color: isWin ? '#04040E' : '#FFFFFF' },
                 ]}
               >
-                <Text
-                  style={[
-                    localStyles.retryBtnText,
-                    { color: isWin ? '#04040E' : '#FFFFFF' },
-                  ]}
-                >
-                  {displayRetryText}
-                </Text>
-              </Pressable>
-            </View>
+                {displayActionText}
+              </Text>
+            </TouchableOpacity>
           </View>
-        </Animated.View>
+        </View>
       </View>
     </Modal>
   );
@@ -155,30 +195,29 @@ const localStyles = StyleSheet.create({
     flex: 1,
     width: '100%',
     height: '100%',
-    backgroundColor: 'rgba(3, 3, 10, 0.92)',
+    backgroundColor: 'rgba(3, 3, 10, 0.94)',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 20,
     zIndex: 999999,
-  },
-  backdropTint: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(3, 3, 10, 0.92)',
+    elevation: 20,
   },
   card: {
     width: '100%',
     maxWidth: 340,
-    backgroundColor: 'rgba(10, 12, 28, 0.98)',
+    backgroundColor: '#0A0D20',
     borderRadius: 20,
-    borderWidth: 1.6,
+    borderWidth: 2,
     padding: 22,
     alignItems: 'center',
     justifyContent: 'center',
     alignSelf: 'center',
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.4,
+    shadowOpacity: 0.6,
     shadowRadius: 16,
-    zIndex: 1000,
+    zIndex: 1000000,
+    elevation: 25,
   },
   icon: {
     fontSize: 34,
@@ -235,34 +274,36 @@ const localStyles = StyleSheet.create({
     flexDirection: 'row',
     gap: 10,
     width: '100%',
-    marginTop: 4,
+    marginTop: 6,
   },
   backBtn: {
     flex: 1,
     backgroundColor: 'rgba(0, 245, 255, 0.12)',
     borderRadius: 12,
-    borderWidth: 1.2,
-    borderColor: 'rgba(0, 245, 255, 0.5)',
-    paddingVertical: 12,
+    borderWidth: 1.4,
+    borderColor: 'rgba(0, 245, 255, 0.6)',
+    paddingVertical: 14,
     alignItems: 'center',
     justifyContent: 'center',
+    elevation: 2,
   },
   backBtnText: {
-    fontSize: 11,
+    fontSize: 12,
     fontFamily: monoFont,
     fontWeight: '900',
     color: '#00F5FF',
-    letterSpacing: 0.8,
+    letterSpacing: 1,
   },
   retryBtn: {
-    flex: 1.3,
+    flex: 1.4,
     borderRadius: 12,
-    paddingVertical: 12,
+    paddingVertical: 14,
     alignItems: 'center',
     justifyContent: 'center',
+    elevation: 3,
   },
   retryBtnText: {
-    fontSize: 11.5,
+    fontSize: 12,
     fontFamily: monoFont,
     fontWeight: '900',
     letterSpacing: 1,

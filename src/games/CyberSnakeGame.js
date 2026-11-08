@@ -326,21 +326,21 @@ export default function CyberSnakeGame({ onBackToHub, onScoreUpdate, isPaused = 
                   ]}
                 />
               ))}
-
-              <GameResultModal
-                visible={status === 'GAME_OVER'}
-                type="GAME_OVER"
-                title="SERPENT CRASHED!"
-                subtitle={`NEON TAIL LENGTH: ${renderState.snake.length} BLOCKS`}
-                score={score}
-                bestScore={bestScore}
-                accentColor={COLORS.matrixMint}
-                onRetry={resetGame}
-                retryLabel="PLAY AGAIN"
-                onBackToHub={onBackToHub}
-              />
             </View>
           </GestureDetector>
+
+          <GameResultModal
+            visible={status === 'GAME_OVER'}
+            type="GAME_OVER"
+            title="SERPENT CRASHED!"
+            subtitle={`NEON TAIL LENGTH: ${renderState.snake.length} BLOCKS`}
+            score={score}
+            bestScore={bestScore}
+            accentColor={COLORS.matrixMint}
+            onRetry={resetGame}
+            retryLabel="PLAY AGAIN"
+            onBackToHub={onBackToHub}
+          />
 
           {/* Dual Cyber Steering Pedals (Tap Screen or Buttons to Cycle) */}
           <View style={[localStyles.steeringRow, { width: cellSize * GRID_COUNT + 16 }]}>

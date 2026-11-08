@@ -631,35 +631,35 @@ export default function CyberSudokuGame({ onBackToHub, onScoreUpdate }) {
                 })}
               </View>
             ))}
-
-            {/* Game Over Modal (3 Mistakes Exceeded) */}
-            <GameResultModal
-              visible={gameState === 'GAME_OVER'}
-              type="GAME_OVER"
-              title="SYSTEM LOCKDOWN"
-              subtitle={`3/3 MISTAKES EXCEEDED // TIME: ${formatTime(timerSec)}`}
-              score={score}
-              bestScore={bestScore}
-              accentColor={COLORS.danger}
-              onRetry={() => initGame(modeKey)}
-              retryLabel="TRY AGAIN"
-              onBackToHub={onBackToHub}
-            />
-
-            {/* Victory Modal */}
-            <GameResultModal
-              visible={gameState === 'WON'}
-              type="VICTORY"
-              title="QUANTUM SOLVED!"
-              subtitle={`SUDOKU SOLVED IN ${formatTime(timerSec)} // ${activeMode.label}`}
-              score={score}
-              bestScore={bestScore}
-              accentColor={activeMode.accent}
-              onRetry={() => initGame(modeKey)}
-              retryLabel="NEW PUZZLE"
-              onBackToHub={onBackToHub}
-            />
           </View>
+
+          {/* Game Over Modal (3 Mistakes Exceeded) */}
+          <GameResultModal
+            visible={gameState === 'GAME_OVER'}
+            type="GAME_OVER"
+            title="SYSTEM LOCKDOWN"
+            subtitle={`3/3 MISTAKES EXCEEDED // TIME: ${formatTime(timerSec)}`}
+            score={score}
+            bestScore={bestScore}
+            accentColor={COLORS.danger}
+            onRetry={() => initGame(modeKey)}
+            retryLabel="TRY AGAIN"
+            onBackToHub={onBackToHub}
+          />
+
+          {/* Victory Modal */}
+          <GameResultModal
+            visible={gameState === 'WON'}
+            type="VICTORY"
+            title="QUANTUM SOLVED!"
+            subtitle={`SUDOKU SOLVED IN ${formatTime(timerSec)} // ${activeMode.label}`}
+            score={score}
+            bestScore={bestScore}
+            accentColor={activeMode.accent}
+            onRetry={() => initGame(modeKey)}
+            retryLabel="NEW PUZZLE"
+            onBackToHub={onBackToHub}
+          />
 
           {/* Action Tools Bar (Undo, Erase, Pencil Mode, Hint) */}
           <View style={[localStyles.actionsRow, { width: boardSize }]}>

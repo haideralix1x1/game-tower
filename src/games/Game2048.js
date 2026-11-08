@@ -689,21 +689,21 @@ export default function Game2048({ onBackToHub, onScoreUpdate, isPaused = false 
                 </View>
               ))}
             </View>
-
-            {/* Game Over Modal */}
-            <GameResultModal
-              visible={isGameOver}
-              type="GAME_OVER"
-              title="BOARD FULL // GAME OVER"
-              subtitle={`MAX TILE MERGED: ${maxTile} // COLUMNS OVERFLOWED`}
-              score={score}
-              bestScore={bestScore}
-              accentColor={COLORS.magenta}
-              onRetry={startNewGame}
-              retryLabel="PLAY AGAIN"
-              onBackToHub={onBackToHub}
-            />
           </View>
+
+          {/* Game Over Modal */}
+          <GameResultModal
+            visible={isGameOver}
+            type="GAME_OVER"
+            title="BOARD FULL // GAME OVER"
+            subtitle={`MAX TILE MERGED: ${maxTile} // COLUMNS OVERFLOWED`}
+            score={score}
+            bestScore={bestScore}
+            accentColor={COLORS.magenta}
+            onRetry={startNewGame}
+            retryLabel="PLAY AGAIN"
+            onBackToHub={onBackToHub}
+          />
 
           {/* Quick Column Selection & Fast Drop Buttons */}
           <View style={[localStyles.bottomControls, { width: boardWidth }]}>
