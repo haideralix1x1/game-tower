@@ -111,7 +111,7 @@ const CURATED_LEVELS = [
     grid: [
       '#######',
       '#P..B.#',
-      '#.#...#',
+      '#.#.#.#',
       '#.B.B.#',
       '#..#.##',
       '#..B.E#',
@@ -119,16 +119,16 @@ const CURATED_LEVELS = [
     ],
     parMoves: 16,
   },
-  // Level 6: Dual Laser Bypass
+  // Level 6: Dual Laser Override
   {
     name: 'DUAL OVERRIDE',
     grid: [
       '########',
       '#P.....#',
-      '#.B.B..#',
-      '#..S.S.#',
-      '###L#L##',
-      '#......#',
+      '#.B..B.#',
+      '#..##..#',
+      '#.S..S.#',
+      '####L###',
       '#.....E#',
       '########',
     ],
@@ -156,31 +156,31 @@ const CURATED_LEVELS = [
     grid: [
       '#########',
       '#P......#',
-      '#.B.#.B.#',
-      '#...#...#',
-      '#.B.S.B.#',
-      '#...#...#',
-      '###.L.###',
+      '#...##..#',
+      '#.B.##..#',
+      '#...S#..#',
+      '#...##..#',
+      '######L##',
       '#......E#',
       '#########',
     ],
-    parMoves: 26,
+    parMoves: 24,
   },
   // Level 9: Hypercube Terminal
   {
     name: 'HYPERCUBE GATE',
     grid: [
       '#########',
-      '#P...#..#',
-      '#.B..B..#',
-      '#..#.#..#',
-      '#.B..S.B#',
-      '#..#.#..#',
-      '#.B..L..#',
+      '#P..#...#',
+      '#.B.#.B.#',
+      '#...#...#',
+      '#.#...#.#',
+      '#..S.S..#',
+      '####L####',
       '#......E#',
       '#########',
     ],
-    parMoves: 30,
+    parMoves: 28,
   },
   // Level 10: Apex Citadel Confinement
   {
@@ -188,16 +188,16 @@ const CURATED_LEVELS = [
     grid: [
       '##########',
       '#P.......#',
-      '#.B.#..B.#',
-      '#...#....#',
-      '#.B.S.S.B#',
-      '#...#.##.#',
-      '###.L.L.##',
-      '#...#....#',
+      '#.B...B..#',
+      '##.##.##.#',
+      '#..#...#.#',
+      '#..S...S.#',
+      '####...###',
+      '#####L####',
       '#.......E#',
       '##########',
     ],
-    parMoves: 36,
+    parMoves: 34,
   },
 ];
 
@@ -253,8 +253,8 @@ function parseLevel(levelData) {
  * Procedurally generates an escalating solvable puzzle chamber for high levels (11+)
  */
 function generateProceduralLevel(levelNum) {
-  const size = Math.min(10, 6 + Math.floor((levelNum - 10) / 4));
-  const numBoxes = Math.min(6, 3 + Math.floor((levelNum - 10) / 3));
+  const size = Math.min(10, 7 + Math.floor((levelNum - 10) / 4));
+  const numBoxes = Math.min(5, 2 + Math.floor((levelNum - 10) / 3));
   const hasLaser = levelNum % 2 === 0;
 
   const walls = [];
@@ -268,37 +268,78 @@ function generateProceduralLevel(levelNum) {
     walls.push({ x: size - 1, y });
   }
 
-  // Internal pillars
-  const pillarCount = Math.floor(size / 3);
-  for (let i = 0; i < pillarCount; i++) {
-    const px = 2 + (i * 2) % (size - 4);
-    const py = 2 + ((i + 1) * 2) % (size - 4);
-    walls.push({ x: px, y: py });
-  }
-
   const player = { x: 1, y: 1 };
   const exit = { x: size - 2, y: size - 2 };
 
+  const switches = [];
+  const lasers = [];
+
+  const gateY = size - 3;
+  const laserX = Math.floor(size / 2);
+
+  if (hasLaser) {
+    // Laser security firewall partition: spans the whole row so no bypass paths exist!
+    for (let x = 1; x < size - 1; x++) {
+      if (x === laserX) {
+        lasers.push({ id: `plaser_${levelNum}`, x, y: gateY });
+      } else {
+        walls.push({ x, y: gateY });
+      }
+    }
+    // Switch placed in upper chamber
+    const sx = Math.max(1, Math.min(size - 2, 2 + (levelNum % (size - 4))));
+    const sy = Math.max(1, Math.min(gateY - 1, Math.floor(gateY / 2)));
+    switches.push({ id: `psw_${levelNum}`, x: sx, y: sy });
+  } else {
+    // Non-laser crate labyrinth: build internal barrier to force crate puzzle
+    const barrierY = gateY;
+    const passageX = 2 + (levelNum % (size - 4));
+    for (let x = 1; x < size - 1; x++) {
+      if (x !== passageX) {
+        walls.push({ x, y: barrierY });
+      }
+    }
+  }
+
+  // Internal pillars in upper chamber
+  const upperHeight = hasLaser ? gateY : size - 3;
+  if (upperHeight > 3) {
+    const pillarCount = Math.floor(size / 4);
+    for (let i = 0; i < pillarCount; i++) {
+      const px = 2 + (i * 2) % (size - 4);
+      const py = 2 + (i * 2) % (upperHeight - 2);
+      if (
+        !walls.some((w) => w.x === px && w.y === py) &&
+        !switches.some((s) => s.x === px && s.y === py) &&
+        !(px === player.x && py === player.y) &&
+        !(px === laserX && py === gateY - 1)
+      ) {
+        walls.push({ x: px, y: py });
+      }
+    }
+  }
+
   const boxes = [];
   for (let b = 0; b < numBoxes; b++) {
-    const bx = 2 + (b % (size - 4));
-    const by = 1 + Math.floor(b / (size - 4)) * 2;
+    const bx = 1 + ((b * 2 + 1) % (size - 3));
+    const by = 1 + ((b + 1) % Math.max(1, (hasLaser ? gateY : size - 2) - 2));
     if (
       !walls.some((w) => w.x === bx && w.y === by) &&
+      !switches.some((s) => s.x === bx && s.y === by) &&
       !(bx === player.x && by === player.y) &&
-      !(bx === exit.x && by === exit.y)
+      !(bx === exit.x && by === exit.y) &&
+      !(bx === laserX && by === gateY - 1) &&
+      !boxes.some((box) => box.x === bx && box.y === by)
     ) {
       boxes.push({ id: `pbox_${b}`, x: bx, y: by });
     }
   }
 
-  const switches = [];
-  const lasers = [];
-  if (hasLaser) {
-    const sx = Math.floor(size / 2);
-    const sy = Math.floor(size / 2);
-    switches.push({ id: `psw_${levelNum}`, x: sx, y: sy });
-    lasers.push({ id: `plaser_${levelNum}`, x: size - 2, y: size - 3 });
+  // Guarantee at least 1 movable box exists
+  if (boxes.length === 0) {
+    const fallbackBx = player.x + 1 < size - 2 ? player.x + 1 : 2;
+    const fallbackBy = player.y + 1 < (hasLaser ? gateY : size - 2) ? player.y + 1 : 1;
+    boxes.push({ id: `pbox_0`, x: fallbackBx, y: fallbackBy });
   }
 
   return {
@@ -311,7 +352,7 @@ function generateProceduralLevel(levelNum) {
     switches,
     lasers,
     name: `ZONE DELTA - ${levelNum}`,
-    parMoves: 18 + levelNum * 2,
+    parMoves: 20 + levelNum * 2,
   };
 }
 
