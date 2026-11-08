@@ -491,7 +491,7 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
 
     // Accurate gap check: solid ground supports cube until center crosses gap threshold
     const isOverGap = gapsRef.current.some(
-      (g) => playerCenterX >= g.x + 8 && playerCenterX <= g.x + g.w - 8
+      (g) => playerCenterX >= g.x + 4 && playerCenterX <= g.x + g.w
     );
 
     const now = Date.now();
@@ -594,10 +594,9 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
       const targetGroundY = curFloorSurface - CUBE_SIZE;
 
       // VOID GAP TEST:
-      // Player center must reach g.x + 8 before falling into abyss!
-      // They NEVER fall before the gap!
+      // Player is over a void gap if their center of mass is within the gap boundaries
       const isOverGap = gapsRef.current.some(
-        (g) => playerCenterX >= g.x + 8 && playerCenterX <= g.x + g.w - 8
+        (g) => playerCenterX >= g.x + 4 && playerCenterX <= g.x + g.w
       );
 
       // Check if landing on static BLOCK from above
@@ -636,22 +635,28 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
         isGrounded = true;
         lastGroundedTimeRef.current = Date.now();
       } else if (!isOverGap) {
-        if (nextY >= targetGroundY) {
+        if (playerYRef.current <= targetGroundY + 4 && nextY >= targetGroundY) {
+          // Landing safely onto solid ground from above
           nextY = targetGroundY;
           nextVy = 0;
           isGrounded = true;
           lastGroundedTimeRef.current = Date.now();
+        } else if (playerYRef.current > targetGroundY + 4) {
+          // Cube fell below the floor level into the gap or hit the pit wall -> GAME OVER
+          handleCrash('VOID_FALL');
+          return;
         } else if (nextY <= curCeilSurface) {
           nextY = curCeilSurface;
           nextVy = 0;
         }
       } else {
-        // Falling into void gap
+        // Falling into void gap!
         if (nextY <= curCeilSurface) {
           nextY = curCeilSurface;
           nextVy = 0;
         }
-        if (nextY > baseFloorY + 40) {
+        // As soon as cube falls into the void gap below the floor line, trigger GAME OVER
+        if (nextY > targetGroundY + 8) {
           handleCrash('VOID_FALL');
           return;
         }
@@ -1233,6 +1238,25 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
 
             return (
               <G key={`gap_visual_${gap.id}`}>
+                {/* Void Abyss chasm cutout opening through the floor */}
+                <Rect
+                  x={startScreenX}
+                  y={baseFloorY - 1}
+                  width={gap.w}
+                  height={arenaHeight - baseFloorY + 10}
+                  fill="#030009"
+                />
+                <Line
+                  x1={startScreenX}
+                  y1={baseFloorY + 28}
+                  x2={endScreenX}
+                  y2={baseFloorY + 28}
+                  stroke="#FF0055"
+                  strokeWidth={1.5}
+                  strokeDasharray="4,4"
+                  opacity={0.35}
+                />
+
                 {/* Left Edge Hazard Warning Beacon */}
                 <Line
                   x1={startScreenX}
