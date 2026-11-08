@@ -9,7 +9,6 @@ import {
   Platform,
 } from 'react-native';
 import Svg, { Path, Polygon, Rect, G, Line, Defs, LinearGradient, Stop } from 'react-native-svg';
-import { COLORS } from '../../styles';
 import MiniGameHeader from '../components/MiniGameHeader';
 import GameResultModal from '../components/GameResultModal';
 import JuiceEngine from '../components/JuiceEngine';
@@ -32,8 +31,16 @@ const DIRS = [
   { dr: 0, dc: -1, name: 'LEFT' },
 ];
 
-// Unified signature Cyber Neon theme color for all arrows
-const THEME_NEON_COLOR = '#00F5FF';
+// Vibrant cyber neon palette for high-contrast, visually distinct arrow paths
+const NEON_ARROW_PALETTE = [
+  '#00F5FF', // Electric Cyan
+  '#FF007F', // Neon Magenta / Hot Pink
+  '#39FF14', // Matrix Lime Green
+  '#FF8500', // Radiant Tangerine
+  '#B5179E', // Laser Violet
+  '#00F5D4', // Mint Turquoise
+  '#48CAE4', // Polar Sky Blue
+];
 
 const STORAGE_LEVEL_KEY = '@game_tower:level_arrows_v1';
 const STORAGE_BEST_KEY = '@game_tower:best_arrows_v1';
@@ -158,7 +165,7 @@ function generatePatternArrows(lvl = 1) {
           headDir: dir.name,
           dr: dir.dr,
           dc: dir.dc,
-          color: THEME_NEON_COLOR,
+          color: NEON_ARROW_PALETTE[id % NEON_ARROW_PALETTE.length],
         };
 
         for (const pt of arrow.path) {
@@ -239,8 +246,11 @@ export default function TapAwayArrowsGame({ onBackToHub, onScoreUpdate, isPaused
   }, []);
 
   useEffect(() => {
-    initLevel(level);
+    const timer = setTimeout(() => {
+      initLevel(level);
+    }, 0);
     return () => {
+      clearTimeout(timer);
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     };
   }, [level, initLevel]);
@@ -571,6 +581,7 @@ export default function TapAwayArrowsGame({ onBackToHub, onScoreUpdate, isPaused
           category="LOGIC UNRAVEL"
           accentColor="#00F5FF"
           score={score}
+          highScore={bestScore}
           onBack={onBackToHub}
           onBackToHub={onBackToHub}
         />
