@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -44,6 +44,9 @@ const monoFont = Platform.select({
   default: 'monospace',
 });
 
+/**
+ * Evaluates guess against target word with standard Wordle green/yellow/gray logic
+ */
 const evaluateGuess = (guess, target) => {
   const res = Array(5).fill('ABSENT');
   const targetArr = target.split('');
@@ -68,11 +71,27 @@ const evaluateGuess = (guess, target) => {
   return res;
 };
 
+/**
+ * Generates new secret target word and 2 random pre-grayed letters that are NOT in the word
+ */
+const getNewRoundConfig = () => {
+  const word = WORD_BANK[Math.floor(Math.random() * WORD_BANK.length)];
+  const targetChars = new Set(word.split(''));
+  const availableWrongChars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+    .split('')
+    .filter((c) => !targetChars.has(c));
+  const shuffled = [...availableWrongChars].sort(() => Math.random() - 0.5);
+  return {
+    word,
+    preGrayed: shuffled.slice(0, 2),
+  };
+};
+
 export default function WordlyGame({ onBackToHub, onScoreUpdate }) {
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
 
-  // Safe bottom inset to ensure keyboard never overlaps system navigation bar/buttons
+  // Safe bottom inset to ensure keyboard never overlaps system navigation bar
   const safeBottom = Math.max(
     insets.bottom || 0,
     Platform.OS === 'android' ? 24 : 14
@@ -97,15 +116,17 @@ export default function WordlyGame({ onBackToHub, onScoreUpdate }) {
 
   const juiceRef = useRef(null);
 
-  const [targetWord, setTargetWord] = useState(
-    () => WORD_BANK[Math.floor(Math.random() * WORD_BANK.length)]
-  );
+  const [roundConfig, setRoundConfig] = useState(() => getNewRoundConfig());
+  const targetWord = roundConfig.word;
+  const preGrayedLetters = roundConfig.preGrayed;
+  const [hintLetters, setHintLetters] = useState([]);
+
   const [guesses, setGuesses] = useState([]);
   const [currentGuess, setCurrentGuess] = useState('');
   const [score, setScore] = useState(0);
   const [bestScore, setBestScore] = useState(0);
   const [streak, setStreak] = useState(0);
-  const [statusMessage, setStatusMessage] = useState('DECODE THE 5-LETTER CYBER WORD');
+  const [statusMessage, setStatusMessage] = useState('DECODE 5-LETTER WORD // 2 KEYS PRE-ELIMINATED');
   const [gameState, setGameState] = useState('PLAYING');
 
   useEffect(() => {
@@ -131,12 +152,13 @@ export default function WordlyGame({ onBackToHub, onScoreUpdate }) {
   );
 
   const startNextRound = useCallback((resetScore = false) => {
-    const nextWord = WORD_BANK[Math.floor(Math.random() * WORD_BANK.length)];
-    setTargetWord(nextWord);
+    const nextConfig = getNewRoundConfig();
+    setRoundConfig(nextConfig);
     setGuesses([]);
     setCurrentGuess('');
     setGameState('PLAYING');
-    setStatusMessage('NEW CIPHER INITIALIZED // 6 ATTEMPTS');
+    setHintLetters([]);
+    setStatusMessage('NEW CIPHER INITIALIZED // 2 KEYS PRE-ELIMINATED');
     if (resetScore) {
       setScore(0);
       setStreak(0);
@@ -145,6 +167,39 @@ export default function WordlyGame({ onBackToHub, onScoreUpdate }) {
       juiceRef.current.flash(COLORS.matrixMint);
     }
   }, []);
+
+  // Compute key states: pre-grayed absent keys, guess results, and hinted keys
+  const keyStates = useMemo(() => {
+    const states = {};
+
+    // 1. Two pre-grayed letters that are guaranteed NOT to be in the word
+    preGrayedLetters.forEach((ch) => {
+      states[ch] = 'ABSENT';
+    });
+
+    // 2. Evaluated keys from submitted guesses
+    guesses.forEach((g) => {
+      g.word.split('').forEach((ch, idx) => {
+        const st = g.states[idx];
+        if (st === 'CORRECT') {
+          states[ch] = 'CORRECT';
+        } else if (st === 'PRESENT' && states[ch] !== 'CORRECT') {
+          states[ch] = 'PRESENT';
+        } else if (!states[ch]) {
+          states[ch] = 'ABSENT';
+        }
+      });
+    });
+
+    // 3. Hinted letters highlighted if not already marked CORRECT or PRESENT
+    hintLetters.forEach((ch) => {
+      if (states[ch] !== 'CORRECT' && states[ch] !== 'PRESENT') {
+        states[ch] = 'HINTED';
+      }
+    });
+
+    return states;
+  }, [preGrayedLetters, guesses, hintLetters]);
 
   const handleKeyPress = useCallback(
     (key) => {
@@ -237,34 +292,48 @@ export default function WordlyGame({ onBackToHub, onScoreUpdate }) {
     [gameState, currentGuess, targetWord, guesses, streak, score, saveScore]
   );
 
+  /**
+   * Hint Button:
+   * - Hints only the letter, NOT the place / position.
+   * - If all letters are already revealed, displays "NO HINT".
+   */
   const handleUseHint = useCallback(() => {
     if (gameState !== 'PLAYING') return;
+
+    // Determine all unique letters in targetWord that haven't been revealed yet
+    const targetUniqueLetters = Array.from(new Set(targetWord.split('')));
+    const unrevealedLetters = targetUniqueLetters.filter((ch) => {
+      if (hintLetters.includes(ch)) return false;
+      if (keyStates[ch] === 'CORRECT' || keyStates[ch] === 'PRESENT') return false;
+      return true;
+    });
+
+    if (unrevealedLetters.length === 0) {
+      triggerLightHaptic();
+      playTapSound();
+      setStatusMessage('NO HINT // ALL LETTERS ALREADY REVEALED');
+      if (juiceRef.current) {
+        juiceRef.current.shake(4, 2);
+        juiceRef.current.popup('NO HINT', 'ALL LETTERS REVEALED', COLORS.textMuted);
+      }
+      return;
+    }
+
+    // Pick one unrevealed letter and reveal only the letter itself (not position!)
+    const hintLetter = unrevealedLetters[Math.floor(Math.random() * unrevealedLetters.length)];
+    setHintLetters((prev) => [...prev, hintLetter]);
+
     triggerLightHaptic();
     playTapSound();
-    const pos = Math.min(4, currentGuess.length);
-    setStatusMessage(`HINT // LETTER #${pos + 1} IS "${targetWord[pos]}"`);
+    setStatusMessage(`HINT // WORD CONTAINS "${hintLetter}"`);
     if (juiceRef.current) {
       juiceRef.current.popup(
-        `LETTER #${pos + 1}: ${targetWord[pos]}`,
+        `CONTAINS "${hintLetter}"`,
         'CYBER INTEL',
         COLORS.solarGold
       );
     }
-  }, [gameState, currentGuess, targetWord]);
-
-  const keyStates = {};
-  guesses.forEach((g) => {
-    g.word.split('').forEach((ch, idx) => {
-      const st = g.states[idx];
-      if (st === 'CORRECT') {
-        keyStates[ch] = 'CORRECT';
-      } else if (st === 'PRESENT' && keyStates[ch] !== 'CORRECT') {
-        keyStates[ch] = 'PRESENT';
-      } else if (!keyStates[ch]) {
-        keyStates[ch] = 'ABSENT';
-      }
-    });
-  });
+  }, [gameState, targetWord, hintLetters, keyStates]);
 
   return (
     <JuiceEngine ref={juiceRef}>
@@ -377,9 +446,22 @@ export default function WordlyGame({ onBackToHub, onScoreUpdate }) {
                       ? '#06D6A0'
                       : st === 'PRESENT'
                         ? '#F77F00'
-                        : st === 'ABSENT'
-                          ? 'rgba(255, 255, 255, 0.06)'
-                          : 'rgba(0, 245, 255, 0.14)';
+                        : st === 'HINTED'
+                          ? 'rgba(255, 209, 102, 0.32)'
+                          : st === 'ABSENT'
+                            ? 'rgba(255, 255, 255, 0.05)'
+                            : 'rgba(0, 245, 255, 0.14)';
+
+                  const keyBorderColor =
+                    st === 'CORRECT'
+                      ? '#00F5D4'
+                      : st === 'PRESENT'
+                        ? '#FFD166'
+                        : st === 'HINTED'
+                          ? COLORS.solarGold
+                          : st === 'ABSENT'
+                            ? 'rgba(255, 255, 255, 0.08)'
+                            : 'rgba(0, 245, 255, 0.32)';
 
                   return (
                     <Pressable
@@ -391,6 +473,7 @@ export default function WordlyGame({ onBackToHub, onScoreUpdate }) {
                           width: isWide ? wideKeyWidth : keyWidth,
                           height: keyHeight,
                           backgroundColor: keyBg,
+                          borderColor: keyBorderColor,
                         },
                         pressed && { opacity: 0.7, transform: [{ scale: 0.94 }] },
                       ]}
@@ -399,7 +482,8 @@ export default function WordlyGame({ onBackToHub, onScoreUpdate }) {
                         style={[
                           localStyles.kbKeyText,
                           isWide && { fontSize: Math.max(9.5, Math.floor(keyWidth * 0.36)) },
-                          st === 'ABSENT' && { color: COLORS.textMuted },
+                          st === 'ABSENT' && { color: 'rgba(255, 255, 255, 0.25)' },
+                          st === 'HINTED' && { color: COLORS.solarGold },
                         ]}
                       >
                         {key}
@@ -438,7 +522,7 @@ const localStyles = StyleSheet.create({
   },
   statusBanner: {
     flex: 1,
-    fontSize: 10.5,
+    fontSize: 10,
     fontFamily: monoFont,
     fontWeight: '800',
     color: COLORS.matrixMint,
@@ -449,19 +533,22 @@ const localStyles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.solarGold,
     borderRadius: 8,
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
     paddingVertical: 4,
     marginLeft: 8,
   },
   hintBtnText: {
-    fontSize: 9.5,
+    fontSize: 10,
     fontFamily: monoFont,
     fontWeight: '900',
     color: COLORS.solarGold,
+    letterSpacing: 1,
   },
   gridWrapper: {
+    alignItems: 'center',
+    justifyContent: 'center',
     gap: 6,
-    marginVertical: 4,
+    paddingVertical: 4,
   },
   wordRow: {
     flexDirection: 'row',
@@ -469,12 +556,11 @@ const localStyles = StyleSheet.create({
   },
   letterBox: {
     borderRadius: 10,
-    borderWidth: 1.4,
+    borderWidth: 1.6,
     alignItems: 'center',
     justifyContent: 'center',
   },
   letterText: {
-    fontSize: 22,
     fontFamily: monoFont,
     fontWeight: '900',
     color: '#FFFFFF',
@@ -506,7 +592,6 @@ const localStyles = StyleSheet.create({
     paddingHorizontal: 2,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.16)',
     alignItems: 'center',
     justifyContent: 'center',
   },
