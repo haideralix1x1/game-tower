@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -138,12 +138,12 @@ function createStage(stageNum) {
     }
   });
 
-  // 3. Spawn Enemies far from player
-  const enemyCount = Math.min(8, 2 + stageNum);
+  // 3. Spawn Enemies far from player - GUARANTEE at least 2 enemies on every level!
+  const targetEnemyCount = Math.max(2, Math.min(8, 1 + stageNum));
   const openForEnemies = [];
   for (let r = 1; r < ROWS - 1; r++) {
     for (let c = 1; c < COLS - 1; c++) {
-      if (grid[r][c] === TILE_EMPTY && r + c > 6) {
+      if (grid[r][c] === TILE_EMPTY && r + c > 5) {
         openForEnemies.push({ r, c });
       }
     }
@@ -155,8 +155,38 @@ function createStage(stageNum) {
     [openForEnemies[i], openForEnemies[j]] = [openForEnemies[j], openForEnemies[i]];
   }
 
+  // If there are fewer than targetEnemyCount open tiles, carve out soft blocks to guarantee enemy spawn!
+  if (openForEnemies.length < targetEnemyCount) {
+    for (let r = ROWS - 2; r >= 1 && openForEnemies.length < targetEnemyCount; r--) {
+      for (let c = COLS - 2; c >= 1 && openForEnemies.length < targetEnemyCount; c--) {
+        if (grid[r][c] === TILE_SOFT && items[r][c] !== ITEM_EXIT && (r + c > 5)) {
+          grid[r][c] = TILE_EMPTY;
+          openForEnemies.push({ r, c });
+        }
+      }
+    }
+  }
+
+  // Fallback corners guarantee at least 2 enemies even in extreme edge cases
+  const fallbackSpots = [
+    { r: ROWS - 2, c: COLS - 2 },
+    { r: ROWS - 2, c: 1 },
+    { r: 1, c: COLS - 2 },
+  ];
+  for (const spot of fallbackSpots) {
+    if (openForEnemies.length >= targetEnemyCount) break;
+    if (!openForEnemies.some((p) => p.r === spot.r && p.c === spot.c)) {
+      grid[spot.r][spot.c] = TILE_EMPTY;
+      if (items[spot.r][spot.c] === ITEM_EXIT) {
+        items[spot.r][spot.c] = ITEM_NONE;
+      }
+      openForEnemies.push(spot);
+    }
+  }
+
   const enemies = [];
-  for (let i = 0; i < Math.min(enemyCount, openForEnemies.length); i++) {
+  const actualSpawnCount = Math.max(2, Math.min(targetEnemyCount, openForEnemies.length));
+  for (let i = 0; i < actualSpawnCount; i++) {
     const pos = openForEnemies[i];
     let type = ENEMY_WANDERER;
     let color = '#FF0055';
@@ -208,14 +238,15 @@ export default function CyberBomberGame({
   const [hasShield, setHasShield] = useState(false);
 
   // Core Game State
-  const [grid, setGrid] = useState(() => createStage(1).grid);
-  const [items, setItems] = useState(() => createStage(1).items);
+  const initialStageData = useMemo(() => createStage(1), []);
+  const [grid, setGrid] = useState(initialStageData.grid);
+  const [items, setItems] = useState(initialStageData.items);
   const [revealedItems, setRevealedItems] = useState({});
   const [playerPos, setPlayerPos] = useState({ x: 1, y: 1 });
   const [playerFacing, setPlayerFacing] = useState('DOWN');
   const [bombs, setBombs] = useState([]);
   const [flames, setFlames] = useState([]);
-  const [enemies, setEnemies] = useState(() => createStage(1).enemies);
+  const [enemies, setEnemies] = useState(initialStageData.enemies);
   const [exitUnlocked, setExitUnlocked] = useState(false);
 
   // Movement Input Ref
@@ -454,10 +485,10 @@ export default function CyberBomberGame({
         let nx = curP.x + dx * playerSpeed;
         let ny = curP.y + dy * playerSpeed;
 
-        // Bounding collision box against walls & blocks
+        // Bounding collision box against walls & blocks (centers are integer tile coords)
         const checkSolid = (cx, cy) => {
-          const col = Math.floor(cx);
-          const row = Math.floor(cy);
+          const col = Math.round(cx);
+          const row = Math.round(cy);
           if (col < 0 || col >= COLS || row < 0 || row >= ROWS) return true;
           if (currentGrid[row][col] !== TILE_EMPTY) return true;
 
@@ -470,7 +501,7 @@ export default function CyberBomberGame({
           return false;
         };
 
-        const radius = 0.35;
+        const radius = 0.30;
         // Test X-axis movement
         if (
           !checkSolid(nx - radius, curP.y - radius) &&
@@ -601,15 +632,15 @@ export default function CyberBomberGame({
         let ny = bot.y + dy * bot.speed;
 
         const checkBotSolid = (cx, cy) => {
-          const c = Math.floor(cx);
-          const r = Math.floor(cy);
+          const c = Math.round(cx);
+          const r = Math.round(cy);
           if (c < 0 || c >= COLS || r < 0 || r >= ROWS) return true;
           if (currentGrid[r][c] !== TILE_EMPTY) return true;
           if (currentBombs.some((b) => b.x === c && b.y === r)) return true;
           return false;
         };
 
-        const radius = 0.35;
+        const radius = 0.30;
         const isBlocked =
           checkBotSolid(nx - radius, ny - radius) ||
           checkBotSolid(nx + radius, ny - radius) ||
@@ -676,15 +707,28 @@ export default function CyberBomberGame({
   }, [isPaused, gameOver, victoryModal, playerSpeed, detonateBomb, handlePlayerDamage, exitUnlocked, score, highScore, stage, onScoreUpdate]);
 
   // Touch Direction Handlers (Press & Hold for D-Pad)
+  const pressTimerRef = useRef(null);
+
+  // Touch Direction Handlers (Press & Hold or Tap for D-Pad)
   const handleDirectionPressIn = (dx, dy) => {
+    if (pressTimerRef.current) clearTimeout(pressTimerRef.current);
     inputDirRef.current = { dx, dy };
     triggerSelectionHaptic();
     playSnapTickSound();
   };
 
   const handleDirectionPressOut = () => {
-    inputDirRef.current = { dx: 0, dy: 0 };
+    // Keep moving for 90ms after release so brief taps result in a clean, responsive step
+    pressTimerRef.current = setTimeout(() => {
+      inputDirRef.current = { dx: 0, dy: 0 };
+    }, 90);
   };
+
+  useEffect(() => {
+    return () => {
+      if (pressTimerRef.current) clearTimeout(pressTimerRef.current);
+    };
+  }, []);
 
   // Next Level Handler
   const handleNextStage = () => {
@@ -1034,6 +1078,8 @@ export default function CyberBomberGame({
           <View style={styles.dpadMatrix}>
             {/* UP */}
             <Pressable
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              pressRetentionOffset={{ top: 25, bottom: 25, left: 25, right: 25 }}
               style={({ pressed }) => [styles.dpadBtn, styles.dpadUp, pressed && styles.dpadBtnActive]}
               onPressIn={() => handleDirectionPressIn(0, -1)}
               onPressOut={handleDirectionPressOut}
@@ -1044,6 +1090,8 @@ export default function CyberBomberGame({
             {/* MIDDLE ROW (LEFT, CORE, RIGHT) */}
             <View style={styles.dpadMiddle}>
               <Pressable
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                pressRetentionOffset={{ top: 25, bottom: 25, left: 25, right: 25 }}
                 style={({ pressed }) => [styles.dpadBtn, styles.dpadLeft, pressed && styles.dpadBtnActive]}
                 onPressIn={() => handleDirectionPressIn(-1, 0)}
                 onPressOut={handleDirectionPressOut}
@@ -1056,6 +1104,8 @@ export default function CyberBomberGame({
               </View>
 
               <Pressable
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                pressRetentionOffset={{ top: 25, bottom: 25, left: 25, right: 25 }}
                 style={({ pressed }) => [styles.dpadBtn, styles.dpadRight, pressed && styles.dpadBtnActive]}
                 onPressIn={() => handleDirectionPressIn(1, 0)}
                 onPressOut={handleDirectionPressOut}
@@ -1066,6 +1116,8 @@ export default function CyberBomberGame({
 
             {/* DOWN */}
             <Pressable
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              pressRetentionOffset={{ top: 25, bottom: 25, left: 25, right: 25 }}
               style={({ pressed }) => [styles.dpadBtn, styles.dpadDown, pressed && styles.dpadBtnActive]}
               onPressIn={() => handleDirectionPressIn(0, 1)}
               onPressOut={handleDirectionPressOut}
