@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/immutability, react-hooks/set-state-in-effect */
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
@@ -78,6 +79,7 @@ import {
   GAME_CATEGORY_MAP,
   isGameUnlocked,
   getUnlockProgress,
+  UNLOCK_ALL_GAMES_FOR_TESTING,
 } from '../utils/gameUnlocks';
 
 const menuMusicAsset = require('../../assets/menu-music.ogg');
@@ -583,6 +585,8 @@ const SECTORS = [
  */
 export default function GameTowerHub({ initialGameId = null } = {}) {
   const insets = useSafeAreaInsets();
+  const safeTop = insets.top > 0 ? insets.top : Platform.OS === 'android' ? 8 : 0;
+  const safeBottom = Math.max(insets.bottom, 12);
   const { width } = useWindowDimensions();
   const juiceRef = useRef(null);
   const scrollRef = useRef(null);
@@ -594,12 +598,16 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
   const lastPlayedGameId = useRef(null);
   const [selectedSector, setSelectedSector] = useState('ALL');
   const [highScores, setHighScores] = useState({});
-  const [ascendingSort, setAscendingSort] = useState(false); // false = Apex (20) top, true = Base (01) top
+  const [ascendingSort, setAscendingSort] = useState(false); // false = Apex top, true = Base (01) top
 
   // 2 Screen Tabs: 'TOWER' (only unlocked games in 3D skyscraper) vs 'ALL_GAMES' (grid view with all locked/unlocked)
   const [activeTab, setActiveTab] = useState('TOWER');
   const [selectedCategory, setSelectedCategory] = useState('ALL');
-  const [unlockedGames, setUnlockedGames] = useState(() => [...STARTER_GAMES]);
+  const [unlockedGames, setUnlockedGames] = useState(() =>
+    UNLOCK_ALL_GAMES_FOR_TESTING
+      ? TOWER_GAMES.map((g) => g.id)
+      : [...STARTER_GAMES]
+  );
   const [unlockModalGame, setUnlockModalGame] = useState(null);
 
   // Load saved music mute preference & unlocked games
@@ -610,11 +618,13 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
         if (savedMute !== null) {
           setIsMusicMuted(savedMute === 'true');
         }
-        const savedUnlocked = await AsyncStorage.getItem(STORAGE_UNLOCKED_GAMES_KEY);
-        if (savedUnlocked) {
-          const list = JSON.parse(savedUnlocked);
-          if (Array.isArray(list)) {
-            setUnlockedGames(Array.from(new Set([...STARTER_GAMES, ...list])));
+        if (!UNLOCK_ALL_GAMES_FOR_TESTING) {
+          const savedUnlocked = await AsyncStorage.getItem(STORAGE_UNLOCKED_GAMES_KEY);
+          if (savedUnlocked) {
+            const list = JSON.parse(savedUnlocked);
+            if (Array.isArray(list)) {
+              setUnlockedGames(Array.from(new Set([...STARTER_GAMES, ...list])));
+            }
           }
         }
       } catch {}
@@ -812,7 +822,6 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
     (sum, val) => sum + (val || 0),
     0
   );
-  const floorsPlayed = Object.values(highScores).filter((v) => v > 0).length;
   const towerRank =
     totalTowerScore >= 10000
       ? 'CYBER LEGEND'
@@ -878,17 +887,13 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
 
   // Calculate dynamic snapping offsets for unlocked tower floor decks
   const computeInitialOffsets = useCallback(() => {
-    const spireOffset = !ascendingSort ? 150 : 0;
-    const offsets = [];
-    if (!ascendingSort) {
-      offsets.push(0);
-    }
+    const offsets = [0];
     const count = unlockedTowerGames.length;
     for (let i = 0; i < count; i++) {
-      offsets.push(spireOffset + i * 90);
+      offsets.push(i * 84);
     }
     return offsets;
-  }, [ascendingSort, unlockedTowerGames.length]);
+  }, [unlockedTowerGames.length]);
 
   const [snapOffsets, setSnapOffsets] = useState(computeInitialOffsets);
   const layoutPositions = useRef({});
@@ -912,7 +917,8 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
           .sort((a, b) => a - b)
           .map((idx) => layoutPositions.current[idx]);
         if (sorted.length > 0) {
-          setSnapOffsets(sorted);
+          // Prepend 0 as the origin anchor so the ScrollView always starts flush at the top
+          setSnapOffsets([0, ...sorted]);
         }
       }, 70);
     }
@@ -1318,18 +1324,6 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
     return Math.min(width - 12, width * ratio);
   };
 
-  const safeTop =
-    insets && typeof insets.top === 'number' && !isNaN(insets.top)
-      ? Math.max(insets.top, Platform.OS === 'android' ? 36 : 14)
-      : Platform.OS === 'android'
-        ? 36
-        : 14;
-
-  const safeBottom =
-    insets && typeof insets.bottom === 'number' && !isNaN(insets.bottom)
-      ? Math.max(insets.bottom, 24)
-      : 24;
-
   return (
     <View style={hubStyles.root}>
       {/* Dynamic Cosmic Galaxy Background with Floating Project Tiles */}
@@ -1340,16 +1334,43 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
 
       {/* Top Sticky Sci-Fi HUD Header */}
       <View style={[hubStyles.hudHeader, { paddingTop: safeTop }]}>
-          {/* Top Title & Quick Actions */}
-          <View style={hubStyles.hudMetaRow}>
-            <View style={hubStyles.arcadeOnlinePill}>
-              <View style={hubStyles.greenDot} />
-              <Text style={hubStyles.arcadeOnlineText}>
-                31-FLOOR CYBER MEGASTRUCTURE
+          {/* Top Title & Utilities Row */}
+          <View style={hubStyles.hudTitleRow}>
+            <View style={hubStyles.titleGroup}>
+              <Text
+                style={hubStyles.hubTitle}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+              >
+                NEO GAME TOWER
               </Text>
+              <View style={hubStyles.arcadeOnlinePill}>
+                <View style={hubStyles.greenDot} />
+                <Text style={hubStyles.arcadeOnlineText}>
+                  {`${TOWER_GAMES.length}-FLOOR MEGASTRUCTURE`}
+                </Text>
+              </View>
             </View>
 
             <View style={hubStyles.hudUtilGroup}>
+              {/* Random Game Launch */}
+              <Pressable
+                onPress={handleRandomLaunch}
+                style={({ pressed }) => [
+                  hubStyles.randomBtn,
+                  pressed && { transform: [{ scale: 0.94 }], opacity: 0.88 },
+                ]}
+              >
+                <LinearGradient
+                  colors={[COLORS.magenta, COLORS.purple]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={hubStyles.randomBtnGrad}
+                >
+                  <Text style={hubStyles.randomBtnText}>⚡ RANDOM</Text>
+                </LinearGradient>
+              </Pressable>
+
               {/* Background Music Mute Toggle */}
               <Pressable
                 onPress={toggleMusicMute}
@@ -1377,35 +1398,6 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
                 </Pressable>
               )}
             </View>
-          </View>
-
-          {/* Row 2: Title and Random Button (Fits 100% within screen bounds) */}
-          <View style={hubStyles.hudTitleRow}>
-            <Text
-              style={hubStyles.hubTitle}
-              numberOfLines={1}
-              adjustsFontSizeToFit
-            >
-              NEO GAME TOWER
-            </Text>
-
-            {/* Random Game Launch */}
-            <Pressable
-              onPress={handleRandomLaunch}
-              style={({ pressed }) => [
-                hubStyles.randomBtn,
-                pressed && { transform: [{ scale: 0.94 }], opacity: 0.88 },
-              ]}
-            >
-              <LinearGradient
-                colors={[COLORS.magenta, COLORS.purple]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={hubStyles.randomBtnGrad}
-              >
-                <Text style={hubStyles.randomBtnText}>⚡ RANDOM</Text>
-              </LinearGradient>
-            </Pressable>
           </View>
 
           {/* Arcade Telemetry HUD */}
@@ -1585,6 +1577,7 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
                 hubStyles.towerScrollContent,
                 { paddingBottom: safeBottom + 32 },
               ]}
+              contentOffset={{ x: 0, y: 0 }}
               showsVerticalScrollIndicator={false}
               snapToOffsets={snapOffsets.length > 0 ? snapOffsets : undefined}
               snapToAlignment="start"
@@ -1596,88 +1589,54 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
               {/* APEX ROOFTOP SPIRE (Visible when sorted Apex at top or ALL) */}
               {!ascendingSort && (
                 <View style={hubStyles.apexSpireWrapper}>
-                  <Svg width={180} height={120}>
+                  <Svg width={140} height={24}>
                     <Defs>
                       <SvgLinearGradient id="spireGrad" x1="0" y1="0" x2="0" y2="1">
                         <Stop offset="0%" stopColor="#00F5FF" stopOpacity="1" />
-                        <Stop offset="50%" stopColor="#7928CA" stopOpacity="0.8" />
-                        <Stop offset="100%" stopColor="#FF007F" stopOpacity="0.3" />
+                        <Stop offset="100%" stopColor="#FF007F" stopOpacity="0.4" />
                       </SvgLinearGradient>
                     </Defs>
                     {/* Central Lightning Mast */}
                     <Line
-                      x1={90}
-                      y1={10}
-                      x2={90}
-                      y2={110}
+                      x1={70}
+                      y1={2}
+                      x2={70}
+                      y2={22}
                       stroke="#00F5FF"
-                      strokeWidth={3}
+                      strokeWidth={2.5}
                     />
                     {/* Warning Red Beacon Dot */}
-                    <Circle cx={90} cy={10} r={5} fill="#FF0055" />
+                    <Circle cx={70} cy={3.5} r={3} fill="#FF0055" />
                     <Circle
-                      cx={90}
-                      cy={10}
-                      r={10}
+                      cx={70}
+                      cy={3.5}
+                      r={6}
                       stroke="#FF0055"
                       strokeWidth={1}
                       opacity={0.6}
                     />
                     {/* Diagonal Guy-wire Cables */}
                     <Line
-                      x1={90}
-                      y1={30}
-                      x2={40}
-                      y2={115}
+                      x1={70}
+                      y1={10}
+                      x2={35}
+                      y2={22}
                       stroke="rgba(0,245,255,0.4)"
                       strokeWidth={1.2}
                     />
                     <Line
-                      x1={90}
-                      y1={30}
-                      x2={140}
-                      y2={115}
+                      x1={70}
+                      y1={10}
+                      x2={105}
+                      y2={22}
                       stroke="rgba(0,245,255,0.4)"
                       strokeWidth={1.2}
                     />
-                    <Line
-                      x1={90}
-                      y1={65}
-                      x2={25}
-                      y2={115}
-                      stroke="rgba(255,0,127,0.4)"
-                      strokeWidth={1.2}
-                    />
-                    <Line
-                      x1={90}
-                      y1={65}
-                      x2={155}
-                      y2={115}
-                      stroke="rgba(255,0,127,0.4)"
-                      strokeWidth={1.2}
-                    />
-                    {/* Radar Spire Rings */}
-                    <Circle
-                      cx={90}
-                      cy={50}
-                      r={18}
-                      stroke="url(#spireGrad)"
-                      strokeWidth={1.5}
-                      fill="none"
-                    />
-                    <Circle
-                      cx={90}
-                      cy={75}
-                      r={28}
-                      stroke="url(#spireGrad)"
-                      strokeWidth={1.5}
-                      fill="none"
-                    />
-                    {/* Spire Cap Base */}
+                    {/* Spire Base */}
                     <Polygon
-                      points="70,115 110,115 125,120 55,120"
+                      points="55,21 85,21 95,24 45,24"
                       fill="#00F5FF"
-                      opacity={0.8}
+                      opacity={0.7}
                     />
                   </Svg>
                   <View style={hubStyles.spireLabelPill}>
@@ -2402,31 +2361,26 @@ const hubStyles = StyleSheet.create({
     overflow: 'hidden',
   },
   hudHeader: {
-    paddingHorizontal: 14,
-    paddingBottom: 8,
+    paddingHorizontal: 12,
+    paddingBottom: 6,
     borderBottomWidth: 1.5,
     borderBottomColor: 'rgba(0, 245, 255, 0.35)',
-    backgroundColor: 'rgba(6, 4, 20, 0.90)',
+    backgroundColor: 'rgba(6, 4, 20, 0.92)',
     zIndex: 20,
     elevation: 20,
-  },
-  hudMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 4,
-  },
-  hudUtilGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
   },
   hudTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 8,
-    gap: 8,
+    marginBottom: 6,
+    gap: 6,
+  },
+  titleGroup: {
+    flex: 1,
+    flexDirection: 'column',
+    justifyContent: 'center',
+    marginRight: 6,
   },
   arcadeOnlinePill: {
     flexDirection: 'row',
@@ -2434,11 +2388,12 @@ const hubStyles = StyleSheet.create({
     backgroundColor: 'rgba(0, 245, 255, 0.12)',
     borderWidth: 1,
     borderColor: 'rgba(0, 245, 255, 0.4)',
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 2.5,
-    gap: 6,
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    gap: 4,
     alignSelf: 'flex-start',
+    marginTop: 2,
   },
   greenDot: {
     width: 6,
@@ -2447,19 +2402,23 @@ const hubStyles = StyleSheet.create({
     backgroundColor: '#00F5D4',
   },
   arcadeOnlineText: {
-    fontSize: 8.5,
+    fontSize: 8,
     fontFamily: monoFont,
     fontWeight: '900',
     color: COLORS.cyan,
-    letterSpacing: 1.2,
+    letterSpacing: 1.1,
+  },
+  hudUtilGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   hubTitle: {
-    flex: 1,
-    fontSize: 21,
+    fontSize: 19,
     fontFamily: monoFont,
     fontWeight: '900',
     color: '#FFFFFF',
-    letterSpacing: 1.6,
+    letterSpacing: 1.4,
     textShadowColor: COLORS.cyanGlow,
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 14,
@@ -2514,12 +2473,12 @@ const hubStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: 'rgba(18, 12, 38, 0.95)',
-    borderRadius: 14,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: 'rgba(0, 245, 255, 0.35)',
-    paddingVertical: 7,
-    paddingHorizontal: 12,
-    marginBottom: 8,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    marginBottom: 6,
   },
   telemetryCell: {
     flex: 1,
@@ -2527,19 +2486,19 @@ const hubStyles = StyleSheet.create({
   },
   telemetryDivider: {
     width: 1,
-    height: 22,
+    height: 18,
     backgroundColor: 'rgba(255, 255, 255, 0.14)',
   },
   telemetrySub: {
-    fontSize: 8,
+    fontSize: 7.5,
     fontFamily: monoFont,
     fontWeight: '800',
     color: COLORS.textSecondary,
     letterSpacing: 0.8,
-    marginBottom: 2,
+    marginBottom: 1,
   },
   telemetryVal: {
-    fontSize: 14,
+    fontSize: 13,
     fontFamily: monoFont,
     fontWeight: '900',
   },
@@ -2575,21 +2534,22 @@ const hubStyles = StyleSheet.create({
     elevation: 10,
   },
   towerScrollContent: {
-    paddingTop: 10,
+    paddingTop: 4,
     alignItems: 'center',
   },
   apexSpireWrapper: {
     alignItems: 'center',
-    marginBottom: 6,
+    marginBottom: 4,
+    marginTop: 2,
   },
   spireLabelPill: {
-    marginTop: -8,
+    marginTop: 2,
     backgroundColor: 'rgba(0, 245, 255, 0.16)',
     borderWidth: 1,
     borderColor: COLORS.cyan,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 3,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
   },
   spireLabelText: {
     fontSize: 9,

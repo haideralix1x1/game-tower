@@ -23,6 +23,9 @@ export const STARTER_GAMES = [
   'tic_tac_toe',  // Strategy Starter (Floor 12)
 ];
 
+// Master toggle for testing: unlocks all 34 games across the entire app
+export const UNLOCK_ALL_GAMES_FOR_TESTING = true;
+
 /**
  * Requirements to unlock each locked game.
  * reqGame: ID of the prerequisite game
@@ -260,6 +263,7 @@ export const GAME_CATEGORY_MAP = {
  * Evaluates whether a game is unlocked based on high scores or starter set.
  */
 export function isGameUnlocked(gameId, highScores = {}, customUnlockedList = []) {
+  if (UNLOCK_ALL_GAMES_FOR_TESTING) return true;
   if (STARTER_GAMES.includes(gameId)) return true;
   if (customUnlockedList.includes(gameId)) return true;
 
@@ -274,6 +278,7 @@ export function isGameUnlocked(gameId, highScores = {}, customUnlockedList = [])
  * Returns unlock progress ratio (0 to 1) for a locked game.
  */
 export function getUnlockProgress(gameId, highScores = {}) {
+  if (UNLOCK_ALL_GAMES_FOR_TESTING) return 1;
   if (STARTER_GAMES.includes(gameId)) return 1;
   const req = UNLOCK_REQUIREMENTS[gameId];
   if (!req) return 1;
