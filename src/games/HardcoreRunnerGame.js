@@ -20,6 +20,7 @@ import Svg, {
   G,
   Path,
   Text as SvgText,
+  ClipPath,
 } from 'react-native-svg';
 import MiniGameHeader from '../components/MiniGameHeader';
 import GameResultModal from '../components/GameResultModal';
@@ -134,47 +135,47 @@ function createGalaxyStars(count = 20) {
   return stars;
 }
 
-// Roaming space ships across corridor and cosmic sky
+// Roaming space ships strictly outside the main corridor (in upper sky or bottom abyss)
 function createInitialNpcShips() {
   return [
     {
       id: 'ship_ufo_1',
-      zone: 'CORRIDOR_UP',
+      zone: 'SKY_TOP',
       type: 'CUTE_UFO',
       x: 70,
-      offsetY: 34,
+      margin: 40,
       speed: 1.1,
       dir: 1,
       scale: 1.1,
     },
     {
-      id: 'ship_rocket_1',
-      zone: 'CORRIDOR_LOW',
-      type: 'CHIBI_ROCKET',
-      x: 240,
-      offsetY: 38,
-      speed: 1.6,
+      id: 'ship_kitty_1',
+      zone: 'SKY_TOP',
+      type: 'STAR_KITTY',
+      x: 310,
+      margin: 58,
+      speed: 0.85,
+      dir: -1,
+      scale: 1.05,
+    },
+    {
+      id: 'ship_fighter_1',
+      zone: 'SKY_TOP',
+      type: 'WARP_FIGHTER',
+      x: 180,
+      margin: 36,
+      speed: 1.4,
       dir: 1,
       scale: 1.0,
     },
     {
-      id: 'ship_kitty_1',
-      zone: 'SKY_TOP',
-      type: 'STAR_KITTY',
-      x: 320,
-      offsetY: 32,
-      speed: 0.85,
-      dir: -1,
-      scale: 1.1,
-    },
-    {
-      id: 'ship_fighter_1',
-      zone: 'CORRIDOR_MID',
-      type: 'WARP_FIGHTER',
-      x: 130,
-      offsetY: 0,
-      speed: 1.4,
-      dir: -1,
+      id: 'ship_rocket_1',
+      zone: 'SKY_BOTTOM',
+      type: 'CHIBI_ROCKET',
+      x: 110,
+      margin: 42,
+      speed: 1.3,
+      dir: 1,
       scale: 1.0,
     },
     {
@@ -182,21 +183,72 @@ function createInitialNpcShips() {
       zone: 'SKY_BOTTOM',
       type: 'CYBER_SHUTTLE',
       x: 270,
-      offsetY: 28,
-      speed: 1.25,
-      dir: 1,
+      margin: 54,
+      speed: 1.2,
+      dir: -1,
       scale: 1.05,
     },
   ];
 }
 
-// Fallen stars (shooting stars with luminous tails) streaking in the background
+// Fallen stars (shooting stars with luminous tails) strictly in sky (above top line) or abyss (below bottom line)
 function createInitialFallingStars(arenaW = 400, arenaH = 650) {
   return [
-    { id: 'fs_0', x: arenaW * 0.72, y: arenaH * 0.1, vx: -4.6, vy: 3.2, len: 65, color: '#00F5FF', opacity: 0.95 },
-    { id: 'fs_1', x: arenaW * 0.42, y: arenaH * 0.22, vx: -5.1, vy: 3.5, len: 75, color: '#FFE600', opacity: 0.9 },
-    { id: 'fs_2', x: arenaW * 0.88, y: arenaH * 0.32, vx: -4.3, vy: 3.0, len: 60, color: '#FF007F', opacity: 0.85 },
-    { id: 'fs_3', x: arenaW * 0.58, y: arenaH * 0.06, vx: -4.9, vy: 3.4, len: 70, color: '#00F5D4', opacity: 0.9 },
+    {
+      id: 'fs_top_0',
+      zone: 'SKY_TOP',
+      x: arenaW * 0.75,
+      y: 20,
+      vx: -4.8,
+      vy: 0.8,
+      len: 65,
+      color: '#00F5FF',
+      opacity: 0.95,
+    },
+    {
+      id: 'fs_top_1',
+      zone: 'SKY_TOP',
+      x: arenaW * 0.45,
+      y: 35,
+      vx: -5.2,
+      vy: 0.6,
+      len: 75,
+      color: '#FFE600',
+      opacity: 0.9,
+    },
+    {
+      id: 'fs_top_2',
+      zone: 'SKY_TOP',
+      x: arenaW * 0.9,
+      y: 18,
+      vx: -4.4,
+      vy: 0.9,
+      len: 60,
+      color: '#00F5D4',
+      opacity: 0.9,
+    },
+    {
+      id: 'fs_bot_0',
+      zone: 'SKY_BOTTOM',
+      x: arenaW * 0.82,
+      y: arenaH * 0.82,
+      vx: -4.6,
+      vy: 0.9,
+      len: 70,
+      color: '#FF007F',
+      opacity: 0.85,
+    },
+    {
+      id: 'fs_bot_1',
+      zone: 'SKY_BOTTOM',
+      x: arenaW * 0.52,
+      y: arenaH * 0.88,
+      vx: -5.0,
+      vy: 0.7,
+      len: 65,
+      color: '#00F5FF',
+      opacity: 0.9,
+    },
   ];
 }
 
@@ -619,16 +671,31 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
         }
       }
 
-      // Update falling stars (shooting stars with luminous tails)
+      // Update falling stars (shooting stars with luminous tails) strictly outside gamearea
       const fStars = fallingStarsRef.current;
       for (let i = 0; i < fStars.length; i++) {
         const fs = fStars[i];
         fs.x += fs.vx;
         fs.y += fs.vy;
-        if (fs.x < -120 || fs.y > arenaHeight + 80) {
-          fs.x = arenaWidth + Math.random() * 100 + 40;
-          fs.y = Math.random() * (arenaHeight * 0.45) - 40;
-          fs.opacity = 0.8 + Math.random() * 0.2;
+
+        const fsElev = getTrackElevation(nextDist + fs.x, segmentsRef.current);
+        const fsCeilY = baseFloorY - fsElev - CORRIDOR_HEIGHT;
+        const fsFloorY = baseFloorY - fsElev;
+
+        if (fs.zone === 'SKY_TOP') {
+          // If falling star leaves left edge OR approaches within 22px of the top ceiling line
+          if (fs.x < -80 || fs.y >= fsCeilY - 22) {
+            fs.x = arenaWidth + Math.random() * 80 + 30;
+            fs.y = Math.random() * Math.max(15, fsCeilY - 55) + 12;
+            fs.opacity = 0.8 + Math.random() * 0.2;
+          }
+        } else {
+          // SKY_BOTTOM: If falling star leaves left/bottom edge OR approaches within 22px of bottom floor line
+          if (fs.x < -80 || fs.y > arenaHeight - 8 || fs.y <= fsFloorY + 22) {
+            fs.x = arenaWidth + Math.random() * 80 + 30;
+            fs.y = fsFloorY + 30 + Math.random() * Math.max(15, arenaHeight - (fsFloorY + 50));
+            fs.opacity = 0.75 + Math.random() * 0.25;
+          }
         }
       }
 
@@ -1052,6 +1119,12 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
               <Stop offset="0%" stopColor="#14082C" stopOpacity="0.96" />
               <Stop offset="100%" stopColor="#060314" stopOpacity="0.96" />
             </LinearGradient>
+            <ClipPath id="skyTopClip">
+              <Path d={topWallPath} />
+            </ClipPath>
+            <ClipPath id="abyssBottomClip">
+              <Path d={botWallPath} />
+            </ClipPath>
           </Defs>
 
           {/* GALAXY DEEP SPACE BACKGROUND */}
@@ -1080,25 +1153,163 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
             );
           })}
 
-          {/* Fallen Stars (Shooting Stars / Meteor Streaks with Luminous Tails) */}
-          {fallingStars.map((fs) => (
-            <G key={fs.id} opacity={fs.opacity}>
-              <Line
-                x1={fs.x}
-                y1={fs.y}
-                x2={fs.x - fs.vx * 12}
-                y2={fs.y - fs.vy * 12}
-                stroke={fs.color}
-                strokeWidth={2.4}
-                strokeLinecap="round"
-              />
-              <Circle cx={fs.x} cy={fs.y} r={3} fill="#FFFFFF" />
-              <Circle cx={fs.x} cy={fs.y} r={5.2} fill={fs.color} opacity={0.6} />
-            </G>
-          ))}
-
           {/* TOP SOLID WALL (Curves dynamically with track elevations) */}
           <Path d={topWallPath} fill="url(#topWallGrad)" />
+
+          {/* BOTTOM SOLID WALL (Curves dynamically with track elevations) */}
+          <Path d={botWallPath} fill="url(#bottomWallGrad)" />
+
+          {/* UPPER SKY ZONE: Fallen Stars and Roaming Space Ships strictly ABOVE the top ceiling line */}
+          <G clipPath="url(#skyTopClip)">
+            {fallingStars
+              .filter((fs) => fs.zone === 'SKY_TOP')
+              .map((fs) => (
+                <G key={fs.id} opacity={fs.opacity}>
+                  <Line
+                    x1={fs.x}
+                    y1={fs.y}
+                    x2={fs.x - fs.vx * 12}
+                    y2={fs.y - fs.vy * 12}
+                    stroke={fs.color}
+                    strokeWidth={2.4}
+                    strokeLinecap="round"
+                  />
+                  <Circle cx={fs.x} cy={fs.y} r={3} fill="#FFFFFF" />
+                  <Circle cx={fs.x} cy={fs.y} r={5.2} fill={fs.color} opacity={0.6} />
+                </G>
+              ))}
+
+            {npcShips
+              .filter((ship) => ship.zone === 'SKY_TOP')
+              .map((ship) => {
+                const elevAtShip = getTrackElevation(distance + ship.x, segments);
+                const ceilY = baseFloorY - elevAtShip - CORRIDOR_HEIGHT;
+                // Strictly above ceiling line with at least 26px clearance
+                const candidateY = ceilY - (ship.margin || 40);
+                const sY = Math.max(20, Math.min(ceilY - 26, candidateY));
+
+                const scaleX = ship.dir * ship.scale;
+                const scaleY = ship.scale;
+
+                return (
+                  <G
+                    key={ship.id}
+                    transform={`translate(${ship.x}, ${sY}) scale(${scaleX}, ${scaleY})`}
+                  >
+                    {ship.type === 'CUTE_UFO' && (
+                      <G>
+                        <Polygon points="-8,7 8,7 16,24 -16,24" fill="rgba(0, 245, 212, 0.25)" />
+                        <Circle cx={0} cy={-5} r={9} fill="rgba(0, 245, 212, 0.55)" stroke="#00F5D4" strokeWidth={1.6} />
+                        <Circle cx={0} cy={-5} r={5} fill="#39FF14" />
+                        <Circle cx={-2} cy={-6} r={1.2} fill="#050510" />
+                        <Circle cx={2} cy={-6} r={1.2} fill="#050510" />
+                        <Circle cx={-3.2} cy={-3.5} r={1} fill="#FF007F" opacity={0.7} />
+                        <Circle cx={3.2} cy={-3.5} r={1} fill="#FF007F" opacity={0.7} />
+                        <Rect x={-18} y={-1} width={36} height={8} rx={4} fill="#FF70A6" stroke="#FFFFFF" strokeWidth={1.5} />
+                        <Circle cx={-10} cy={3} r={1.6} fill="#FFE600" />
+                        <Circle cx={0} cy={3} r={1.6} fill="#FFE600" />
+                        <Circle cx={10} cy={3} r={1.6} fill="#FFE600" />
+                      </G>
+                    )}
+
+                    {ship.type === 'STAR_KITTY' && (
+                      <G>
+                        <Circle cx={-16} cy={0} r={3} fill="#FFB3C6" opacity={0.8} />
+                        <Circle cx={-22} cy={0} r={1.8} fill="#FF70A6" opacity={0.6} />
+                        <Polygon points="-8,-8 -4,-16 0,-10" fill="#FF70A6" stroke="#FFFFFF" strokeWidth={1} />
+                        <Polygon points="2,-10 6,-16 10,-8" fill="#FF70A6" stroke="#FFFFFF" strokeWidth={1} />
+                        <Circle cx={0} cy={0} r={11} fill="#FFE5EC" stroke="#FF70A6" strokeWidth={1.6} />
+                        <Circle cx={0} cy={0} r={11} fill="none" stroke="rgba(0, 245, 255, 0.55)" strokeWidth={1.4} />
+                        <Circle cx={-3.2} cy={-1.5} r={1.3} fill="#331832" />
+                        <Circle cx={3.2} cy={-1.5} r={1.3} fill="#331832" />
+                        <Polygon points="0,0.8 -1.2,0 1.2,0" fill="#FF007F" />
+                        <Circle cx={-5.5} cy={1.2} r={1.4} fill="#FF70A6" opacity={0.6} />
+                        <Circle cx={5.5} cy={1.2} r={1.4} fill="#FF70A6" opacity={0.6} />
+                      </G>
+                    )}
+
+                    {ship.type === 'WARP_FIGHTER' && (
+                      <G>
+                        <Polygon points="-14,0 4,-9 22,0 4,9" fill="url(#runnerShipGrad)" stroke="#FFFFFF" strokeWidth={1.4} />
+                        <Polygon points="2,0 8,-4 16,0 8,4" fill="#0C1328" />
+                        <Circle cx={12} cy={0} r={2} fill="#00F5FF" />
+                        <Line x1={-18} y1={0} x2={-12} y2={0} stroke="#00F5FF" strokeWidth={2} />
+                      </G>
+                    )}
+                  </G>
+                );
+              })}
+          </G>
+
+          {/* LOWER ABYSS ZONE: Fallen Stars and Roaming Space Ships strictly BELOW the bottom floor line */}
+          <G clipPath="url(#abyssBottomClip)">
+            {fallingStars
+              .filter((fs) => fs.zone === 'SKY_BOTTOM')
+              .map((fs) => (
+                <G key={fs.id} opacity={fs.opacity}>
+                  <Line
+                    x1={fs.x}
+                    y1={fs.y}
+                    x2={fs.x - fs.vx * 12}
+                    y2={fs.y - fs.vy * 12}
+                    stroke={fs.color}
+                    strokeWidth={2.4}
+                    strokeLinecap="round"
+                  />
+                  <Circle cx={fs.x} cy={fs.y} r={3} fill="#FFFFFF" />
+                  <Circle cx={fs.x} cy={fs.y} r={5.2} fill={fs.color} opacity={0.6} />
+                </G>
+              ))}
+
+            {npcShips
+              .filter((ship) => ship.zone === 'SKY_BOTTOM')
+              .map((ship) => {
+                const elevAtShip = getTrackElevation(distance + ship.x, segments);
+                const floorY = baseFloorY - elevAtShip;
+                // Strictly below floor line with at least 26px clearance
+                const candidateY = floorY + (ship.margin || 42);
+                const sY = Math.min(arenaHeight - 20, Math.max(floorY + 26, candidateY));
+
+                const scaleX = ship.dir * ship.scale;
+                const scaleY = ship.scale;
+
+                return (
+                  <G
+                    key={ship.id}
+                    transform={`translate(${ship.x}, ${sY}) scale(${scaleX}, ${scaleY})`}
+                  >
+                    {ship.type === 'CHIBI_ROCKET' && (
+                      <G>
+                        <Circle cx={-16} cy={0} r={4} fill="#FFE600" />
+                        <Circle cx={-22} cy={0} r={2.5} fill="#FF6D00" />
+                        <Polygon points="-8,-8 -14,-12 -11,-3" fill="#7928CA" />
+                        <Polygon points="-8,8 -14,12 -11,3" fill="#7928CA" />
+                        <Path
+                          d="M 15 0 C 11 -7 -7 -7 -11 -4 C -12 0 -12 0 -11 4 C -7 7 11 7 15 0 Z"
+                          fill="#FFFFFF"
+                          stroke="#00F5FF"
+                          strokeWidth={1.6}
+                        />
+                        <Path d="M 15 0 C 12 -3.5 8 -3.5 8 0 C 8 3.5 12 3.5 15 0 Z" fill="#FF007F" />
+                        <Circle cx={-1} cy={0} r={4.5} fill="#180A2E" stroke="#FFE600" strokeWidth={1.3} />
+                        <Circle cx={-2} cy={-0.8} r={1} fill="#00F5FF" />
+                        <Circle cx={0.5} cy={-0.8} r={1} fill="#00F5FF" />
+                      </G>
+                    )}
+
+                    {ship.type === 'CYBER_SHUTTLE' && (
+                      <G>
+                        <Rect x={-14} y={-6} width={26} height={12} rx={4} fill="#170A34" stroke="#FF70A6" strokeWidth={1.5} />
+                        <Polygon points="12,-5 19,0 12,5" fill="#00F5D4" />
+                        <Circle cx={-4} cy={0} r={2.2} fill="#00F5FF" />
+                        <Circle cx={3} cy={0} r={2.2} fill="#FFE600" />
+                        <Line x1={-18} y1={0} x2={-14} y2={0} stroke="#FFE600" strokeWidth={2.4} />
+                      </G>
+                    )}
+                  </G>
+                );
+              })}
+          </G>
 
           {/* TOP CEILING NEON GUIDEWAY LINE (Moves UP & DOWN with the path) */}
           <Path
@@ -1109,9 +1320,6 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
             strokeLinecap="round"
           />
 
-          {/* BOTTOM SOLID WALL (Curves dynamically with track elevations) */}
-          <Path d={botWallPath} fill="url(#bottomWallGrad)" />
-
           {/* BOTTOM FLOOR NEON GUIDEWAY LINE (Moves UP & DOWN with the path) */}
           <Path
             d={floorLinePath}
@@ -1120,102 +1328,6 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
             fill="none"
             strokeLinecap="round"
           />
-
-          {/* ROAMING FUTURISTIC SPACE SHIPS (Always visible across corridor and sky) */}
-          {npcShips.map((ship) => {
-            let sY = baseCenterY;
-            if (ship.zone === 'CORRIDOR_UP') {
-              sY = baseCeilingY + (ship.offsetY || 34);
-            } else if (ship.zone === 'CORRIDOR_LOW') {
-              sY = baseFloorY - (ship.offsetY || 38);
-            } else if (ship.zone === 'CORRIDOR_MID') {
-              sY = baseCenterY + (ship.offsetY || 0);
-            } else if (ship.zone === 'SKY_TOP') {
-              sY = Math.max(26, baseCeilingY - (ship.offsetY || 32));
-            } else if (ship.zone === 'SKY_BOTTOM') {
-              sY = Math.min(arenaHeight - 26, baseFloorY + (ship.offsetY || 30));
-            }
-
-            const scaleX = ship.dir * ship.scale;
-            const scaleY = ship.scale;
-
-            return (
-              <G
-                key={ship.id}
-                transform={`translate(${ship.x}, ${sY}) scale(${scaleX}, ${scaleY})`}
-              >
-                {ship.type === 'CUTE_UFO' && (
-                  <G>
-                    <Polygon points="-8,7 8,7 16,24 -16,24" fill="rgba(0, 245, 212, 0.25)" />
-                    <Circle cx={0} cy={-5} r={9} fill="rgba(0, 245, 212, 0.55)" stroke="#00F5D4" strokeWidth={1.6} />
-                    <Circle cx={0} cy={-5} r={5} fill="#39FF14" />
-                    <Circle cx={-2} cy={-6} r={1.2} fill="#050510" />
-                    <Circle cx={2} cy={-6} r={1.2} fill="#050510" />
-                    <Circle cx={-3.2} cy={-3.5} r={1} fill="#FF007F" opacity={0.7} />
-                    <Circle cx={3.2} cy={-3.5} r={1} fill="#FF007F" opacity={0.7} />
-                    <Rect x={-18} y={-1} width={36} height={8} rx={4} fill="#FF70A6" stroke="#FFFFFF" strokeWidth={1.5} />
-                    <Circle cx={-10} cy={3} r={1.6} fill="#FFE600" />
-                    <Circle cx={0} cy={3} r={1.6} fill="#FFE600" />
-                    <Circle cx={10} cy={3} r={1.6} fill="#FFE600" />
-                  </G>
-                )}
-
-                {ship.type === 'CHIBI_ROCKET' && (
-                  <G>
-                    <Circle cx={-16} cy={0} r={4} fill="#FFE600" />
-                    <Circle cx={-22} cy={0} r={2.5} fill="#FF6D00" />
-                    <Polygon points="-8,-8 -14,-12 -11,-3" fill="#7928CA" />
-                    <Polygon points="-8,8 -14,12 -11,3" fill="#7928CA" />
-                    <Path
-                      d="M 15 0 C 11 -7 -7 -7 -11 -4 C -12 0 -12 0 -11 4 C -7 7 11 7 15 0 Z"
-                      fill="#FFFFFF"
-                      stroke="#00F5FF"
-                      strokeWidth={1.6}
-                    />
-                    <Path d="M 15 0 C 12 -3.5 8 -3.5 8 0 C 8 3.5 12 3.5 15 0 Z" fill="#FF007F" />
-                    <Circle cx={-1} cy={0} r={4.5} fill="#180A2E" stroke="#FFE600" strokeWidth={1.3} />
-                    <Circle cx={-2} cy={-0.8} r={1} fill="#00F5FF" />
-                    <Circle cx={0.5} cy={-0.8} r={1} fill="#00F5FF" />
-                  </G>
-                )}
-
-                {ship.type === 'STAR_KITTY' && (
-                  <G>
-                    <Circle cx={-16} cy={0} r={3} fill="#FFB3C6" opacity={0.8} />
-                    <Circle cx={-22} cy={0} r={1.8} fill="#FF70A6" opacity={0.6} />
-                    <Polygon points="-8,-8 -4,-16 0,-10" fill="#FF70A6" stroke="#FFFFFF" strokeWidth={1} />
-                    <Polygon points="2,-10 6,-16 10,-8" fill="#FF70A6" stroke="#FFFFFF" strokeWidth={1} />
-                    <Circle cx={0} cy={0} r={11} fill="#FFE5EC" stroke="#FF70A6" strokeWidth={1.6} />
-                    <Circle cx={0} cy={0} r={11} fill="none" stroke="rgba(0, 245, 255, 0.55)" strokeWidth={1.4} />
-                    <Circle cx={-3.2} cy={-1.5} r={1.3} fill="#331832" />
-                    <Circle cx={3.2} cy={-1.5} r={1.3} fill="#331832" />
-                    <Polygon points="0,0.8 -1.2,0 1.2,0" fill="#FF007F" />
-                    <Circle cx={-5.5} cy={1.2} r={1.4} fill="#FF70A6" opacity={0.6} />
-                    <Circle cx={5.5} cy={1.2} r={1.4} fill="#FF70A6" opacity={0.6} />
-                  </G>
-                )}
-
-                {ship.type === 'WARP_FIGHTER' && (
-                  <G>
-                    <Polygon points="-14,0 4,-9 22,0 4,9" fill="url(#runnerShipGrad)" stroke="#FFFFFF" strokeWidth={1.4} />
-                    <Polygon points="2,0 8,-4 16,0 8,4" fill="#0C1328" />
-                    <Circle cx={12} cy={0} r={2} fill="#00F5FF" />
-                    <Line x1={-18} y1={0} x2={-12} y2={0} stroke="#00F5FF" strokeWidth={2} />
-                  </G>
-                )}
-
-                {ship.type === 'CYBER_SHUTTLE' && (
-                  <G>
-                    <Rect x={-14} y={-6} width={26} height={12} rx={4} fill="#170A34" stroke="#FF70A6" strokeWidth={1.5} />
-                    <Polygon points="12,-5 19,0 12,5" fill="#00F5D4" />
-                    <Circle cx={-4} cy={0} r={2.2} fill="#00F5FF" />
-                    <Circle cx={3} cy={0} r={2.2} fill="#FFE600" />
-                    <Line x1={-18} y1={0} x2={-14} y2={0} stroke="#FFE600" strokeWidth={2.4} />
-                  </G>
-                )}
-              </G>
-            );
-          })}
 
           {/* CEILING-MOUNTED UPPER TURRETS (Mounted to top line, aiming & shooting at player!) */}
           {visibleTurrets.map((turret) => {
