@@ -571,15 +571,6 @@ export const TOWER_GAMES = [
   },
 ];
 
-const SECTORS = [
-  { id: 'ALL', label: 'ALL (34)' },
-  { id: 'ORBIT', label: '🛰️ ORBIT (34-25)' },
-  { id: 'APEX', label: '⚡ APEX (24-20)' },
-  { id: 'SKY', label: '🏙️ SKY (19-15)' },
-  { id: 'CORE', label: '⚙️ CORE (14-05)' },
-  { id: 'BASE', label: '🛡️ BASE (04-01)' },
-];
-
 /**
  * @param {{ initialGameId?: string | null }} [props]
  */
@@ -596,7 +587,6 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
 
   const [activeGameId, setActiveGameId] = useState(initialGameId);
   const lastPlayedGameId = useRef(null);
-  const [selectedSector, setSelectedSector] = useState('ALL');
   const [highScores, setHighScores] = useState({});
   const [ascendingSort, setAscendingSort] = useState(false); // false = Apex top, true = Base (01) top
 
@@ -835,12 +825,9 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
               ? 'GRID INITIATE'
               : 'ROOKIE';
 
-  const displayedGames = [...TOWER_GAMES]
-    .sort((a, b) => (ascendingSort ? a.floorNum - b.floorNum : b.floorNum - a.floorNum))
-    .filter((g) => {
-      if (selectedSector === 'ALL') return true;
-      return g.tier === selectedSector;
-    });
+  const displayedGames = [...TOWER_GAMES].sort((a, b) =>
+    ascendingSort ? a.floorNum - b.floorNum : b.floorNum - a.floorNum
+  );
 
   // ONLY UNLOCKED GAMES ARE PART OF THE TOWER!
   const unlockedTowerGames = displayedGames.filter((g) =>
@@ -903,7 +890,7 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
   useEffect(() => {
     layoutPositions.current = {};
     setSnapOffsets(computeInitialOffsets());
-  }, [computeInitialOffsets, ascendingSort, selectedSector, unlockedTowerGames.length]);
+  }, [computeInitialOffsets, ascendingSort, unlockedTowerGames.length]);
 
   const handleDeckLayout = useCallback((index, event) => {
     const { y } = event.nativeEvent.layout;
@@ -1494,41 +1481,8 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
             </Pressable>
           </View>
 
-          {/* Sub-Filters: Sector Filter for Tower, Category Filter for All Games Grid */}
-          {activeTab === 'TOWER' ? (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={hubStyles.sectorScroll}
-            >
-              {SECTORS.map((sec) => {
-                const active = selectedSector === sec.id;
-                return (
-                  <Pressable
-                    key={sec.id}
-                    onPress={() => {
-                      triggerLightHaptic();
-                      playTapSound();
-                      setSelectedSector(sec.id);
-                    }}
-                    style={[
-                      hubStyles.sectorTab,
-                      active && hubStyles.sectorTabActive,
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        hubStyles.sectorTabText,
-                        active && hubStyles.sectorTabTextActive,
-                      ]}
-                    >
-                      {sec.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          ) : (
+          {/* Sub-Filters: Category Filter for All Games Grid Only */}
+          {activeTab === 'ALL_GAMES' && (
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
