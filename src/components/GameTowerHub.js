@@ -104,7 +104,7 @@ export const TOWER_GAMES = [
     desc: 'Scale high-rise buildings, evade flashlight patrol guards, secure emergency fuel, steal the Quantum Diamond, and outrun rival thieves to reach your getaway car!',
     accent: '#00F5FF',
     secondary: '#FFE600',
-    icon: '🕵️',
+    icon: '💎',
     storageKey: '@game_tower:best_thief_v1',
   },
   {
@@ -118,7 +118,7 @@ export const TOWER_GAMES = [
     desc: 'Deploy timed plasma bombs to blast cyber crates, eradicate enemy patrol bots, collect tactical power-ups, and reach the data uplink exit!',
     accent: '#FF0055',
     secondary: '#00F5FF',
-    icon: '💣',
+    icon: '💥',
     storageKey: '@game_tower:best_bomber_v1',
   },
   {
@@ -132,7 +132,7 @@ export const TOWER_GAMES = [
     desc: 'Unscrew plasma bolts and relocate them into open sockets to strategically dismantle interlocking cyber struts!',
     accent: '#FFE600',
     secondary: '#00F5FF',
-    icon: '🔩',
+    icon: '🔧',
     storageKey: '@game_tower:best_screw_v1',
   },
   {
@@ -146,7 +146,7 @@ export const TOWER_GAMES = [
     desc: 'Slot modular glowing energy conduits to route your cyber operative safely from the entry gate to the exit receptor!',
     accent: '#00F5D4',
     secondary: '#39FF14',
-    icon: '🛤️',
+    icon: '⚡',
     storageKey: '@game_tower:best_pathfinder_v1',
   },
   {
@@ -160,7 +160,7 @@ export const TOWER_GAMES = [
     desc: 'Unscramble cyber letter dials to forge 2 to 7+ letter words. Find more and more words to crack levels.',
     accent: '#00F5FF',
     secondary: '#7928CA',
-    icon: '🔤',
+    icon: '🔠',
     storageKey: '@game_tower:best_scramble_v1',
   },
   {
@@ -174,7 +174,7 @@ export const TOWER_GAMES = [
     desc: 'Ascend the infinite cyber spire. Dodge incinerating fire platforms, outrun homing sentry bombs, and evade defense turrets.',
     accent: '#00F5FF',
     secondary: '#FF0055',
-    icon: '⚡',
+    icon: '🧗',
     storageKey: '@game_tower:best_climber_v1',
   },
   {
@@ -188,7 +188,7 @@ export const TOWER_GAMES = [
     desc: 'Unravel directional arrow blocks by tapping only those with clear trajectories off the board.',
     accent: '#39FF14',
     secondary: '#00F5FF',
-    icon: '🧭',
+    icon: '🎯',
     storageKey: '@game_tower:best_arrows_v1',
   },
   {
@@ -202,7 +202,7 @@ export const TOWER_GAMES = [
     desc: 'Match glowing gems, shatter armored cyber bricks, and collect caged stars before the countdown ends.',
     accent: '#FF007F',
     secondary: '#FFD166',
-    icon: '💎',
+    icon: '👑',
     storageKey: '@game_tower:best_match3_v1',
   },
   {
@@ -216,7 +216,7 @@ export const TOWER_GAMES = [
     desc: 'Classic falling tetrominoes with hold slot, ghost projection, hard drop slams, and juicy multi-clears.',
     accent: '#00F5FF',
     secondary: '#9D4EDD',
-    icon: '🧱',
+    icon: '🕹️',
     storageKey: '@game_tower:best_tetris_v1',
   },
   {
@@ -230,7 +230,7 @@ export const TOWER_GAMES = [
     desc: 'High-speed hardcore rhythm runner with spike hurdles, gravity-flip portals, and attempt counters.',
     accent: '#FFE600',
     secondary: '#FF0055',
-    icon: '⚡',
+    icon: '🏃',
     storageKey: '@game_tower:best_dash_v1',
   },
   {
@@ -244,7 +244,7 @@ export const TOWER_GAMES = [
     desc: 'Bounce your color orb through rotating multi-colored rings matching only your current wavelength.',
     accent: '#FF007F',
     secondary: '#00F5FF',
-    icon: '🔘',
+    icon: '🌈',
     storageKey: '@game_tower:best_switch_v1',
   },
   {
@@ -272,7 +272,7 @@ export const TOWER_GAMES = [
     desc: 'Slice suspended ropes with precise timing to swing the quantum ball safely into the floor receptor bucket.',
     accent: '#00F5D4',
     secondary: '#FFD166',
-    icon: '🪢',
+    icon: '✂️',
     storageKey: '@game_tower:best_rope_v1',
   },
   {
@@ -328,7 +328,7 @@ export const TOWER_GAMES = [
     desc: 'Tap scrambled quantum digits 1–25 in high-velocity ascending order.',
     accent: '#00F5D4',
     secondary: '#0088FF',
-    icon: '🔢',
+    icon: '⏱️',
     storageKey: '@game_tower:best_schulte_v1',
   },
   {
@@ -356,7 +356,7 @@ export const TOWER_GAMES = [
     desc: 'Identify the ink color before your neural cortex reads the word itself.',
     accent: '#FF007F',
     secondary: '#B5179E',
-    icon: '🎯',
+    icon: '🎨',
     storageKey: '@game_tower:best_stroop_v1',
   },
   {
@@ -370,7 +370,7 @@ export const TOWER_GAMES = [
     desc: 'Solve escalating arithmetic equations against the hyper-depleting turbo clock.',
     accent: '#80FF72',
     secondary: '#00F5D4',
-    icon: '⚡',
+    icon: '💡',
     storageKey: '@game_tower:best_mathblitz_v1',
   },
   {
@@ -398,7 +398,7 @@ export const TOWER_GAMES = [
     desc: 'Slot polyomino neon shapes to detonate full rows and columns in multi-combos.',
     accent: '#48BFE3',
     secondary: '#7209B7',
-    icon: '🧱',
+    icon: '🔷',
     storageKey: '@game_tower:best_blockblast_v1',
   },
   {
@@ -454,7 +454,7 @@ export const TOWER_GAMES = [
     desc: 'Deflect the plasma ball with your cyber paddle to shatter armored brick barriers.',
     accent: '#00F5FF',
     secondary: '#00BBF9',
-    icon: '▬',
+    icon: '🏓',
     storageKey: '@game_tower:best_breaker_v1',
   },
   {
@@ -468,7 +468,7 @@ export const TOWER_GAMES = [
     desc: 'Memorize and mimic accelerating 9-pad musical neon pulse sequences.',
     accent: '#FF2A85',
     secondary: '#9D4EDD',
-    icon: '◉',
+    icon: '🎵',
     storageKey: '@game_tower:best_simon_v1',
   },
   {
@@ -482,7 +482,7 @@ export const TOWER_GAMES = [
     desc: 'Infect the entire 8x8 matrix with a single neon wavelength within 18 moves.',
     accent: '#FF6D00',
     secondary: '#D00000',
-    icon: '⬢',
+    icon: '🌊',
     storageKey: '@game_tower:best_flood_v1',
   },
   {
@@ -496,7 +496,7 @@ export const TOWER_GAMES = [
     desc: 'Slide numbered neon blocks 1–15 into ascending order with minimum moves.',
     accent: '#FFD166',
     secondary: '#F77F00',
-    icon: '◫',
+    icon: '🧩',
     storageKey: '@game_tower:best_slide15_v1',
   },
   {
@@ -510,7 +510,7 @@ export const TOWER_GAMES = [
     desc: 'Toggle linked quantum nodes to extinguish all cyan firewall circuits.',
     accent: '#48BFE3',
     secondary: '#4361EE',
-    icon: '⚡',
+    icon: '🔦',
     storageKey: '@game_tower:best_lightsout_v1',
   },
   {
@@ -524,7 +524,7 @@ export const TOWER_GAMES = [
     desc: 'Flip neural data cards and chain consecutive pair matches for streak points.',
     accent: '#C77DFF',
     secondary: '#7209B7',
-    icon: '◈',
+    icon: '🧠',
     storageKey: '@game_tower:best_memory_v1',
   },
   {
@@ -538,7 +538,7 @@ export const TOWER_GAMES = [
     desc: 'Scan the 7x7 grid, flag hidden plasma mines, and sweep safe sectors.',
     accent: '#FF007F',
     secondary: '#B5179E',
-    icon: '✸',
+    icon: '🚩',
     storageKey: '@game_tower:best_mines_v1',
   },
   {
@@ -552,7 +552,7 @@ export const TOWER_GAMES = [
     desc: 'Crack the 5-letter cyber password in 6 tries with live keyboard feedback.',
     accent: '#06D6A0',
     secondary: '#047857',
-    icon: '🔤',
+    icon: '🟩',
     storageKey: '@game_tower:best_wordly_v1',
   },
   {
@@ -566,7 +566,7 @@ export const TOWER_GAMES = [
     desc: 'Drop numbered boxes from top into 5 columns. Match adjacent boxes to merge into 16, 32, 64+ in multi-directional chain reactions!',
     accent: '#00F5D4',
     secondary: '#0A9396',
-    icon: '⊞',
+    icon: '🎲',
     storageKey: '@game_tower:best_2048_drop_v1',
   },
 ];
@@ -1715,39 +1715,13 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
                         ]}
                       />
 
-                      {/* Left Elevator / Structural Pylon Column */}
-                      <View
-                        style={[
-                          hubStyles.deckElevatorShaft,
-                          { borderColor: `${game.accent}44` },
-                        ]}
-                      >
-                        <View
-                          style={[
-                            hubStyles.elevatorNode,
-                            { backgroundColor: game.accent },
-                          ]}
-                        />
-                        <Text
-                          style={[hubStyles.floorNumText, { color: game.accent }]}
-                        >
-                          {String(game.floorNum).padStart(2, '0')}
-                        </Text>
-                        <View
-                          style={[
-                            hubStyles.elevatorNode,
-                            { backgroundColor: game.accent },
-                          ]}
-                        />
-                      </View>
-
                       {/* Holographic Icon Core Chamber */}
                       <View
                         style={[
                           hubStyles.iconCoreChamber,
                           {
                             borderColor: game.accent,
-                            backgroundColor: `${game.accent}14`,
+                            backgroundColor: `${game.accent}22`,
                           },
                         ]}
                       >
@@ -1755,7 +1729,7 @@ export default function GameTowerHub({ initialGameId = null } = {}) {
                         <View
                           style={[
                             hubStyles.tierTag,
-                            { backgroundColor: `${game.accent}26` },
+                            { backgroundColor: `${game.accent}33` },
                           ]}
                         >
                           <Text
@@ -2605,37 +2579,17 @@ const hubStyles = StyleSheet.create({
     shadowOpacity: 0.9,
     shadowRadius: 4,
   },
-  deckElevatorShaft: {
-    width: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRightWidth: 1,
-    paddingRight: 6,
-    marginRight: 6,
-    gap: 3,
-  },
-  elevatorNode: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-  },
-  floorNumText: {
-    fontSize: 11,
-    fontFamily: monoFont,
-    fontWeight: '900',
-    letterSpacing: 0.5,
-  },
   iconCoreChamber: {
-    width: 46,
-    height: 48,
-    borderRadius: 12,
-    borderWidth: 1.2,
+    width: 50,
+    height: 50,
+    borderRadius: 14,
+    borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 10,
+    marginRight: 12,
   },
   iconEmoji: {
-    fontSize: 20,
+    fontSize: 24,
   },
   tierTag: {
     borderRadius: 4,
