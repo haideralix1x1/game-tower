@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -517,8 +517,11 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
   );
 
   useEffect(() => {
-    resetGame(mode, 1);
-  }, []);
+    const timer = setTimeout(() => {
+      resetGame(mode, 1);
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [mode, resetGame]);
 
   // Launch Balls on Tap
   const handleLaunchBall = useCallback(() => {
@@ -926,7 +929,7 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
 
             const aiCenter = eng.aiPaddleX + eng.aiPaddleW / 2;
             const diff = targetX - aiCenter;
-            const aiMaxSpeed = eng.mode === 'HARD_SPHERE_DUEL' ? 390 : 270;
+            const aiMaxSpeed = eng.mode === 'HARD_SPHERE_DUEL' ? 480 : 270;
             const moveStep = Math.sign(diff) * Math.min(Math.abs(diff), aiMaxSpeed * dt);
             eng.aiPaddleX = Math.max(4, Math.min(arenaWidth - eng.aiPaddleW - 4, eng.aiPaddleX + moveStep));
           }
@@ -967,9 +970,9 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
               if (
                 b.vy < 0 &&
                 nextY - b.r <= aiBottom &&
-                nextY + b.r >= aiTop &&
-                nextX >= eng.aiPaddleX - 4 &&
-                nextX <= eng.aiPaddleX + eng.aiPaddleW + 4
+                b.y + b.r >= aiTop &&
+                nextX >= eng.aiPaddleX - 6 &&
+                nextX <= eng.aiPaddleX + eng.aiPaddleW + 6
               ) {
                 nextY = aiBottom + b.r;
                 const hitOffset = (nextX - (eng.aiPaddleX + eng.aiPaddleW / 2)) / (eng.aiPaddleW / 2);
@@ -1078,9 +1081,9 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
             if (
               b.vy > 0 &&
               nextY + b.r >= pTop &&
-              nextY - b.r <= pBottom &&
-              nextX >= eng.paddleX - 4 &&
-              nextX <= eng.paddleX + eng.paddleW + 4
+              b.y - b.r <= pBottom &&
+              nextX >= eng.paddleX - 6 &&
+              nextX <= eng.paddleX + eng.paddleW + 6
             ) {
               nextY = pTop - b.r;
               const hitOffset = (nextX - (eng.paddleX + eng.paddleW / 2)) / (eng.paddleW / 2);
@@ -1121,7 +1124,6 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
                 if (distSq <= b.r * b.r) {
                   if (!b.isFire) {
                     const prevX = b.x;
-                    const prevY = b.y;
                     if (prevX < brk.x || prevX > brk.x + brk.w) {
                       b.vx = -b.vx;
                     } else {
@@ -1335,10 +1337,11 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
 
             b.x = nextX;
             b.y = nextY;
+            b.speed = Math.hypot(b.vx, b.vy);
             nextBalls.push(b);
           }
 
-          // --- 9. BALL-TO-BALL ELASTIC COLLISIONS (WITH HEAVY BALL MOMENTUM) ---
+          // --- 9. BALL-TO-BALL ELASTIC COLLISIONS (WITH HARD AI DUEL SPEED ACCELERATION) ---
           if (nextBalls.length > 1) {
             for (let i = 0; i < nextBalls.length; i++) {
               for (let j = i + 1; j < nextBalls.length; j++) {
@@ -1378,11 +1381,57 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
                     b2.vx += impulse * m1 * nx;
                     b2.vy += impulse * m1 * ny;
 
-                    if (b1.isHeavy || b2.isHeavy) {
+                    if (eng.mode === 'HARD_SPHERE_DUEL') {
+                      // Physics kinetic energy increase on collision in Hard AI Duel!
+                      const MAX_DUEL_BALL_SPEED = 620;
+                      const SPEED_BOOST_MULTIPLIER = 1.22;
+                      const MIN_SPEED_ADD = 35;
+
+                      const spd1 = Math.hypot(b1.vx, b1.vy);
+                      const spd2 = Math.hypot(b2.vx, b2.vy);
+
+                      const newSpd1 = Math.min(
+                        MAX_DUEL_BALL_SPEED,
+                        Math.max(spd1 * SPEED_BOOST_MULTIPLIER, spd1 + MIN_SPEED_ADD)
+                      );
+                      const newSpd2 = Math.min(
+                        MAX_DUEL_BALL_SPEED,
+                        Math.max(spd2 * SPEED_BOOST_MULTIPLIER, spd2 + MIN_SPEED_ADD)
+                      );
+
+                      if (spd1 > 0.001) {
+                        b1.vx = (b1.vx / spd1) * newSpd1;
+                        b1.vy = (b1.vy / spd1) * newSpd1;
+                      }
+                      if (spd2 > 0.001) {
+                        b2.vx = (b2.vx / spd2) * newSpd2;
+                        b2.vy = (b2.vy / spd2) * newSpd2;
+                      }
+
+                      b1.speed = newSpd1;
+                      b2.speed = newSpd2;
+
+                      safeSound(playSpeedUpSound);
+                      safeHaptic(triggerSliceHaptic);
+                      if (juiceRef.current) {
+                        juiceRef.current.pulse(1.14);
+                        juiceRef.current.shake(4, 3);
+                        juiceRef.current.flash('#FF0055');
+                        juiceRef.current.popup(
+                          '⚡ KINETIC COLLISION!',
+                          `SPEED: ${Math.round(Math.max(newSpd1, newSpd2))} PX/S`,
+                          '#FFE600'
+                        );
+                      }
+                    } else if (b1.isHeavy || b2.isHeavy) {
+                      b1.speed = Math.hypot(b1.vx, b1.vy);
+                      b2.speed = Math.hypot(b2.vx, b2.vy);
                       safeSound(playSliceSound);
                       safeHaptic(triggerMediumHaptic);
                       if (juiceRef.current) juiceRef.current.pulse(1.08);
                     } else {
+                      b1.speed = Math.hypot(b1.vx, b1.vy);
+                      b2.speed = Math.hypot(b2.vx, b2.vy);
                       safeSound(playTapSound);
                       safeHaptic(triggerLightHaptic);
                       if (juiceRef.current) juiceRef.current.pulse(1.04);
@@ -1409,7 +1458,7 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
             aiHasShield: eng.aiHasShield,
           });
         }
-      } catch (err) {
+      } catch (_err) {
         // Prevent any game-loop error from crashing the entire app
       }
 
@@ -1426,34 +1475,37 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
   // PanResponder for smooth 1:1 paddle dragging & tap-to-start detection
   const dragStartRef = useRef({ startX: 0, startPaddleX: 0, hasMoved: false });
 
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => !isPausedRef.current,
-      onMoveShouldSetPanResponder: (_, gestureState) => {
-        return !isPausedRef.current && Math.abs(gestureState.dx) > 3;
-      },
-      onPanResponderGrant: (evt) => {
-        dragStartRef.current.startX = evt.nativeEvent.pageX;
-        dragStartRef.current.startPaddleX = engineRef.current.paddleX;
-        dragStartRef.current.hasMoved = false;
-      },
-      onPanResponderMove: (evt) => {
-        const dx = evt.nativeEvent.pageX - dragStartRef.current.startX;
-        if (Math.abs(dx) > 5) {
-          dragStartRef.current.hasMoved = true;
-        }
-        const eng = engineRef.current;
-        const targetX = dragStartRef.current.startPaddleX + dx;
-        const clamped = Math.max(4, Math.min(arenaWidth - eng.paddleW - 4, targetX));
-        eng.paddleX = clamped;
-      },
-      onPanResponderRelease: () => {
-        if (!engineRef.current.ballLaunched) {
-          handleLaunchBall();
-        }
-      },
-    })
-  ).current;
+  const panResponder = useMemo(
+    () =>
+      // eslint-disable-next-line react-hooks/refs
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => !isPausedRef.current,
+        onMoveShouldSetPanResponder: (_, gestureState) => {
+          return !isPausedRef.current && Math.abs(gestureState.dx) > 3;
+        },
+        onPanResponderGrant: (evt) => {
+          dragStartRef.current.startX = evt.nativeEvent.pageX;
+          dragStartRef.current.startPaddleX = engineRef.current.paddleX;
+          dragStartRef.current.hasMoved = false;
+        },
+        onPanResponderMove: (evt) => {
+          const dx = evt.nativeEvent.pageX - dragStartRef.current.startX;
+          if (Math.abs(dx) > 5) {
+            dragStartRef.current.hasMoved = true;
+          }
+          const eng = engineRef.current;
+          const targetX = dragStartRef.current.startPaddleX + dx;
+          const clamped = Math.max(4, Math.min(arenaWidth - eng.paddleW - 4, targetX));
+          eng.paddleX = clamped;
+        },
+        onPanResponderRelease: () => {
+          if (!engineRef.current.ballLaunched) {
+            handleLaunchBall();
+          }
+        },
+      }),
+    [arenaWidth, handleLaunchBall]
+  );
 
   // Nudge button controls
   const handleNudge = (delta) => {
@@ -1694,38 +1746,57 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
                 </View>
               ))}
 
-              {/* BALLS WITH HEAVY BALL STYLING */}
-              {renderState.balls.map((b) => (
-                <View
-                  key={b.id}
-                  pointerEvents="none"
-                  style={[
-                    localStyles.ball,
-                    {
-                      left: b.x - b.r,
-                      top: b.y - b.r,
-                      width: b.r * 2,
-                      height: b.r * 2,
-                      borderRadius: b.r,
-                      backgroundColor: b.isHeavy ? '#FF4500' : b.isFire ? '#FF6D00' : b.color,
-                      shadowColor: b.isHeavy ? '#FF4500' : b.isFire ? '#FF6D00' : b.color,
-                      borderWidth: b.isHeavy ? 2.5 : 0,
-                      borderColor: b.isHeavy ? '#FFE600' : 'transparent',
-                    },
-                  ]}
-                >
+              {/* BALLS WITH HEAVY BALL & HIGH-VELOCITY KINETIC STYLING */}
+              {renderState.balls.map((b) => {
+                const isHighSpeed = mode === 'HARD_SPHERE_DUEL' && (b.speed || 0) > 310;
+                return (
                   <View
+                    key={b.id}
+                    pointerEvents="none"
                     style={[
-                      localStyles.ballCore,
-                      b.isHeavy
-                        ? { backgroundColor: '#FFE600', width: '48%', height: '48%' }
-                        : b.isFire
-                        ? { backgroundColor: '#FFE600' }
-                        : null,
+                      localStyles.ball,
+                      {
+                        left: b.x - b.r,
+                        top: b.y - b.r,
+                        width: b.r * 2,
+                        height: b.r * 2,
+                        borderRadius: b.r,
+                        backgroundColor: b.isHeavy
+                          ? '#FF4500'
+                          : b.isFire
+                          ? '#FF6D00'
+                          : isHighSpeed
+                          ? '#FF0055'
+                          : b.color,
+                        shadowColor: b.isHeavy
+                          ? '#FF4500'
+                          : b.isFire
+                          ? '#FF6D00'
+                          : isHighSpeed
+                          ? '#FFE600'
+                          : b.color,
+                        shadowRadius: isHighSpeed ? 14 : 8,
+                        elevation: isHighSpeed ? 10 : 6,
+                        borderWidth: b.isHeavy ? 2.5 : isHighSpeed ? 1.5 : 0,
+                        borderColor: b.isHeavy || isHighSpeed ? '#FFE600' : 'transparent',
+                      },
                     ]}
-                  />
-                </View>
-              ))}
+                  >
+                    <View
+                      style={[
+                        localStyles.ballCore,
+                        b.isHeavy
+                          ? { backgroundColor: '#FFE600', width: '48%', height: '48%' }
+                          : b.isFire
+                          ? { backgroundColor: '#FFE600' }
+                          : isHighSpeed
+                          ? { backgroundColor: '#FFE600', width: '45%', height: '45%' }
+                          : null,
+                      ]}
+                    />
+                  </View>
+                );
+              })}
 
               {/* Bottom Safety Shield Line */}
               {renderState.hasShield && (
