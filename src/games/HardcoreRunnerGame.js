@@ -23,7 +23,6 @@ import Svg, {
 } from 'react-native-svg';
 import MiniGameHeader from '../components/MiniGameHeader';
 import GameResultModal from '../components/GameResultModal';
-import JuiceEngine from '../components/JuiceEngine';
 import { playTapSound, playSliceSound, playGameOverSound } from '../utils/sound';
 import {
   triggerLightHaptic,
@@ -41,7 +40,7 @@ const STORAGE_HIGH_SCORE_KEY = '@game_tower:best_dash_v1';
 
 // Cube and physics parameters
 const CUBE_SIZE = 22;
-const SPEED = 4.8;
+const SPEED = 5.6;
 const GRAVITY = 0.52;
 const JUMP_VELOCITY = -8.2;
 const CORRIDOR_HEIGHT = 118;
@@ -173,7 +172,9 @@ function createInitialNpcShips() {
 
 export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPaused = false }) {
   const isPausedRef = useRef(isPaused);
-  isPausedRef.current = isPaused;
+  useEffect(() => {
+    isPausedRef.current = isPaused;
+  }, [isPaused]);
 
   const { width, height } = useWindowDimensions();
   const arenaWidth = width;
@@ -193,12 +194,19 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
   const [phaseBanner, setPhaseBanner] = useState(null);
 
   // Consolidated 60 FPS visual state
-  const [frameState, setFrameState] = useState({
+  const [frameState, setFrameState] = useState(() => ({
     distance: 0,
     playerY: groundY,
     rotation: 0,
     score: 0,
-  });
+    segments: [],
+    obstacles: [],
+    turrets: [],
+    projectiles: [],
+    gaps: [],
+    npcShips: createInitialNpcShips(),
+    stars: createGalaxyStars(),
+  }));
 
   // Result modal
   const [modalVisible, setModalVisible] = useState(false);
@@ -219,7 +227,7 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
   const currentPhaseRef = useRef(currentPhase);
   const animFrameRef = useRef(null);
   const tickCountRef = useRef(0);
-  const lastGroundedTimeRef = useRef(Date.now());
+  const lastGroundedTimeRef = useRef(0);
 
   // Ambient galaxy refs
   const starsRef = useRef(createGalaxyStars());
@@ -443,6 +451,13 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
       playerY: groundY,
       rotation: 0,
       score: 0,
+      segments: [...segmentsRef.current],
+      obstacles: [],
+      turrets: [],
+      projectiles: [],
+      gaps: [],
+      npcShips: npcShipsRef.current,
+      stars: starsRef.current,
     });
     setIsPlaying(false);
     setModalVisible(false);
@@ -455,7 +470,10 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
   }, [groundY, spawnAhead]);
 
   useEffect(() => {
-    initLevel();
+    const timer = setTimeout(() => {
+      initLevel();
+    }, 0);
+    return () => clearTimeout(timer);
   }, [initLevel]);
 
   // Handle jump with responsive Coyote time
@@ -487,6 +505,28 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
       triggerLightHaptic();
     }
   };
+
+  const handleCrash = useCallback(
+    (cause) => {
+      setIsPlaying(false);
+      playGameOverSound();
+      triggerGameOverHaptic();
+      setCrashCause(cause);
+
+      const curScore = Math.floor(distanceRef.current / 5);
+      if (curScore > highScore) {
+        setHighScore(curScore);
+        AsyncStorage.setItem(STORAGE_HIGH_SCORE_KEY, String(curScore)).catch(() => {});
+        onScoreUpdate?.(curScore);
+      } else {
+        onScoreUpdate?.(curScore);
+      }
+
+      setModalType('gameover');
+      setModalVisible(true);
+    },
+    [highScore, onScoreUpdate]
+  );
 
   // 60 FPS Physics & Game Loop
   useEffect(() => {
@@ -692,6 +732,13 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
         playerY: nextY,
         rotation: nextRot,
         score: nextScore,
+        segments: segmentsRef.current,
+        obstacles: obstaclesRef.current,
+        turrets: turretsRef.current,
+        projectiles: projectilesRef.current,
+        gaps: gapsRef.current,
+        npcShips: npcShipsRef.current,
+        stars: starsRef.current,
       });
 
       // Player Hitbox
@@ -781,32 +828,26 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
     isPlaying,
     playerScreenX,
     spawnAhead,
+    handleCrash,
   ]);
-
-  const handleCrash = (cause) => {
-    setIsPlaying(false);
-    playGameOverSound();
-    triggerGameOverHaptic();
-    setCrashCause(cause);
-
-    const curScore = Math.floor(distanceRef.current / 5);
-    if (curScore > highScore) {
-      setHighScore(curScore);
-      AsyncStorage.setItem(STORAGE_HIGH_SCORE_KEY, String(curScore)).catch(() => {});
-      onScoreUpdate?.(curScore);
-    } else {
-      onScoreUpdate?.(curScore);
-    }
-
-    setModalType('gameover');
-    setModalVisible(true);
-  };
 
   const handleRetry = () => {
     initLevel();
   };
 
-  const { distance, playerY, rotation, score } = frameState;
+  const {
+    distance,
+    playerY,
+    rotation,
+    score,
+    segments = [],
+    obstacles = [],
+    turrets = [],
+    gaps = [],
+    projectiles = [],
+    npcShips = [],
+    stars = [],
+  } = frameState;
 
   // Viewport sampling for continuous corridor lines (top ceiling & bottom floor)
   const sampleStep = 8;
@@ -815,7 +856,7 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
   for (let i = 0; i < numSteps; i++) {
     const sX = -30 + i * sampleStep;
     const worldX = distance + sX;
-    const elev = getTrackElevation(worldX, segmentsRef.current);
+    const elev = getTrackElevation(worldX, segments);
     const fY = baseFloorY - elev;
     const cY = fY - CORRIDOR_HEIGHT;
     samplePoints.push({ sX, fY, cY, worldX });
@@ -842,7 +883,7 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
   botWallPath += ` L ${arenaWidth + 30} ${arenaHeight} L -30 ${arenaHeight} Z`;
 
   // Floor continuous neon guideway path (with physical gaps over void chasms)
-  const activeGaps = gapsRef.current;
+  const activeGaps = gaps;
   function isWorldXInGap(wX) {
     for (let g = 0; g < activeGaps.length; g++) {
       if (wX >= activeGaps[g].x && wX <= activeGaps[g].x + activeGaps[g].w) {
@@ -870,17 +911,17 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
   }
 
   // Visible elements for rendering
-  const visibleGaps = gapsRef.current.filter((g) => {
+  const visibleGaps = gaps.filter((g) => {
     const sX = g.x - distance + playerScreenX;
     return sX + g.w > -50 && sX < arenaWidth + 50;
   });
 
-  const visibleObstacles = obstaclesRef.current.filter((obs) => {
+  const visibleObstacles = obstacles.filter((obs) => {
     const sX = obs.x - distance + playerScreenX;
     return sX > -60 && sX < arenaWidth + 60;
   });
 
-  const visibleTurrets = turretsRef.current.filter((t) => {
+  const visibleTurrets = turrets.filter((t) => {
     const sX = t.x - distance + playerScreenX;
     return sX > -60 && sX < arenaWidth + 60;
   });
@@ -904,7 +945,7 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
       <View style={styles.topHud}>
         <View style={styles.hudBadge}>
           <Text style={[styles.hudPhaseText, { color: currentPhase.color }]}>
-            PHASE {currentPhase.phase} // {currentPhase.name}
+            PHASE {currentPhase.phase} {'//'} {currentPhase.name}
           </Text>
         </View>
 
@@ -959,7 +1000,7 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
           <Circle cx={arenaWidth * 0.82} cy={arenaHeight * 0.82} r={140} fill="url(#nebulaCyan)" />
 
           {/* Ambient Parallax Galaxy Stars */}
-          {starsRef.current.map((star) => {
+          {stars.map((star) => {
             const screenX =
               ((star.origX - distance * star.parallax) % (arenaWidth + 80) +
                 arenaWidth +
@@ -981,7 +1022,7 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
           })}
 
           {/* ROAMING CUTE SPACE PALS OUTSIDE TUNNEL */}
-          {npcShipsRef.current.map((ship) => {
+          {npcShips.map((ship) => {
             const sY =
               ship.zone === 'UPPER'
                 ? Math.max(22, baseCeilingY - ship.offsetY)
@@ -1076,7 +1117,7 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
           {/* CEILING-MOUNTED UPPER TURRETS (Mounted to top line, aiming & shooting at player!) */}
           {visibleTurrets.map((turret) => {
             const tScreenX = turret.x - distance + playerScreenX;
-            const tElev = getTrackElevation(turret.x, segmentsRef.current);
+            const tElev = getTrackElevation(turret.x, segments);
             const tCeilY = baseFloorY - tElev - CORRIDOR_HEIGHT;
 
             // Angle towards player cube
@@ -1151,7 +1192,7 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
           })}
 
           {/* FIRED PLASMA PROJECTILES FLYING TOWARDS PLAYER */}
-          {projectilesRef.current.map((proj) => {
+          {projectiles.map((proj) => {
             const sX = proj.x - distance + playerScreenX;
             const sY = proj.y;
             if (sX < -40 || sX > arenaWidth + 50) return null;
@@ -1272,7 +1313,7 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
             if (obs.type === 'SPIKE_DROP') {
               const curPlayerX = distance + playerScreenX;
               const distToPlayer = obs.x - curPlayerX;
-              const obsElev = getTrackElevation(obs.x, segmentsRef.current);
+              const obsElev = getTrackElevation(obs.x, segments);
               const obsCeil = baseFloorY - obsElev - CORRIDOR_HEIGHT;
               const obsFloor = baseFloorY - obsElev;
 
