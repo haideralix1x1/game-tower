@@ -48,7 +48,24 @@ const monoFont = Platform.select({
 // Arena Dimensions
 const ARENA_W = 340;
 const ARENA_H = 420;
-const FLASHLIGHT_LEN = 60; // 60px flashlight beam ensures ladder zones remain safe
+const FLASHLIGHT_LEN = 60; // 60px flashlight beam ensures ladder corridors stay safe
+
+// Architectural Windows: players can ONLY hide inside these windows
+const WINDOW_X_LIST = [50, 120, 170, 220, 290];
+const WINDOW_PROXIMITY = 18; // Must be within 18px of window center to hide
+
+const getNearestWindowX = (playerX) => {
+  let nearest = null;
+  let minDist = Infinity;
+  for (const wx of WINDOW_X_LIST) {
+    const d = Math.abs(playerX - wx);
+    if (d < minDist) {
+      minDist = d;
+      nearest = wx;
+    }
+  }
+  return minDist <= WINDOW_PROXIMITY ? nearest : null;
+};
 
 /**
  * Curated Levels with Escalating Guards, Petrol Missions, Rival Thieves & Safe Ladder Corridors
@@ -191,7 +208,7 @@ export default function ThiefEscapeGame({
     [floorHeight]
   );
 
-  // Player State: supports smooth ladder climbing & stopping midway
+  // Player State: supports smooth ladder climbing & window hiding
   const [player, setPlayer] = useState({
     floor: 0,
     x: levelConfig.car.x + (levelConfig.car.x < 150 ? 50 : -50),
@@ -199,6 +216,7 @@ export default function ThiefEscapeGame({
     isClimbing: false,
     stairIdx: null,
     isHiding: false,
+    hiddenWindowX: null,
     hasDiamond: false,
     hasPetrol: !levelConfig.requiresPetrol,
     facing: 1, // 1 = right, -1 = left
@@ -288,6 +306,7 @@ export default function ThiefEscapeGame({
         isClimbing: false,
         stairIdx: null,
         isHiding: false,
+        hiddenWindowX: null,
         hasDiamond: false,
         hasPetrol: !cfg.requiresPetrol,
         facing: cfg.car.x < 150 ? 1 : -1,
@@ -398,11 +417,15 @@ export default function ThiefEscapeGame({
       const curGuards = guardsRef.current.map((g) => ({ ...g }));
       const curRival = { ...rivalRef.current };
 
-      // 1. Update Player Movement (Smooth Ladder Climbing OR Walking)
+      // 1. Update Player Movement (Smooth Ladder Climbing OR Walking / Window Hiding)
       if (curPlayer.isClimbing && curPlayer.stairIdx != null) {
         const stair = levelConfig.stairs[curPlayer.stairIdx];
         const yBottom = getFloorY(stair.fromFloor);
         const yTop = getFloorY(stair.toFloor);
+
+        // Cannot hide while climbing on ladders
+        curPlayer.isHiding = false;
+        curPlayer.hiddenWindowX = null;
 
         // Continuous vertical climbing movement
         if (climbDirRef.current !== 0) {
@@ -444,42 +467,53 @@ export default function ThiefEscapeGame({
           }
         }
       } else {
-        // Normal horizontal walking on platform
-        if (inputDirRef.current !== 0) {
-          curPlayer.x += inputDirRef.current * (isSneakRef.current ? 1.4 : 2.6);
-          curPlayer.facing = inputDirRef.current;
-        }
-        curPlayer.x = Math.max(30, Math.min(ARENA_W - 30, curPlayer.x));
-        curPlayer.isHiding = isSneakRef.current;
-
-        // Ladder Climb Up Entry Check: near stair going up
-        if (climbDirRef.current === -1) {
-          const upIdx = levelConfig.stairs.findIndex(
-            (s) => s.fromFloor === curPlayer.floor && Math.abs(curPlayer.x - s.x) < 24
-          );
-          if (upIdx !== -1) {
-            const stair = levelConfig.stairs[upIdx];
-            curPlayer.isClimbing = true;
-            curPlayer.stairIdx = upIdx;
-            curPlayer.x = stair.x;
-            curPlayer.y = getFloorY(stair.fromFloor) - 4;
-            playSliceSound();
-            triggerLightHaptic();
+        // Player is on a floor catwalk: check window hiding vs walking
+        if (curPlayer.isHiding) {
+          // If player is currently hidden inside a window, movement steps out of the window
+          if (inputDirRef.current !== 0) {
+            curPlayer.isHiding = false;
+            curPlayer.hiddenWindowX = null;
+            isSneakRef.current = false;
+            curPlayer.x += inputDirRef.current * 2.6;
+            curPlayer.facing = inputDirRef.current;
           }
-        }
-        // Ladder Climb Down Entry Check: near stair going down
-        else if (climbDirRef.current === 1) {
-          const downIdx = levelConfig.stairs.findIndex(
-            (s) => s.toFloor === curPlayer.floor && Math.abs(curPlayer.x - s.x) < 24
-          );
-          if (downIdx !== -1) {
-            const stair = levelConfig.stairs[downIdx];
-            curPlayer.isClimbing = true;
-            curPlayer.stairIdx = downIdx;
-            curPlayer.x = stair.x;
-            curPlayer.y = getFloorY(stair.toFloor) + 4;
-            playSliceSound();
-            triggerLightHaptic();
+        } else {
+          // Normal horizontal walking on platform
+          if (inputDirRef.current !== 0) {
+            curPlayer.x += inputDirRef.current * 2.6;
+            curPlayer.facing = inputDirRef.current;
+          }
+          curPlayer.x = Math.max(30, Math.min(ARENA_W - 30, curPlayer.x));
+
+          // Ladder Climb Up Entry Check: near stair going up
+          if (climbDirRef.current === -1) {
+            const upIdx = levelConfig.stairs.findIndex(
+              (s) => s.fromFloor === curPlayer.floor && Math.abs(curPlayer.x - s.x) < 24
+            );
+            if (upIdx !== -1) {
+              const stair = levelConfig.stairs[upIdx];
+              curPlayer.isClimbing = true;
+              curPlayer.stairIdx = upIdx;
+              curPlayer.x = stair.x;
+              curPlayer.y = getFloorY(stair.fromFloor) - 4;
+              playSliceSound();
+              triggerLightHaptic();
+            }
+          }
+          // Ladder Climb Down Entry Check: near stair going down
+          else if (climbDirRef.current === 1) {
+            const downIdx = levelConfig.stairs.findIndex(
+              (s) => s.toFloor === curPlayer.floor && Math.abs(curPlayer.x - s.x) < 24
+            );
+            if (downIdx !== -1) {
+              const stair = levelConfig.stairs[downIdx];
+              curPlayer.isClimbing = true;
+              curPlayer.stairIdx = downIdx;
+              curPlayer.x = stair.x;
+              curPlayer.y = getFloorY(stair.toFloor) + 4;
+              playSliceSound();
+              triggerLightHaptic();
+            }
           }
         }
       }
@@ -559,7 +593,7 @@ export default function ThiefEscapeGame({
       setThrownStones(nextStones);
 
       // 4. Update Vision Detection against Player
-      // Note: If player is climbing mid-ladder, player is between floors and safe from horizontal beams!
+      // Only detected if player is NOT hidden in a window and aligns with guard level
       if (!curPlayer.isHiding) {
         const playerY = curPlayer.isClimbing && curPlayer.y != null ? curPlayer.y : getFloorY(curPlayer.floor);
 
@@ -708,17 +742,41 @@ export default function ThiefEscapeGame({
     return () => clearInterval(interval);
   }, [isPaused, isGameOver, victoryModal, levelConfig, getFloorY, handlePlayerBusted, level, highScore, onScoreUpdate]);
 
-  // Sneak / Hide Toggle
+  // Sneak / Hide Toggle: ONLY allows hiding if standing close to a window!
   const handleSneakPressIn = () => {
-    isSneakRef.current = true;
-    setPlayer((p) => ({ ...p, isHiding: true }));
-    triggerSelectionHaptic();
-    playSnapTickSound();
+    if (playerRef.current.isClimbing) {
+      triggerLightHaptic();
+      juiceRef.current?.popup('CANNOT HIDE ON LADDER', 'Step onto a floor first', '#FF0055');
+      return;
+    }
+
+    const nearWinX = getNearestWindowX(playerRef.current.x);
+    if (nearWinX != null) {
+      // Successfully duck inside the window!
+      isSneakRef.current = true;
+      setPlayer((p) => ({
+        ...p,
+        x: nearWinX, // Snaps precisely inside the window frame
+        isHiding: true,
+        hiddenWindowX: nearWinX,
+      }));
+      triggerSelectionHaptic();
+      playSnapTickSound();
+      juiceRef.current?.popup('🪟 HIDDEN IN WINDOW', 'Shadow gray silhouette active', '#94A3B8');
+    } else {
+      // Not close to any window
+      triggerLightHaptic();
+      juiceRef.current?.popup('NO WINDOW NEARBY!', 'Move close to a window to hide', '#FF0055');
+    }
   };
 
   const handleSneakPressOut = () => {
     isSneakRef.current = false;
-    setPlayer((p) => ({ ...p, isHiding: false }));
+    setPlayer((p) => ({
+      ...p,
+      isHiding: false,
+      hiddenWindowX: null,
+    }));
   };
 
   // Next Level Handler
@@ -738,6 +796,9 @@ export default function ThiefEscapeGame({
 
   // Active player vertical position
   const activePlayerY = player.isClimbing && player.y != null ? player.y : getFloorY(player.floor);
+
+  // Check if player is currently close enough to a window to hide
+  const isNearWindow = !player.isClimbing && getNearestWindowX(player.x) != null;
 
   return (
     <View style={styles.container}>
@@ -834,14 +895,121 @@ export default function ThiefEscapeGame({
               {/* Building Facade Background */}
               <Rect x={10} y={15} width={ARENA_W - 20} height={ARENA_H - 45} rx={12} fill="url(#buildingGrad)" stroke="rgba(0, 245, 255, 0.25)" strokeWidth={2} />
 
-              {/* Building Windows in Noir Comic Style */}
+              {/* Architectural Windows in Noir Comic Style & Window Hiding Spots */}
               {Array.from({ length: levelConfig.floorsCount }).map((_, f) => {
                 const fy = getFloorY(f);
+                const winY = fy - 48;
+
                 return (
                   <G key={`windows_${f}`}>
-                    <Rect x={45} y={fy - 48} width={26} height={38} rx={3} fill="#090C1A" stroke="rgba(0, 245, 255, 0.2)" strokeWidth={1.2} />
-                    <Rect x={155} y={fy - 48} width={26} height={38} rx={3} fill={f % 2 === 0 ? '#FFE60033' : '#090C1A'} stroke="rgba(0, 245, 255, 0.2)" strokeWidth={1.2} />
-                    <Rect x={265} y={fy - 48} width={26} height={38} rx={3} fill="#090C1A" stroke="rgba(0, 245, 255, 0.2)" strokeWidth={1.2} />
+                    {WINDOW_X_LIST.map((wx) => {
+                      // Skip window if blocked by ground floor car
+                      if (f === 0 && Math.abs(wx - levelConfig.car.x) < 32) return null;
+
+                      const isPlayerHiddenHere = player.isHiding && player.floor === f && player.hiddenWindowX === wx;
+                      const isPlayerNearHere = !player.isHiding && !player.isClimbing && player.floor === f && Math.abs(player.x - wx) <= WINDOW_PROXIMITY;
+
+                      return (
+                        <G key={`win_${f}_${wx}`}>
+                          {/* Outer Window Frame */}
+                          <Rect
+                            x={wx - 14}
+                            y={winY}
+                            width={28}
+                            height={40}
+                            rx={4}
+                            fill={isPlayerHiddenHere ? '#0F1322' : (f % 2 === 0 && wx === 170 ? '#FFE60020' : '#070914')}
+                            stroke={isPlayerHiddenHere ? '#94A3B8' : isPlayerNearHere ? '#00F5FF' : 'rgba(0, 245, 255, 0.25)'}
+                            strokeWidth={isPlayerHiddenHere ? 2 : isPlayerNearHere ? 1.6 : 1.2}
+                          />
+
+                          {/* Subtle arrow prompt when standing close to this window */}
+                          {isPlayerNearHere && (
+                            <Polygon
+                              points={`${wx},${winY - 2} ${wx - 5},${winY - 8} ${wx + 5},${winY - 8}`}
+                              fill="#00F5FF"
+                            />
+                          )}
+
+                          {/* Interior Window Pane */}
+                          <Rect
+                            x={wx - 11}
+                            y={winY + 3}
+                            width={22}
+                            height={34}
+                            rx={2}
+                            fill={isPlayerHiddenHere ? '#1E2333' : '#0B0E1B'}
+                          />
+
+                          {/* Thief Hiding INSIDE the Window (Turned completely to Shadow Slate Gray) */}
+                          {isPlayerHiddenHere && (
+                            <G>
+                              {/* Gray Shadow Body */}
+                              <Rect
+                                x={wx - 6}
+                                y={fy - 25}
+                                width={12}
+                                height={22}
+                                rx={3}
+                                fill="#334155"
+                                stroke="#94A3B8"
+                                strokeWidth={1.5}
+                              />
+                              {/* Gray Shadow Head */}
+                              <Circle cx={wx} cy={fy - 27} r={5} fill="#475569" stroke="#94A3B8" strokeWidth={1} />
+                              {/* Soft Silver Visor Slit */}
+                              <Line
+                                x1={wx - 3}
+                                y1={fy - 27}
+                                x2={wx + player.facing * 4}
+                                y2={fy - 27}
+                                stroke="#CBD5E1"
+                                strokeWidth={1.5}
+                              />
+                              {/* Gray Shadow Diamond if carried */}
+                              {player.hasDiamond && (
+                                <Polygon
+                                  points={`${wx},${fy - 34} ${wx + 4},${fy - 30} ${wx},${fy - 26} ${wx - 4},${fy - 30}`}
+                                  fill="#475569"
+                                  stroke="#94A3B8"
+                                  strokeWidth={1}
+                                />
+                              )}
+                            </G>
+                          )}
+
+                          {/* Window Mullions / Crossbars (always rendered in front of window interior) */}
+                          <Line
+                            x1={wx}
+                            y1={winY + 3}
+                            x2={wx}
+                            y2={winY + 37}
+                            stroke={isPlayerHiddenHere ? 'rgba(148, 163, 184, 0.5)' : 'rgba(0, 245, 255, 0.2)'}
+                            strokeWidth={1}
+                          />
+                          <Line
+                            x1={wx - 11}
+                            y1={winY + 20}
+                            x2={wx + 11}
+                            y2={winY + 20}
+                            stroke={isPlayerHiddenHere ? 'rgba(148, 163, 184, 0.5)' : 'rgba(0, 245, 255, 0.2)'}
+                            strokeWidth={1}
+                          />
+
+                          {/* Architectural Window Sill */}
+                          <Rect
+                            x={wx - 15}
+                            y={winY + 38}
+                            width={30}
+                            height={3.5}
+                            rx={1}
+                            fill="#181D2E"
+                            stroke={isPlayerHiddenHere ? '#94A3B8' : 'rgba(0, 245, 255, 0.2)'}
+                            strokeWidth={1}
+                          />
+                        </G>
+                      );
+                    })}
                   </G>
                 );
               })}
@@ -1021,73 +1189,75 @@ export default function ThiefEscapeGame({
                 </G>
               )}
 
-              {/* Player Stealth Thief Operative (Renders smooth climbing vs on-floor walking) */}
-              {player.isClimbing ? (
-                <G>
-                  {/* Gripping Hands on Ladder Rails */}
-                  <Line x1={player.x - 11} y1={activePlayerY - 18} x2={player.x - 5} y2={activePlayerY - 14} stroke="#00F5FF" strokeWidth={2.2} />
-                  <Line x1={player.x + 5} y1={activePlayerY - 14} x2={player.x + 11} y2={activePlayerY - 18} stroke="#00F5FF" strokeWidth={2.2} />
+              {/* Player Stealth Thief Operative: Shown on catwalk ONLY when not hidden in window */}
+              {!player.isHiding && (
+                player.isClimbing ? (
+                  <G>
+                    {/* Gripping Hands on Ladder Rails */}
+                    <Line x1={player.x - 11} y1={activePlayerY - 18} x2={player.x - 5} y2={activePlayerY - 14} stroke="#00F5FF" strokeWidth={2.2} />
+                    <Line x1={player.x + 5} y1={activePlayerY - 14} x2={player.x + 11} y2={activePlayerY - 18} stroke="#00F5FF" strokeWidth={2.2} />
 
-                  {/* Body climbing back silhouette */}
-                  <Rect
-                    x={player.x - 6}
-                    y={activePlayerY - 24}
-                    width={12}
-                    height={20}
-                    rx={3}
-                    fill="#080C1E"
-                    stroke="#00F5FF"
-                    strokeWidth={1.8}
-                  />
-
-                  {/* Head */}
-                  <Circle cx={player.x} cy={activePlayerY - 26} r={5} fill="#00F5FF" />
-
-                  {/* Gripping Feet on Ladder Rungs */}
-                  <Line x1={player.x - 10} y1={activePlayerY - 4} x2={player.x - 4} y2={activePlayerY - 2} stroke="#00F5FF" strokeWidth={2.2} />
-                  <Line x1={player.x + 4} y1={activePlayerY - 2} x2={player.x + 10} y2={activePlayerY - 4} stroke="#00F5FF" strokeWidth={2.2} />
-
-                  {/* Diamond on operative's back */}
-                  {player.hasDiamond && (
-                    <Polygon
-                      points={`${player.x},${activePlayerY - 33} ${player.x + 5},${activePlayerY - 28} ${player.x},${activePlayerY - 23} ${player.x - 5},${activePlayerY - 28}`}
-                      fill="#00F5FF"
-                      stroke="#FFFFFF"
-                      strokeWidth={1.2}
+                    {/* Body climbing back silhouette */}
+                    <Rect
+                      x={player.x - 6}
+                      y={activePlayerY - 24}
+                      width={12}
+                      height={20}
+                      rx={3}
+                      fill="#080C1E"
+                      stroke="#00F5FF"
+                      strokeWidth={1.8}
                     />
-                  )}
-                </G>
-              ) : (
-                <G>
-                  <Rect
-                    x={player.x - 7}
-                    y={activePlayerY - (player.isHiding ? 14 : 26)}
-                    width={14}
-                    height={player.isHiding ? 12 : 24}
-                    rx={3}
-                    fill={player.isHiding ? 'rgba(0, 245, 255, 0.25)' : '#080C1E'}
-                    stroke="#00F5FF"
-                    strokeWidth={1.8}
-                  />
-                  <Circle cx={player.x} cy={activePlayerY - (player.isHiding ? 16 : 28)} r={5} fill="#00F5FF" />
-                  <Line
-                    x1={player.x - 4}
-                    y1={activePlayerY - (player.isHiding ? 16 : 28)}
-                    x2={player.x + player.facing * 5}
-                    y2={activePlayerY - (player.isHiding ? 16 : 28)}
-                    stroke="#FFFFFF"
-                    strokeWidth={2}
-                  />
-                  {player.hasDiamond && (
-                    <Circle cx={player.x} cy={activePlayerY - 36} r={5} fill="#00F5FF" stroke="#FFFFFF" strokeWidth={1.5} />
-                  )}
-                </G>
+
+                    {/* Head */}
+                    <Circle cx={player.x} cy={activePlayerY - 26} r={5} fill="#00F5FF" />
+
+                    {/* Gripping Feet on Ladder Rungs */}
+                    <Line x1={player.x - 10} y1={activePlayerY - 4} x2={player.x - 4} y2={activePlayerY - 2} stroke="#00F5FF" strokeWidth={2.2} />
+                    <Line x1={player.x + 4} y1={activePlayerY - 2} x2={player.x + 10} y2={activePlayerY - 4} stroke="#00F5FF" strokeWidth={2.2} />
+
+                    {/* Diamond on operative's back */}
+                    {player.hasDiamond && (
+                      <Polygon
+                        points={`${player.x},${activePlayerY - 33} ${player.x + 5},${activePlayerY - 28} ${player.x},${activePlayerY - 23} ${player.x - 5},${activePlayerY - 28}`}
+                        fill="#00F5FF"
+                        stroke="#FFFFFF"
+                        strokeWidth={1.2}
+                      />
+                    )}
+                  </G>
+                ) : (
+                  <G>
+                    <Rect
+                      x={player.x - 7}
+                      y={activePlayerY - 26}
+                      width={14}
+                      height={24}
+                      rx={3}
+                      fill="#080C1E"
+                      stroke="#00F5FF"
+                      strokeWidth={1.8}
+                    />
+                    <Circle cx={player.x} cy={activePlayerY - 28} r={5} fill="#00F5FF" />
+                    <Line
+                      x1={player.x - 4}
+                      y1={activePlayerY - 28}
+                      x2={player.x + player.facing * 5}
+                      y2={activePlayerY - 28}
+                      stroke="#FFFFFF"
+                      strokeWidth={2}
+                    />
+                    {player.hasDiamond && (
+                      <Circle cx={player.x} cy={activePlayerY - 36} r={5} fill="#00F5FF" stroke="#FFFFFF" strokeWidth={1.5} />
+                    )}
+                  </G>
+                )
               )}
             </Svg>
           </View>
         </View>
 
-        {/* Tactical Control Bar: Horizontal Walk, Smooth Ladder Climb, Stone Distractor & Hide */}
+        {/* Tactical Control Bar: Horizontal Walk, Smooth Ladder Climb, Stone Distractor & Window Hide */}
         <View style={styles.controlsRow}>
           {/* Movement D-Pad (Left & Right) */}
           <View style={styles.dirGroup}>
@@ -1129,7 +1299,7 @@ export default function ThiefEscapeGame({
             </Pressable>
           </View>
 
-          {/* Actions: Distractor Stone Throw & Shadow Hide */}
+          {/* Actions: Distractor Stone Throw & Window Hide */}
           <View style={styles.actionGroup}>
             <Pressable
               style={({ pressed }) => [
@@ -1143,16 +1313,22 @@ export default function ThiefEscapeGame({
               <Text style={styles.stoneCount}>{stones}</Text>
             </Pressable>
 
+            {/* Window Hide Button: Highlights when standing close to a window */}
             <Pressable
               style={({ pressed }) => [
                 styles.sneakBtn,
-                (pressed || player.isHiding) && styles.sneakBtnActive,
+                isNearWindow && styles.sneakBtnAvailable,
+                player.isHiding && styles.sneakBtnActive,
+                !isNearWindow && !player.isHiding && styles.sneakBtnDimmed,
+                pressed && styles.sneakBtnPressed,
               ]}
               onPressIn={handleSneakPressIn}
               onPressOut={handleSneakPressOut}
             >
-              <Text style={styles.sneakIcon}>👤</Text>
-              <Text style={styles.sneakText}>HIDE</Text>
+              <Text style={styles.sneakIcon}>🪟</Text>
+              <Text style={[styles.sneakText, player.isHiding && { color: '#94A3B8' }]}>
+                {player.isHiding ? 'INSIDE' : isNearWindow ? 'HIDE' : 'NO WIN'}
+              </Text>
             </Pressable>
           </View>
         </View>
@@ -1338,15 +1514,25 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 12,
-    backgroundColor: '#1C122C',
+    backgroundColor: '#151926',
     borderWidth: 1.5,
-    borderColor: '#9D4EDD',
+    borderColor: 'rgba(255, 255, 255, 0.25)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  sneakBtnActive: {
-    backgroundColor: 'rgba(157, 78, 221, 0.4)',
+  sneakBtnAvailable: {
     borderColor: '#00F5FF',
+    backgroundColor: '#142338',
+  },
+  sneakBtnActive: {
+    backgroundColor: '#334155',
+    borderColor: '#94A3B8',
+    transform: [{ scale: 0.94 }],
+  },
+  sneakBtnDimmed: {
+    opacity: 0.5,
+  },
+  sneakBtnPressed: {
     transform: [{ scale: 0.94 }],
   },
   sneakIcon: {
@@ -1354,7 +1540,7 @@ const styles = StyleSheet.create({
   },
   sneakText: {
     fontFamily: monoFont,
-    fontSize: 8,
+    fontSize: 7.5,
     fontWeight: '900',
     color: '#FFFFFF',
     letterSpacing: 0.5,
