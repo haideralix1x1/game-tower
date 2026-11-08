@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef, useCallback, Component } from 'react';
-import { View, StyleSheet, useWindowDimensions, Platform } from 'react-native';
+import React, { useEffect, Component } from 'react';
+import { View, StyleSheet, useWindowDimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, {
   Defs,
@@ -9,14 +9,17 @@ import Svg, {
   Line,
   Ellipse,
   G,
+  Polygon,
+  Rect,
 } from 'react-native-svg';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
+  withDelay,
+  withRepeat,
   cancelAnimation,
   Easing,
-  runOnJS,
 } from 'react-native-reanimated';
 
 // Galaxy Starfield coordinates across deep cosmic space
@@ -57,149 +60,52 @@ const ASTEROID_PALETTES = [
 ];
 
 /**
- * Generate a random edge point on screen
- * Edges: 0 = TOP, 1 = RIGHT, 2 = BOTTOM, 3 = LEFT
- */
-function getEdgePoint(edge, w, h, margin = 40) {
-  switch (edge) {
-    case 0: // TOP
-      return { x: Math.random() * (w + 40) - 20, y: -margin };
-    case 1: // RIGHT
-      return { x: w + margin, y: Math.random() * (h + 40) - 20 };
-    case 2: // BOTTOM
-      return { x: Math.random() * (w + 40) - 20, y: h + margin };
-    case 3: // LEFT
-    default:
-      return { x: -margin, y: Math.random() * (h + 40) - 20 };
-  }
-}
-
-/**
- * Generate random projectile trajectory from one screen edge to another
- */
-function getRandomTrajectory(w, h, depthLayer = 2) {
-  const safeW = w > 50 ? w : 390;
-  const safeH = h > 50 ? h : 844;
-
-  const startEdge = Math.floor(Math.random() * 4);
-  const otherEdges = [0, 1, 2, 3].filter((e) => e !== startEdge);
-  const endEdge = otherEdges[Math.floor(Math.random() * otherEdges.length)];
-
-  const start = getEdgePoint(startEdge, safeW, safeH, 50);
-  const end = getEdgePoint(endEdge, safeW, safeH, 50);
-
-  const dx = end.x - start.x;
-  const dy = end.y - start.y;
-  const dist = Math.sqrt(dx * dx + dy * dy);
-  const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
-
-  // Faster, dynamic asteroid speeds
-  const speed =
-    depthLayer === 1
-      ? 80 + Math.random() * 40
-      : depthLayer === 2
-        ? 120 + Math.random() * 60
-        : 180 + Math.random() * 90;
-
-  const duration = Math.max(3500, Math.round((dist / speed) * 1000));
-
-  return {
-    startX: start.x,
-    startY: start.y,
-    endX: end.x,
-    endY: end.y,
-    angle,
-    duration,
-  };
-}
-
-/**
  * Sleek Asteroid Projectile Dot with Glowing Trail
  */
 function AsteroidProjectile({
-  width,
-  height,
+  startX,
+  startY,
+  endX,
+  endY,
+  duration = 4500,
+  delay = 0,
   depthLayer = 2,
-  initialProgress = 0,
-  initialDelay = 0,
   paletteIndex = 0,
 }) {
-  const dimRef = useRef({ width, height });
-  dimRef.current = { width, height };
-
-  const trajRef = useRef(getRandomTrajectory(width, height, depthLayer));
   const palette = ASTEROID_PALETTES[paletteIndex % ASTEROID_PALETTES.length];
-
-  const startX = useSharedValue(trajRef.current.startX);
-  const startY = useSharedValue(trajRef.current.startY);
-  const endX = useSharedValue(trajRef.current.endX);
-  const endY = useSharedValue(trajRef.current.endY);
-  const rotAngle = useSharedValue(trajRef.current.angle);
-  const progress = useSharedValue(initialProgress);
-
-  const headSize = depthLayer === 1 ? 3 : depthLayer === 2 ? 4.5 : 6;
-  const tailLength = depthLayer === 1 ? 16 : depthLayer === 2 ? 28 : 42;
-  const baseOpacity = depthLayer === 1 ? 0.45 : depthLayer === 2 ? 0.75 : 0.95;
-
-  const runNextLeg = useCallback(() => {
-    const { width: curW, height: curH } = dimRef.current;
-    const next = getRandomTrajectory(curW, curH, depthLayer);
-    trajRef.current = next;
-
-    startX.value = next.startX;
-    startY.value = next.startY;
-    endX.value = next.endX;
-    endY.value = next.endY;
-    rotAngle.value = next.angle;
-    progress.value = 0;
-
-    progress.value = withTiming(
-      1,
-      { duration: next.duration, easing: Easing.linear },
-      (finished) => {
-        if (finished) {
-          runOnJS(runNextLeg)();
-        }
-      }
-    );
-  }, [depthLayer, endX, endY, progress, rotAngle, startX, startY]);
+  const progress = useSharedValue(0);
 
   useEffect(() => {
-    let active = true;
-    const initialTraj = trajRef.current;
-    const remainingTime = Math.max(1000, initialTraj.duration * (1 - initialProgress));
-
-    const timer = setTimeout(() => {
-      if (!active) return;
-      progress.value = withTiming(
-        1,
-        { duration: remainingTime, easing: Easing.linear },
-        (finished) => {
-          if (finished && active) {
-            runOnJS(runNextLeg)();
-          }
-        }
-      );
-    }, initialDelay);
-
+    progress.value = withDelay(
+      delay,
+      withRepeat(
+        withTiming(1, { duration, easing: Easing.linear }),
+        -1,
+        false
+      )
+    );
     return () => {
-      active = false;
-      clearTimeout(timer);
       cancelAnimation(progress);
     };
-  }, [initialDelay, initialProgress, progress, runNextLeg]);
+  }, [delay, duration, progress]);
+
+  const dx = endX - startX;
+  const dy = endY - startY;
+  const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
+
+  const headSize = depthLayer === 1 ? 3 : depthLayer === 2 ? 4.5 : 6;
+  const tailLength = depthLayer === 1 ? 18 : depthLayer === 2 ? 30 : 44;
+  const baseOpacity = depthLayer === 1 ? 0.45 : depthLayer === 2 ? 0.75 : 0.95;
 
   const animatedStyle = useAnimatedStyle(() => {
     'worklet';
-    const p = progress.value;
-    const curX = startX.value + (endX.value - startX.value) * p;
-    const curY = startY.value + (endY.value - startY.value) * p;
-
+    const curX = startX + dx * progress.value;
+    const curY = startY + dy * progress.value;
     return {
       transform: [
         { translateX: curX },
         { translateY: curY },
-        { rotate: `${rotAngle.value}deg` },
+        { rotate: `${angle}deg` },
       ],
       opacity: baseOpacity,
     };
@@ -207,7 +113,6 @@ function AsteroidProjectile({
 
   return (
     <Animated.View style={[styles.projectileWrapper, animatedStyle]} pointerEvents="none">
-      {/* Trailing streak line behind projectile */}
       <View
         style={[
           styles.asteroidTail,
@@ -218,7 +123,6 @@ function AsteroidProjectile({
           },
         ]}
       />
-      {/* Asteroid Core Head Dot */}
       <View
         style={[
           styles.asteroidHead,
@@ -235,7 +139,218 @@ function AsteroidProjectile({
   );
 }
 
-// Error Boundary for bulletproof stability
+/**
+ * Visible Futuristic Cruising Space Ships (Starfighter, Shuttle, Frigate)
+ * Cruising across the cosmic background behind the tower
+ */
+function BackgroundSpaceShip({
+  startYRatio = 0.22,
+  dir = 1,
+  speed = 32,
+  scale = 1.0,
+  shipType = 0,
+  delay = 0,
+}) {
+  const { width, height } = useWindowDimensions();
+  const safeW = width > 50 ? width : 390;
+  const safeH = height > 50 ? height : 844;
+
+  const totalDist = safeW + 200;
+  const duration = Math.round((totalDist / speed) * 1000);
+
+  const startX = dir === 1 ? -100 : safeW + 100;
+  const endX = dir === 1 ? safeW + 100 : -100;
+  const y = safeH * startYRatio;
+
+  const progress = useSharedValue(0);
+
+  useEffect(() => {
+    progress.value = withDelay(
+      delay,
+      withRepeat(
+        withTiming(1, { duration, easing: Easing.linear }),
+        -1,
+        false
+      )
+    );
+    return () => {
+      cancelAnimation(progress);
+    };
+  }, [delay, duration, progress]);
+
+  const animatedStyle = useAnimatedStyle(() => {
+    'worklet';
+    const curX = startX + (endX - startX) * progress.value;
+    return {
+      transform: [
+        { translateX: curX },
+        { translateY: y },
+        { scaleX: dir },
+        { scale },
+      ],
+    };
+  });
+
+  return (
+    <Animated.View style={[styles.shipContainer, animatedStyle]} pointerEvents="none">
+      <Svg width={60} height={30} viewBox="0 0 60 30">
+        <Defs>
+          <SvgLinearGradient id={`shipGrad_${shipType}_${Math.round(startYRatio * 100)}`} x1="0" y1="0" x2="1" y2="0">
+            <Stop offset="0%" stopColor="#00F5FF" stopOpacity="0.95" />
+            <Stop offset="50%" stopColor="#7928CA" stopOpacity="0.85" />
+            <Stop offset="100%" stopColor="#FF007F" stopOpacity="0.95" />
+          </SvgLinearGradient>
+          <SvgLinearGradient id={`thrusterGrad_${shipType}_${Math.round(startYRatio * 100)}`} x1="0" y1="0" x2="1" y2="0">
+            <Stop offset="0%" stopColor="#FF9E00" stopOpacity="0.0" />
+            <Stop offset="50%" stopColor="#FF0055" stopOpacity="0.75" />
+            <Stop offset="100%" stopColor="#FFE600" stopOpacity="1.0" />
+          </SvgLinearGradient>
+        </Defs>
+
+        {/* Dynamic Glowing Thruster Exhaust */}
+        <Polygon points="0,15 16,10 16,20" fill={`url(#thrusterGrad_${shipType}_${Math.round(startYRatio * 100)})`} />
+        <Line x1="-16" y1="15" x2="8" y2="15" stroke="#00F5FF" strokeWidth="2" opacity={0.7} />
+
+        {shipType === 0 ? (
+          // Sleek Warp Starfighter
+          <G>
+            <Polygon
+              points="14,15 24,5 54,15 24,25"
+              fill={`url(#shipGrad_${shipType}_${Math.round(startYRatio * 100)})`}
+              stroke="#FFFFFF"
+              strokeWidth={1.5}
+            />
+            <Polygon points="28,15 35,9 49,15 35,21" fill="#0C1328" />
+            <Circle cx="40" cy="15" r="3" fill="#00F5FF" />
+            <Circle cx="22" cy="6" r="2" fill="#FFE600" />
+            <Circle cx="22" cy="24" r="2" fill="#FFE600" />
+          </G>
+        ) : shipType === 1 ? (
+          // Heavy Orbital Interceptor
+          <G>
+            <Polygon
+              points="16,15 28,3 46,11 56,15 46,19 28,27"
+              fill="#0E1736"
+              stroke="#00F5FF"
+              strokeWidth={1.6}
+            />
+            <Polygon points="24,15 34,8 50,15 34,22" fill="#FF007F" opacity={0.9} />
+            <Circle cx="38" cy="15" r="3.2" fill="#FFE600" />
+            <Line x1="18" y1="7" x2="34" y2="7" stroke="#00F5FF" strokeWidth="1.8" />
+            <Line x1="18" y1="23" x2="34" y2="23" stroke="#00F5FF" strokeWidth="1.8" />
+          </G>
+        ) : (
+          // High-Tech Cyber Shuttle
+          <G>
+            <Rect x="16" y="9" width="32" height="12" rx="4" fill="#170A34" stroke="#FF70A6" strokeWidth={1.6} />
+            <Polygon points="48,10 57,15 48,20" fill="#00F5D4" />
+            <Circle cx="26" cy="15" r="2.4" fill="#00F5FF" />
+            <Circle cx="35" cy="15" r="2.4" fill="#FFE600" />
+            <Circle cx="44" cy="15" r="2.4" fill="#00F5FF" />
+            <Polygon points="20,4 32,9 20,9" fill="#7928CA" />
+            <Polygon points="20,21 32,21 20,26" fill="#7928CA" />
+          </G>
+        )}
+      </Svg>
+    </Animated.View>
+  );
+}
+
+/**
+ * Fallen Stars (Shooting Stars / Meteor Streaks)
+ * Blazing luminous diagonal trails across deep space
+ */
+function FallingStar({
+  delay = 0,
+  interval = 4000,
+  startXRatio = 0.7,
+  startYRatio = 0.1,
+  travelDist = 320,
+  color = '#00F5FF',
+}) {
+  const { width, height } = useWindowDimensions();
+  const safeW = width > 50 ? width : 390;
+  const safeH = height > 50 ? height : 844;
+
+  const startX = safeW * startXRatio;
+  const startY = safeH * startYRatio;
+
+  const streakLength = 75;
+  const angleRad = (40 * Math.PI) / 180;
+  const dx = -travelDist * Math.cos(angleRad);
+  const dy = travelDist * Math.sin(angleRad);
+
+  const duration = 1100;
+  const totalPeriod = duration + interval;
+  const progress = useSharedValue(0);
+
+  useEffect(() => {
+    progress.value = withDelay(
+      delay,
+      withRepeat(
+        withTiming(1, { duration: totalPeriod, easing: Easing.linear }),
+        -1,
+        false
+      )
+    );
+    return () => {
+      cancelAnimation(progress);
+    };
+  }, [delay, progress, totalPeriod]);
+
+  const activeFrac = duration / totalPeriod;
+
+  const animatedStyle = useAnimatedStyle(() => {
+    'worklet';
+    const p = progress.value;
+    if (p > activeFrac) {
+      return {
+        opacity: 0,
+        transform: [{ translateX: -999 }, { translateY: -999 }],
+      };
+    }
+    const normP = p / activeFrac;
+    const curX = startX + dx * normP;
+    const curY = startY + dy * normP;
+    const op = normP < 0.15 ? normP / 0.15 : (1 - normP) * 0.95;
+
+    return {
+      transform: [
+        { translateX: curX },
+        { translateY: curY },
+        { rotate: '140deg' },
+      ],
+      opacity: op,
+    };
+  });
+
+  return (
+    <Animated.View style={[styles.fallingStarWrapper, animatedStyle]} pointerEvents="none">
+      <Svg width={streakLength + 12} height={14} viewBox={`0 0 ${streakLength + 12} 14`}>
+        <Defs>
+          <SvgLinearGradient id={`fsGrad_${delay}_${Math.round(startXRatio * 100)}`} x1="0" y1="0" x2="1" y2="0">
+            <Stop offset="0%" stopColor={color} stopOpacity="0" />
+            <Stop offset="65%" stopColor={color} stopOpacity="0.8" />
+            <Stop offset="100%" stopColor="#FFFFFF" stopOpacity="1" />
+          </SvgLinearGradient>
+        </Defs>
+        <Line
+          x1={0}
+          y1={7}
+          x2={streakLength}
+          y2={7}
+          stroke={`url(#fsGrad_${delay}_${Math.round(startXRatio * 100)})`}
+          strokeWidth={2.4}
+          strokeLinecap="round"
+        />
+        <Circle cx={streakLength + 3} cy={7} r={3.2} fill="#FFFFFF" />
+        <Circle cx={streakLength + 3} cy={7} r={5} fill={color} opacity={0.5} />
+      </Svg>
+    </Animated.View>
+  );
+}
+
+// Error boundary to protect the menu background
 class GalaxyErrorBoundary extends Component {
   constructor(props) {
     super(props);
@@ -250,7 +365,7 @@ class GalaxyErrorBoundary extends Component {
 
   render() {
     if (this.state.hasError) {
-      return null;
+      return <View style={[styles.container, { backgroundColor: '#02010A' }]} />;
     }
     return this.props.children;
   }
@@ -258,28 +373,21 @@ class GalaxyErrorBoundary extends Component {
 
 /**
  * TowerAnimatedBackground
- * Pure Cosmic Galaxy Environment with Streaming Asteroids / Projectiles
- * No cards, no text blocks, no buildings.
+ * Premium Cyberpunk Galaxy Atmosphere with Cruising Spaceships,
+ * Fallen Stars, and Cosmic Asteroids.
  */
 export default function TowerAnimatedBackground() {
   const { width, height } = useWindowDimensions();
+  const safeW = width > 50 ? width : 390;
+  const safeH = height > 50 ? height : 844;
 
-  // 14 simultaneous projectile asteroids flying across space
-  const PROJECTILES_CONFIG = [
-    { depth: 3, initProg: 0.12, delay: 0, pal: 0 },
-    { depth: 2, initProg: 0.45, delay: 0, pal: 1 },
-    { depth: 1, initProg: 0.78, delay: 0, pal: 2 },
-    { depth: 3, initProg: 0.32, delay: 100, pal: 3 },
-    { depth: 2, initProg: 0.65, delay: 0, pal: 4 },
-    { depth: 1, initProg: 0.18, delay: 0, pal: 5 },
-    { depth: 3, initProg: 0.88, delay: 0, pal: 0 },
-    { depth: 2, initProg: 0.22, delay: 150, pal: 1 },
-    { depth: 1, initProg: 0.54, delay: 0, pal: 2 },
-    { depth: 2, initProg: 0.92, delay: 0, pal: 3 },
-    { depth: 3, initProg: 0.05, delay: 250, pal: 4 },
-    { depth: 2, initProg: 0.37, delay: 0, pal: 5 },
-    { depth: 1, initProg: 0.71, delay: 0, pal: 0 },
-    { depth: 3, initProg: 0.58, delay: 300, pal: 1 },
+  const projectiles = [
+    { startX: -30, startY: safeH * 0.2, endX: safeW + 30, endY: safeH * 0.45, duration: 4200, delay: 0, depth: 1, pal: 5 },
+    { startX: safeW + 30, startY: safeH * 0.15, endX: -30, endY: safeH * 0.65, duration: 3800, delay: 800, depth: 3, pal: 0 },
+    { startX: safeW * 0.1, startY: -30, endX: safeW * 0.85, endY: safeH + 30, duration: 4800, delay: 1500, depth: 2, pal: 1 },
+    { startX: safeW + 30, startY: safeH * 0.75, endX: -30, endY: safeH * 0.25, duration: 4400, delay: 600, depth: 1, pal: 2 },
+    { startX: -30, startY: safeH * 0.8, endX: safeW + 30, endY: safeH * 0.5, duration: 4000, delay: 2000, depth: 2, pal: 3 },
+    { startX: safeW * 0.9, startY: -30, endX: safeW * 0.2, endY: safeH + 30, duration: 3600, delay: 1200, depth: 3, pal: 4 },
   ];
 
   return (
@@ -424,16 +532,31 @@ export default function TowerAnimatedBackground() {
           })}
         </Svg>
 
+        {/* Visible Background Space Ships Cruising Through Deep Space */}
+        <BackgroundSpaceShip startYRatio={0.16} dir={1} speed={36} scale={1.05} shipType={0} delay={0} />
+        <BackgroundSpaceShip startYRatio={0.34} dir={-1} speed={28} scale={0.95} shipType={1} delay={1800} />
+        <BackgroundSpaceShip startYRatio={0.64} dir={1} speed={32} scale={1.1} shipType={2} delay={3600} />
+        <BackgroundSpaceShip startYRatio={0.82} dir={-1} speed={38} scale={1.0} shipType={0} delay={2400} />
+
+        {/* Fallen Stars (Shooting Stars) Streaking Across the Sky */}
+        <FallingStar delay={200} interval={3800} startXRatio={0.7} startYRatio={0.08} color="#00F5FF" />
+        <FallingStar delay={1400} interval={4400} startXRatio={0.4} startYRatio={0.18} color="#FFE600" />
+        <FallingStar delay={2600} interval={3900} startXRatio={0.85} startYRatio={0.28} color="#FF007F" />
+        <FallingStar delay={3600} interval={4200} startXRatio={0.55} startYRatio={0.4} color="#00F5D4" />
+        <FallingStar delay={4600} interval={4800} startXRatio={0.9} startYRatio={0.52} color="#FFFFFF" />
+
         {/* Dynamic Flying Asteroid Projectiles */}
-        {PROJECTILES_CONFIG.map((cfg, i) => (
+        {projectiles.map((p, i) => (
           <AsteroidProjectile
-            key={`projectile_${i}`}
-            width={width}
-            height={height}
-            depthLayer={cfg.depth}
-            initialProgress={cfg.initProg}
-            initialDelay={cfg.delay}
-            paletteIndex={cfg.pal}
+            key={`proj_${i}`}
+            startX={p.startX}
+            startY={p.startY}
+            endX={p.endX}
+            endY={p.endY}
+            duration={p.duration}
+            delay={p.delay}
+            depthLayer={p.depth}
+            paletteIndex={p.pal}
           />
         ))}
       </View>
@@ -443,18 +566,22 @@ export default function TowerAnimatedBackground() {
 
 const styles = StyleSheet.create({
   container: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 0,
-    elevation: 0,
+    ...StyleSheet.absoluteFillObject,
     overflow: 'hidden',
   },
   nebulaOrb: {
     position: 'absolute',
-    opacity: 0.75,
+    filter: 'blur(45px)',
+  },
+  shipContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+  },
+  fallingStarWrapper: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
   },
   projectileWrapper: {
     position: 'absolute',
@@ -462,21 +589,19 @@ const styles = StyleSheet.create({
     left: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    height: 12,
   },
   asteroidTail: {
-    height: 1.5,
-    borderRadius: 1,
-    opacity: 0.7,
+    height: 1.8,
+    opacity: 0.8,
     shadowOffset: { width: 0, height: 0 },
-    shadowRadius: 6,
     shadowOpacity: 0.9,
-    elevation: 2,
+    shadowRadius: 5,
   },
   asteroidHead: {
+    marginLeft: -1,
     shadowOffset: { width: 0, height: 0 },
-    shadowRadius: 8,
     shadowOpacity: 1,
+    shadowRadius: 8,
     elevation: 4,
   },
 });
