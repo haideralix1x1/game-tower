@@ -5,8 +5,6 @@ import {
   Pressable,
   StyleSheet,
   Platform,
-  Animated,
-  Easing,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Svg, {
@@ -14,7 +12,6 @@ import Svg, {
   Circle,
   Path,
   Defs,
-  LinearGradient as SvgLinearGradient,
   RadialGradient as SvgRadialGradient,
   Stop,
   G,
@@ -47,106 +44,95 @@ const monoFont = Platform.select({
 
 // Board dimensions
 const BOARD_W = 340;
-const BOARD_H = 400;
+const BOARD_H = 420;
 
-/**
- * Neon Cyberpunk Palette for Struts and Screws
- */
-const STRUT_COLORS = [
-  '#00F5FF', // Cyan
-  '#FF007F', // Neon Pink / Magenta
-  '#FFE600', // Electric Gold
-  '#39FF14', // Acid Green
-  '#9D4EDD', // Quantum Violet
-  '#FF5E00', // Plasma Orange
-  '#00F5D4', // Matrix Mint
-  '#4D96FF', // Neon Blue
+// Universal Top Spare Rack Sockets (guarantees every level is solvable & fair)
+const SPARE_SOCKETS = [
+  { id: 'spare_0', x: 95, y: 50, isSpare: true },
+  { id: 'spare_1', x: 170, y: 50, isSpare: true },
+  { id: 'spare_2', x: 245, y: 50, isSpare: true },
 ];
 
 /**
  * 12 Curated Escalating Levels of Cyber Screws and Interlocking Struts
  */
 const CURATED_LEVELS = [
-  // Level 1: Tutorial // Dual Strut (2 bars, 1 empty hole)
+  // Level 1: Dual Strut Override
   {
     name: 'INITIAL OVERRIDE',
     parMoves: 4,
     holes: [
-      { id: 'h0', x: 80, y: 130 },
-      { id: 'h1', x: 260, y: 130 },
-      { id: 'h2', x: 170, y: 270 },
-      { id: 'h_empty1', x: 170, y: 70 }, // Spare empty
+      { id: 'h0', x: 90, y: 160 },
+      { id: 'h1', x: 250, y: 160 },
+      { id: 'h2', x: 170, y: 290 },
     ],
     planks: [
       { id: 'p0', name: 'CYAN STRUT', holes: ['h0', 'h1'], color: '#00F5FF', layer: 2 },
       { id: 'p1', name: 'MAGENTA STRUT', holes: ['h0', 'h2'], color: '#FF007F', layer: 1 },
     ],
-    screws: {
+    initialScrews: {
       h0: { color: '#00F5FF' },
       h1: { color: '#00F5FF' },
       h2: { color: '#FF007F' },
     },
   },
 
-  // Level 2: Crossfire (3 bars, 2 empty holes)
+  // Level 2: Crossfire Matrix
   {
     name: 'CROSSFIRE MATRIX',
     parMoves: 6,
     holes: [
-      { id: 'h0', x: 70, y: 120 },
-      { id: 'h1', x: 270, y: 120 },
-      { id: 'h2', x: 70, y: 260 },
-      { id: 'h3', x: 270, y: 260 },
-      { id: 'h4', x: 170, y: 190 },
-      { id: 'h_empty1', x: 170, y: 70 },
-      { id: 'h_empty2', x: 170, y: 310 },
+      { id: 'h0', x: 80, y: 140 },
+      { id: 'h1', x: 260, y: 140 },
+      { id: 'h2', x: 80, y: 280 },
+      { id: 'h3', x: 260, y: 280 },
+      { id: 'h4', x: 170, y: 210 }, // Central board socket
     ],
     planks: [
       { id: 'p0', name: 'GOLD BEAM', holes: ['h0', 'h1'], color: '#FFE600', layer: 3 },
       { id: 'p1', name: 'CYAN BEAM', holes: ['h2', 'h3'], color: '#00F5FF', layer: 2 },
       { id: 'p2', name: 'LIME DIAGONAL', holes: ['h0', 'h3'], color: '#39FF14', layer: 1 },
     ],
-    screws: {
+    initialScrews: {
       h0: { color: '#FFE600' },
       h1: { color: '#FFE600' },
       h2: { color: '#00F5FF' },
       h3: { color: '#00F5FF' },
-      h4: { color: '#39FF14' },
     },
   },
 
-  // Level 3: Triad Nexus (Triangle of 3 interlocking bars, 1 center hole)
+  // Level 3: Triad Nexus (Triangle of 3 interlocking struts)
   {
     name: 'TRIAD NEXUS',
     parMoves: 7,
     holes: [
-      { id: 'h0', x: 90, y: 110 },
-      { id: 'h1', x: 250, y: 110 },
-      { id: 'h2', x: 170, y: 270 },
-      { id: 'h_center', x: 170, y: 170 }, // Spare center hole
+      { id: 'h0', x: 90, y: 135 },
+      { id: 'h1', x: 250, y: 135 },
+      { id: 'h2', x: 170, y: 285 },
+      { id: 'h_center', x: 170, y: 190 },
     ],
     planks: [
       { id: 'p0', name: 'VIOLET STRUT', holes: ['h0', 'h1'], color: '#9D4EDD', layer: 3 },
       { id: 'p1', name: 'ORANGE STRUT', holes: ['h1', 'h2'], color: '#FF5E00', layer: 2 },
       { id: 'p2', name: 'CYAN STRUT', holes: ['h2', 'h0'], color: '#00F5FF', layer: 1 },
     ],
-    screws: {
+    initialScrews: {
       h0: { color: '#9D4EDD' },
       h1: { color: '#FF5E00' },
       h2: { color: '#00F5FF' },
     },
   },
 
-  // Level 4: Cyber Z-Link (Classic Z strut layout)
+  // Level 4: Cyber Z-Link
   {
     name: 'CYBER Z-LINK',
     parMoves: 8,
     holes: [
-      { id: 'h0', x: 70, y: 90 },
-      { id: 'h1', x: 270, y: 90 },
-      { id: 'h2', x: 70, y: 290 },
-      { id: 'h3', x: 270, y: 290 },
-      { id: 'h_spare1', x: 170, y: 130 },
+      { id: 'h0', x: 80, y: 130 },
+      { id: 'h1', x: 260, y: 130 },
+      { id: 'h2', x: 80, y: 290 },
+      { id: 'h3', x: 260, y: 290 },
+      { id: 'h_spare1', x: 170, y: 160 },
       { id: 'h_spare2', x: 170, y: 250 },
     ],
     planks: [
@@ -154,7 +140,7 @@ const CURATED_LEVELS = [
       { id: 'p1', name: 'DIAGONAL Z', holes: ['h1', 'h2'], color: '#FFE600', layer: 2 },
       { id: 'p2', name: 'BOTTOM BAR', holes: ['h2', 'h3'], color: '#FF007F', layer: 1 },
     ],
-    screws: {
+    initialScrews: {
       h0: { color: '#00F5FF' },
       h1: { color: '#00F5FF' },
       h2: { color: '#FFE600' },
@@ -162,17 +148,16 @@ const CURATED_LEVELS = [
     },
   },
 
-  // Level 5: Pentaplex (4 bars, interlocking square + diagonal)
+  // Level 5: Pentaplex Core
   {
     name: 'PENTAPLEX CORE',
     parMoves: 9,
     holes: [
-      { id: 'h0', x: 80, y: 110 },
-      { id: 'h1', x: 260, y: 110 },
-      { id: 'h2', x: 260, y: 270 },
-      { id: 'h3', x: 80, y: 270 },
-      { id: 'h_s1', x: 170, y: 190 },
-      { id: 'h_s2', x: 170, y: 60 },
+      { id: 'h0', x: 80, y: 130 },
+      { id: 'h1', x: 260, y: 130 },
+      { id: 'h2', x: 260, y: 290 },
+      { id: 'h3', x: 80, y: 290 },
+      { id: 'h_center', x: 170, y: 210 },
     ],
     planks: [
       { id: 'p0', name: 'NORTH STRUT', holes: ['h0', 'h1'], color: '#00F5FF', layer: 4 },
@@ -180,7 +165,7 @@ const CURATED_LEVELS = [
       { id: 'p2', name: 'SOUTH STRUT', holes: ['h2', 'h3'], color: '#FF007F', layer: 2 },
       { id: 'p3', name: 'DIAGONAL CROSS', holes: ['h0', 'h2'], color: '#FFE600', layer: 1 },
     ],
-    screws: {
+    initialScrews: {
       h0: { color: '#00F5FF' },
       h1: { color: '#39FF14' },
       h2: { color: '#FF007F' },
@@ -188,27 +173,24 @@ const CURATED_LEVELS = [
     },
   },
 
-  // Level 6: Double Chevron (5 bars, 2 spare holes)
+  // Level 6: Double Chevron
   {
     name: 'DOUBLE CHEVRON',
     parMoves: 10,
     holes: [
-      { id: 'h0', x: 70, y: 90 },
-      { id: 'h1', x: 270, y: 90 },
-      { id: 'h2', x: 170, y: 180 },
-      { id: 'h3', x: 70, y: 290 },
-      { id: 'h4', x: 270, y: 290 },
-      { id: 'h_s1', x: 100, y: 200 },
-      { id: 'h_s2', x: 240, y: 200 },
+      { id: 'h0', x: 80, y: 120 },
+      { id: 'h1', x: 260, y: 120 },
+      { id: 'h2', x: 170, y: 200 },
+      { id: 'h3', x: 80, y: 300 },
+      { id: 'h4', x: 260, y: 300 },
     ],
     planks: [
-      { id: 'p0', name: 'UPPER LEFT', holes: ['h0', 'h2'], color: '#FF5E00', layer: 5 },
-      { id: 'p1', name: 'UPPER RIGHT', holes: ['h1', 'h2'], color: '#00F5FF', layer: 4 },
-      { id: 'p2', name: 'LOWER LEFT', holes: ['h3', 'h2'], color: '#39FF14', layer: 3 },
-      { id: 'p3', name: 'LOWER RIGHT', holes: ['h4', 'h2'], color: '#9D4EDD', layer: 2 },
-      { id: 'p4', name: 'BASE TIE', holes: ['h3', 'h4'], color: '#FFE600', layer: 1 },
+      { id: 'p0', name: 'UPPER LEFT', holes: ['h0', 'h2'], color: '#FF5E00', layer: 4 },
+      { id: 'p1', name: 'UPPER RIGHT', holes: ['h1', 'h2'], color: '#00F5FF', layer: 3 },
+      { id: 'p2', name: 'LOWER LEFT', holes: ['h3', 'h2'], color: '#39FF14', layer: 2 },
+      { id: 'p3', name: 'LOWER RIGHT', holes: ['h4', 'h2'], color: '#9D4EDD', layer: 1 },
     ],
-    screws: {
+    initialScrews: {
       h0: { color: '#FF5E00' },
       h1: { color: '#00F5FF' },
       h2: { color: '#FFE600' },
@@ -217,28 +199,26 @@ const CURATED_LEVELS = [
     },
   },
 
-  // Level 7: Hexa-Lattice (5 bars, 3 spare holes)
+  // Level 7: Hexa-Lattice
   {
     name: 'HEXA LATTICE',
     parMoves: 11,
     holes: [
-      { id: 'h0', x: 80, y: 100 },
-      { id: 'h1', x: 260, y: 100 },
-      { id: 'h2', x: 60, y: 200 },
-      { id: 'h3', x: 280, y: 200 },
+      { id: 'h0', x: 80, y: 120 },
+      { id: 'h1', x: 260, y: 120 },
+      { id: 'h2', x: 60, y: 210 },
+      { id: 'h3', x: 280, y: 210 },
       { id: 'h4', x: 80, y: 300 },
       { id: 'h5', x: 260, y: 300 },
-      { id: 'h_s1', x: 170, y: 140 },
-      { id: 'h_s2', x: 170, y: 260 },
+      { id: 'h_c', x: 170, y: 210 },
     ],
     planks: [
-      { id: 'p0', name: 'TOP HORIZON', holes: ['h0', 'h1'], color: '#00F5FF', layer: 5 },
-      { id: 'p1', name: 'LEFT WING', holes: ['h0', 'h2'], color: '#FF007F', layer: 4 },
-      { id: 'p2', name: 'RIGHT WING', holes: ['h1', 'h3'], color: '#FFE600', layer: 3 },
-      { id: 'p3', name: 'CROSS STRUT A', holes: ['h2', 'h5'], color: '#39FF14', layer: 2 },
-      { id: 'p4', name: 'BOTTOM HORIZON', holes: ['h4', 'h5'], color: '#9D4EDD', layer: 1 },
+      { id: 'p0', name: 'TOP HORIZON', holes: ['h0', 'h1'], color: '#00F5FF', layer: 4 },
+      { id: 'p1', name: 'LEFT WING', holes: ['h0', 'h2'], color: '#FF007F', layer: 3 },
+      { id: 'p2', name: 'RIGHT WING', holes: ['h1', 'h3'], color: '#FFE600', layer: 2 },
+      { id: 'p3', name: 'BOTTOM HORIZON', holes: ['h4', 'h5'], color: '#9D4EDD', layer: 1 },
     ],
-    screws: {
+    initialScrews: {
       h0: { color: '#00F5FF' },
       h1: { color: '#FF007F' },
       h2: { color: '#FFE600' },
@@ -248,399 +228,35 @@ const CURATED_LEVELS = [
     },
   },
 
-  // Level 8: Titanium Cage (6 bars, 2 spare holes)
+  // Level 8: Titanium Cage
   {
     name: 'TITANIUM CAGE',
     parMoves: 13,
     holes: [
-      { id: 'h0', x: 70, y: 90 },
-      { id: 'h1', x: 170, y: 90 },
-      { id: 'h2', x: 270, y: 90 },
-      { id: 'h3', x: 70, y: 280 },
-      { id: 'h4', x: 170, y: 280 },
-      { id: 'h5', x: 270, y: 280 },
-      { id: 'h_s1', x: 120, y: 185 },
-      { id: 'h_s2', x: 220, y: 185 },
+      { id: 'h0', x: 80, y: 120 },
+      { id: 'h1', x: 170, y: 120 },
+      { id: 'h2', x: 260, y: 120 },
+      { id: 'h3', x: 80, y: 290 },
+      { id: 'h4', x: 170, y: 290 },
+      { id: 'h5', x: 260, y: 290 },
     ],
     planks: [
-      { id: 'p0', name: 'TOP HORIZON', holes: ['h0', 'h2'], color: '#00F5FF', layer: 6 },
-      { id: 'p1', name: 'LEFT POST', holes: ['h0', 'h3'], color: '#FF007F', layer: 5 },
-      { id: 'p2', name: 'CENTER POST', holes: ['h1', 'h4'], color: '#FFE600', layer: 4 },
-      { id: 'p3', name: 'RIGHT POST', holes: ['h2', 'h5'], color: '#39FF14', layer: 3 },
-      { id: 'p4', name: 'DIAGONAL CROSS', holes: ['h0', 'h5'], color: '#FF5E00', layer: 2 },
-      { id: 'p5', name: 'BASE HORIZON', holes: ['h3', 'h5'], color: '#9D4EDD', layer: 1 },
+      { id: 'p0', name: 'TOP HORIZON', holes: ['h0', 'h2'], color: '#00F5FF', layer: 5 },
+      { id: 'p1', name: 'LEFT POST', holes: ['h0', 'h3'], color: '#FF007F', layer: 4 },
+      { id: 'p2', name: 'CENTER POST', holes: ['h1', 'h4'], color: '#FFE600', layer: 3 },
+      { id: 'p3', name: 'RIGHT POST', holes: ['h2', 'h5'], color: '#39FF14', layer: 2 },
+      { id: 'p4', name: 'BASE HORIZON', holes: ['h3', 'h5'], color: '#9D4EDD', layer: 1 },
     ],
-    screws: {
+    initialScrews: {
       h0: { color: '#00F5FF' },
       h1: { color: '#FF007F' },
       h2: { color: '#FFE600' },
       h3: { color: '#39FF14' },
       h4: { color: '#FF5E00' },
       h5: { color: '#9D4EDD' },
-    },
-  },
-
-  // Level 9: Neo Labyrinth (6 bars, 3 spare holes)
-  {
-    name: 'NEO LABYRINTH',
-    parMoves: 14,
-    holes: [
-      { id: 'h0', x: 80, y: 80 },
-      { id: 'h1', x: 260, y: 80 },
-      { id: 'h2', x: 170, y: 140 },
-      { id: 'h3', x: 80, y: 220 },
-      { id: 'h4', x: 260, y: 220 },
-      { id: 'h5', x: 170, y: 300 },
-      { id: 'h_s1', x: 100, y: 150 },
-      { id: 'h_s2', x: 240, y: 150 },
-      { id: 'h_s3', x: 170, y: 220 },
-    ],
-    planks: [
-      { id: 'p0', name: 'ROOF BEAM', holes: ['h0', 'h1'], color: '#00F5FF', layer: 6 },
-      { id: 'p1', name: 'CHEVRON LEFT', holes: ['h0', 'h2'], color: '#39FF14', layer: 5 },
-      { id: 'p2', name: 'CHEVRON RIGHT', holes: ['h1', 'h2'], color: '#FF007F', layer: 4 },
-      { id: 'p3', name: 'MID HORIZON', holes: ['h3', 'h4'], color: '#FFE600', layer: 3 },
-      { id: 'p4', name: 'V-LEFT', holes: ['h3', 'h5'], color: '#FF5E00', layer: 2 },
-      { id: 'p5', name: 'V-RIGHT', holes: ['h4', 'h5'], color: '#9D4EDD', layer: 1 },
-    ],
-    screws: {
-      h0: { color: '#00F5FF' },
-      h1: { color: '#39FF14' },
-      h2: { color: '#FF007F' },
-      h3: { color: '#FFE600' },
-      h4: { color: '#FF5E00' },
-      h5: { color: '#9D4EDD' },
-    },
-  },
-
-  // Level 10: Nano Reactor (7 bars, 3 spare holes)
-  {
-    name: 'NANO REACTOR CORE',
-    parMoves: 16,
-    holes: [
-      { id: 'h0', x: 170, y: 70 },
-      { id: 'h1', x: 270, y: 140 },
-      { id: 'h2', x: 270, y: 260 },
-      { id: 'h3', x: 170, y: 330 },
-      { id: 'h4', x: 70, y: 260 },
-      { id: 'h5', x: 70, y: 140 },
-      { id: 'h6', x: 170, y: 200 }, // Center
-      { id: 'h_s1', x: 120, y: 130 },
-      { id: 'h_s2', x: 220, y: 130 },
-      { id: 'h_s3', x: 170, y: 270 },
-    ],
-    planks: [
-      { id: 'p0', name: 'SPOKE N', holes: ['h0', 'h6'], color: '#00F5FF', layer: 7 },
-      { id: 'p1', name: 'SPOKE NE', holes: ['h1', 'h6'], color: '#FF007F', layer: 6 },
-      { id: 'p2', name: 'SPOKE SE', holes: ['h2', 'h6'], color: '#FFE600', layer: 5 },
-      { id: 'p3', name: 'SPOKE S', holes: ['h3', 'h6'], color: '#39FF14', layer: 4 },
-      { id: 'p4', name: 'SPOKE SW', holes: ['h4', 'h6'], color: '#9D4EDD', layer: 3 },
-      { id: 'p5', name: 'SPOKE NW', holes: ['h5', 'h6'], color: '#FF5E00', layer: 2 },
-      { id: 'p6', name: 'CROSS SHIELD', holes: ['h5', 'h1'], color: '#00F5D4', layer: 1 },
-    ],
-    screws: {
-      h0: { color: '#00F5FF' },
-      h1: { color: '#FF007F' },
-      h2: { color: '#FFE600' },
-      h3: { color: '#39FF14' },
-      h4: { color: '#9D4EDD' },
-      h5: { color: '#FF5E00' },
-      h6: { color: '#00F5D4' },
-    },
-  },
-
-  // Level 11: Vortex Weave (8 bars, 3 spare holes)
-  {
-    name: 'VORTEX WEAVE',
-    parMoves: 18,
-    holes: [
-      { id: 'h0', x: 70, y: 80 },
-      { id: 'h1', x: 270, y: 80 },
-      { id: 'h2', x: 70, y: 180 },
-      { id: 'h3', x: 270, y: 180 },
-      { id: 'h4', x: 70, y: 280 },
-      { id: 'h5', x: 270, y: 280 },
-      { id: 'h_s1', x: 170, y: 110 },
-      { id: 'h_s2', x: 170, y: 210 },
-      { id: 'h_s3', x: 170, y: 310 },
-    ],
-    planks: [
-      { id: 'p0', name: 'ROW 1', holes: ['h0', 'h1'], color: '#00F5FF', layer: 8 },
-      { id: 'p1', name: 'ROW 2', holes: ['h2', 'h3'], color: '#FF007F', layer: 7 },
-      { id: 'p2', name: 'ROW 3', holes: ['h4', 'h5'], color: '#FFE600', layer: 6 },
-      { id: 'p3', name: 'LEFT COL', holes: ['h0', 'h4'], color: '#39FF14', layer: 5 },
-      { id: 'p4', name: 'RIGHT COL', holes: ['h1', 'h5'], color: '#9D4EDD', layer: 4 },
-      { id: 'p5', name: 'DIAGONAL A', holes: ['h0', 'h3'], color: '#FF5E00', layer: 3 },
-      { id: 'p6', name: 'DIAGONAL B', holes: ['h2', 'h5'], color: '#00F5D4', layer: 2 },
-      { id: 'p7', name: 'CENTER TIE', holes: ['h1', 'h4'], color: '#4D96FF', layer: 1 },
-    ],
-    screws: {
-      h0: { color: '#00F5FF' },
-      h1: { color: '#FF007F' },
-      h2: { color: '#FFE600' },
-      h3: { color: '#39FF14' },
-      h4: { color: '#9D4EDD' },
-      h5: { color: '#FF5E00' },
-    },
-  },
-
-  // Level 12: Apex Overdrive (8 bars, Master Challenge)
-  {
-    name: 'APEX OVERDRIVE',
-    parMoves: 20,
-    holes: [
-      { id: 'h0', x: 80, y: 70 },
-      { id: 'h1', x: 260, y: 70 },
-      { id: 'h2', x: 170, y: 130 },
-      { id: 'h3', x: 60, y: 210 },
-      { id: 'h4', x: 280, y: 210 },
-      { id: 'h5', x: 170, y: 270 },
-      { id: 'h6', x: 80, y: 330 },
-      { id: 'h7', x: 260, y: 330 },
-      { id: 'h_s1', x: 120, y: 200 },
-      { id: 'h_s2', x: 220, y: 200 },
-      { id: 'h_s3', x: 170, y: 200 },
-    ],
-    planks: [
-      { id: 'p0', name: 'TITAN NORTH', holes: ['h0', 'h1'], color: '#00F5FF', layer: 8 },
-      { id: 'p1', name: 'NORTH CHEVRON', holes: ['h0', 'h2'], color: '#FF007F', layer: 7 },
-      { id: 'p2', name: 'NORTH LINK', holes: ['h1', 'h2'], color: '#FFE600', layer: 6 },
-      { id: 'p3', name: 'OUTER LEFT', holes: ['h3', 'h6'], color: '#39FF14', layer: 5 },
-      { id: 'p4', name: 'OUTER RIGHT', holes: ['h4', 'h7'], color: '#9D4EDD', layer: 4 },
-      { id: 'p5', name: 'SOUTH LINK', holes: ['h5', 'h6'], color: '#FF5E00', layer: 3 },
-      { id: 'p6', name: 'SOUTH CHEVRON', holes: ['h5', 'h7'], color: '#00F5D4', layer: 2 },
-      { id: 'p7', name: 'TITAN SOUTH', holes: ['h6', 'h7'], color: '#4D96FF', layer: 1 },
-    ],
-    screws: {
-      h0: { color: '#00F5FF' },
-      h1: { color: '#FF007F' },
-      h2: { color: '#FFE600' },
-      h3: { color: '#39FF14' },
-      h4: { color: '#9D4EDD' },
-      h5: { color: '#FF5E00' },
-      h6: { color: '#00F5D4' },
-      h7: { color: '#4D96FF' },
     },
   },
 ];
-
-/**
- * Procedural Endless Level Generator (for Level 13+)
- */
-function generateProceduralLevel(levelNum) {
-  const barCount = Math.min(8, 4 + Math.floor((levelNum - 12) / 2));
-  const holes = [];
-  const planks = [];
-  const screws = {};
-
-  // Grid coordinates
-  const rows = 3;
-  const cols = 3;
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      holes.push({
-        id: `h_${r}_${c}`,
-        x: 80 + c * 90,
-        y: 100 + r * 95,
-      });
-    }
-  }
-
-  // Extra 2 spare sockets
-  holes.push({ id: 'h_spare_top', x: 170, y: 55 });
-  holes.push({ id: 'h_spare_bot', x: 170, y: 345 });
-
-  // Connect pairs of holes for struts
-  const availableIndices = [];
-  for (let i = 0; i < 9; i++) availableIndices.push(i);
-
-  for (let i = 0; i < barCount; i++) {
-    const idx1 = availableIndices[i % availableIndices.length];
-    const idx2 = (idx1 + 1 + (i % 3)) % 9;
-    const h1 = holes[idx1].id;
-    const h2 = holes[idx2].id;
-    const color = STRUT_COLORS[i % STRUT_COLORS.length];
-
-    planks.push({
-      id: `proc_p_${i}`,
-      name: `STRUT ${i + 1}`,
-      holes: [h1, h2],
-      color,
-      layer: barCount - i,
-    });
-
-    screws[h1] = { color };
-    screws[h2] = { color };
-  }
-
-  return {
-    name: `ENDLESS CORE // LVL ${levelNum}`,
-    parMoves: barCount * 2 + 4,
-    holes,
-    planks,
-    screws,
-  };
-}
-
-/**
- * Helper to clone deep level config
- */
-function cloneLevel(cfg) {
-  return {
-    name: cfg.name,
-    parMoves: cfg.parMoves,
-    holes: cfg.holes.map((h) => ({ ...h })),
-    planks: cfg.planks.map((p) => ({ ...p, holes: [...p.holes] })),
-    screws: { ...cfg.screws },
-  };
-}
-
-/**
- * Independent Animated Strut Plank Component
- * Encapsulates dropping and pivoting physics to comply with React 19 rules.
- */
-function StrutPlank({
-  plank,
-  h1,
-  h2,
-  isFallen,
-  remainingScrewsCount,
-  onPlankDropStarted,
-  onPlankDropFinished,
-}) {
-  const [translateY] = useState(() => new Animated.Value(0));
-  const [rotate] = useState(() => new Animated.Value(0));
-  const [opacity] = useState(() => new Animated.Value(1));
-  const isDroppingRef = useRef(false);
-
-  // Geometric calculations
-  const dx = h2.x - h1.x;
-  const dy = h2.y - h1.y;
-  const length = Math.sqrt(dx * dx + dy * dy);
-  const initialAngle = (Math.atan2(dy, dx) * 180) / Math.PI;
-  const cx = (h1.x + h2.x) / 2;
-  const cy = (h1.y + h2.y) / 2;
-  const barWidth = length + 44;
-  const barHeight = 38;
-
-  useEffect(() => {
-    if (isFallen) return;
-
-    if (remainingScrewsCount === 0) {
-      if (isDroppingRef.current) return;
-      isDroppingRef.current = true;
-      onPlankDropStarted?.(plank, cx, cy);
-
-      Animated.parallel([
-        Animated.timing(translateY, {
-          toValue: 500,
-          duration: 550,
-          easing: Easing.bezier(0.4, 0, 1, 1),
-          useNativeDriver: true,
-        }),
-        Animated.timing(rotate, {
-          toValue: 35,
-          duration: 550,
-          easing: Easing.quad,
-          useNativeDriver: true,
-        }),
-        Animated.timing(opacity, {
-          toValue: 0,
-          duration: 450,
-          delay: 100,
-          useNativeDriver: true,
-        }),
-      ]).start(() => {
-        onPlankDropFinished?.(plank.id);
-      });
-    } else if (remainingScrewsCount === 1) {
-      Animated.spring(rotate, {
-        toValue: 20,
-        friction: 4,
-        tension: 40,
-        useNativeDriver: true,
-      }).start();
-    } else {
-      Animated.spring(rotate, {
-        toValue: 0,
-        friction: 6,
-        useNativeDriver: true,
-      }).start();
-    }
-  }, [remainingScrewsCount, isFallen, plank, cx, cy, onPlankDropStarted, onPlankDropFinished, translateY, rotate, opacity]);
-
-  if (isFallen) return null;
-
-  return (
-    <Animated.View
-      pointerEvents="none"
-      style={[
-        styles.plankView,
-        {
-          width: barWidth,
-          height: barHeight,
-          left: cx - barWidth / 2,
-          top: cy - barHeight / 2,
-          transform: [
-            { translateY },
-            {
-              rotate: rotate.interpolate({
-                inputRange: [-180, 180],
-                outputRange: [`${initialAngle - 180}deg`, `${initialAngle + 180}deg`],
-              }),
-            },
-          ],
-          opacity,
-        },
-      ]}
-    >
-      <Svg width={barWidth} height={barHeight}>
-        <Defs>
-          <SvgLinearGradient id={`plankGrad_${plank.id}`} x1="0%" y1="0%" x2="100%" y2="100%">
-            <Stop offset="0%" stopColor={plank.color} stopOpacity="0.35" />
-            <Stop offset="50%" stopColor="#0B0D1A" stopOpacity="0.85" />
-            <Stop offset="100%" stopColor={plank.color} stopOpacity="0.35" />
-          </SvgLinearGradient>
-        </Defs>
-
-        {/* Main Strut Capsule Body */}
-        <Rect
-          x={2}
-          y={2}
-          width={barWidth - 4}
-          height={barHeight - 4}
-          rx={17}
-          fill={`url(#plankGrad_${plank.id})`}
-          stroke={plank.color}
-          strokeWidth={2.2}
-        />
-
-        {/* Center Energy Core Line */}
-        <Line
-          x1={24}
-          y1={barHeight / 2}
-          x2={barWidth - 24}
-          y2={barHeight / 2}
-          stroke={plank.color}
-          strokeWidth={2}
-          opacity={0.6}
-          strokeDasharray="6 3"
-        />
-
-        {/* Drilled Holes Grommets at endpoints */}
-        <Circle cx={22} cy={barHeight / 2} r={15} fill="#060812" stroke={plank.color} strokeWidth={1.5} />
-        <Circle
-          cx={barWidth - 22}
-          cy={barHeight / 2}
-          r={15}
-          fill="#060812"
-          stroke={plank.color}
-          strokeWidth={1.5}
-        />
-      </Svg>
-    </Animated.View>
-  );
-}
 
 export default function CyberScrewGame({
   isPaused = false,
@@ -654,11 +270,30 @@ export default function CyberScrewGame({
   const [highScore, setHighScore] = useState(0);
   const [movesCount, setMovesCount] = useState(0);
 
-  // Active level state (initialized lazily to avoid React 19 setState in effect)
-  const [levelConfig, setLevelConfig] = useState(() => cloneLevel(CURATED_LEVELS[0]));
-  const [screws, setScrews] = useState(() => ({ ...CURATED_LEVELS[0].screws }));
+  // Active level config
+  const levelIdx = Math.min(currentLevel - 1, CURATED_LEVELS.length - 1);
+  const levelConfig = CURATED_LEVELS[levelIdx];
+
+  // Board holes + Top Spare sockets combined
+  const allHoles = useMemo(() => {
+    return [...SPARE_SOCKETS, ...levelConfig.holes];
+  }, [levelConfig.holes]);
+
+  const holeMap = useMemo(() => {
+    const map = {};
+    allHoles.forEach((h) => {
+      map[h.id] = h;
+    });
+    return map;
+  }, [allHoles]);
+
+  // Current screws mapping: { [holeId]: { color } }
+  const [screws, setScrews] = useState(() => ({ ...levelConfig.initialScrews }));
+  // Fallen planks set: Set<plankId>
   const [fallenPlanks, setFallenPlanks] = useState(() => new Set());
+  // Selected screw hole ID
   const [selectedHoleId, setSelectedHoleId] = useState(null);
+  // Undo history stack
   const [undoStack, setUndoStack] = useState([]);
   const [isWon, setIsWon] = useState(false);
   const [showResultModal, setShowResultModal] = useState(false);
@@ -674,13 +309,8 @@ export default function CyberScrewGame({
 
   // Initialize level
   const initLevel = useCallback((lvl) => {
-    const config =
-      lvl <= CURATED_LEVELS.length
-        ? cloneLevel(CURATED_LEVELS[lvl - 1])
-        : generateProceduralLevel(lvl);
-
-    setLevelConfig(config);
-    setScrews({ ...config.screws });
+    const cfg = CURATED_LEVELS[Math.min(lvl - 1, CURATED_LEVELS.length - 1)];
+    setScrews({ ...cfg.initialScrews });
     setFallenPlanks(new Set());
     setSelectedHoleId(null);
     setUndoStack([]);
@@ -689,25 +319,16 @@ export default function CyberScrewGame({
     setShowResultModal(false);
   }, []);
 
-  // Map of hole ID to Hole object for quick lookup
-  const holeMap = useMemo(() => {
-    const map = {};
-    levelConfig.holes.forEach((h) => {
-      map[h.id] = h;
-    });
-    return map;
-  }, [levelConfig.holes]);
-
-  // Check victory callback
+  // Check victory condition
   const checkVictory = useCallback(
-    (currentFallenSet) => {
+    (currentFallenSet, currentMoves) => {
       if (currentFallenSet.size === levelConfig.planks.length) {
         setIsWon(true);
         triggerPerfectHaptic();
         playPerfectSound();
 
-        const parBonus = Math.max(0, (levelConfig.parMoves - movesCount) * 20);
-        const earned = 200 + currentLevel * 100 + parBonus;
+        const parBonus = Math.max(0, (levelConfig.parMoves - currentMoves) * 25);
+        const earned = 250 + currentLevel * 100 + parBonus;
         const nextScore = totalScore + earned;
         setTotalScore(nextScore);
 
@@ -719,39 +340,19 @@ export default function CyberScrewGame({
 
         juiceRef.current?.celebrate(
           '⚡ ALL STRUTS DISMANTLED!',
-          `Cleared in ${movesCount + 1} moves! +${earned} PTS`,
+          `Core unlocked in ${currentMoves} moves! +${earned} PTS`,
           COLORS.matrixMint
         );
 
         setTimeout(() => {
           setShowResultModal(true);
-        }, 1200);
+        }, 1100);
       }
     },
-    [levelConfig.planks.length, levelConfig.parMoves, movesCount, currentLevel, totalScore, highScore, onScoreUpdate]
+    [levelConfig.planks.length, levelConfig.parMoves, currentLevel, totalScore, highScore, onScoreUpdate]
   );
 
-  // Plank drop event handlers
-  const handlePlankDropStarted = useCallback((plank, cx, cy) => {
-    juiceRef.current?.burst(cx, cy, plank.color, 16);
-    juiceRef.current?.shake(3, 4);
-    playPerfectSound();
-    triggerLightHaptic();
-  }, []);
-
-  const handlePlankDropFinished = useCallback(
-    (plankId) => {
-      setFallenPlanks((prev) => {
-        const next = new Set(prev);
-        next.add(plankId);
-        checkVictory(next);
-        return next;
-      });
-    },
-    [checkVictory]
-  );
-
-  // Handle tap on a hole (either selecting a screw or moving selected screw into empty hole)
+  // Handle tap on a hole or socket
   const handleHolePress = useCallback(
     (holeId) => {
       if (isPaused || isWon) return;
@@ -759,74 +360,107 @@ export default function CyberScrewGame({
       const hasScrew = !!screws[holeId];
 
       if (!selectedHoleId) {
-        // No screw selected yet
+        // Step 1: Select a screw
         if (hasScrew) {
-          // Select this screw!
           setSelectedHoleId(holeId);
           playSliceSound();
           triggerSelectionHaptic();
         } else {
-          // Tapped empty hole with nothing selected
+          // Tapped an empty socket with no screw selected
           playSnapTickSound();
           triggerLightHaptic();
         }
       } else {
-        // A screw is already selected
+        // Step 2: A screw is currently selected
         if (selectedHoleId === holeId) {
           // Tapped the same screw -> Deselect
           setSelectedHoleId(null);
           playSnapTickSound();
           triggerLightHaptic();
         } else if (hasScrew) {
-          // Tapped another screw -> Switch selection to the new screw
+          // Tapped another screw -> Switch selection
           setSelectedHoleId(holeId);
           playSliceSound();
           triggerSelectionHaptic();
         } else {
-          // Tapped an EMPTY hole -> RELOCATE SCREW HERE!
+          // Tapped an EMPTY socket -> MOVE SCREW HERE!
           const movingScrew = screws[selectedHoleId];
           const nextScrews = { ...screws };
           delete nextScrews[selectedHoleId];
           nextScrews[holeId] = movingScrew;
 
-          // Push move to undo stack
+          const nextMoves = movesCount + 1;
+          setMovesCount(nextMoves);
+
+          // Save to Undo stack
           setUndoStack((prev) => [
             ...prev,
             {
-              fromHole: selectedHoleId,
-              toHole: holeId,
               screwsSnapshot: { ...screws },
               fallenSnapshot: new Set(fallenPlanks),
+              moves: movesCount,
             },
           ]);
 
           setScrews(nextScrews);
           setSelectedHoleId(null);
-          setMovesCount((m) => m + 1);
 
           playTapSound();
           triggerMediumHaptic();
 
-          // Flash socket juice
+          // Spark juice at target socket
           const destHole = holeMap[holeId];
           if (destHole) {
-            juiceRef.current?.burst(destHole.x, destHole.y, movingScrew.color, 8);
+            juiceRef.current?.burst(destHole.x, destHole.y, movingScrew.color, 10);
+          }
+
+          // Check if any active plank now has ZERO screws holding it!
+          const nextFallen = new Set(fallenPlanks);
+          let dropOccurred = false;
+
+          levelConfig.planks.forEach((plank) => {
+            if (nextFallen.has(plank.id)) return;
+
+            // Count how many screws are currently in this plank's holes
+            const remaining = plank.holes.filter((hId) => !!nextScrews[hId]).length;
+            if (remaining === 0) {
+              // ALL SCREWS REMOVED! THE PLANK DROPS!
+              nextFallen.add(plank.id);
+              dropOccurred = true;
+
+              const h1 = holeMap[plank.holes[0]];
+              const h2 = holeMap[plank.holes[1]];
+              const cx = h1 && h2 ? (h1.x + h2.x) / 2 : 170;
+              const cy = h1 && h2 ? (h1.y + h2.y) / 2 : 200;
+
+              juiceRef.current?.burst(cx, cy, plank.color, 20);
+              juiceRef.current?.shake(6, 6);
+              juiceRef.current?.popup('💥 STRUT FREED!', plank.name, plank.color);
+            }
+          });
+
+          if (dropOccurred) {
+            setFallenPlanks(nextFallen);
+            playPerfectSound();
+            triggerPerfectHaptic();
+            checkVictory(nextFallen, nextMoves);
           }
         }
       }
     },
-    [isPaused, isWon, screws, selectedHoleId, fallenPlanks, holeMap]
+    [isPaused, isWon, screws, selectedHoleId, movesCount, fallenPlanks, holeMap, levelConfig.planks, checkVictory]
   );
 
-  // Undo previous screw relocation
+  // Undo move
   const handleUndo = useCallback(() => {
     if (isPaused || undoStack.length === 0 || isWon) return;
 
-    const lastMove = undoStack[undoStack.length - 1];
+    const last = undoStack[undoStack.length - 1];
     setUndoStack((prev) => prev.slice(0, -1));
 
-    setScrews(lastMove.screwsSnapshot);
-    setFallenPlanks(new Set(lastMove.fallenSnapshot));
+    setScrews(last.screwsSnapshot);
+    setFallenPlanks(new Set(last.fallenSnapshot));
+    setMovesCount(last.moves);
     setSelectedHoleId(null);
 
     playTapSound();
@@ -834,7 +468,7 @@ export default function CyberScrewGame({
     juiceRef.current?.popup('↺ UNDO', 'Move reverted', COLORS.cyan);
   }, [isPaused, undoStack, isWon]);
 
-  // Restart current level
+  // Restart level
   const handleRestart = useCallback(() => {
     if (isPaused) return;
     initLevel(currentLevel);
@@ -843,34 +477,38 @@ export default function CyberScrewGame({
     juiceRef.current?.popup('⚡ RESTART', `Level ${currentLevel} reset`, COLORS.solarGold);
   }, [isPaused, initLevel, currentLevel]);
 
-  // Hint: Highlights a recommended screw to relocate
+  // Hint
   const handleHint = useCallback(() => {
     if (isPaused || isWon) return;
 
-    // Find a plank that has only 1 or 2 screws left
+    // Find an active plank that has 1 screw left
     const activePlanks = levelConfig.planks.filter((p) => !fallenPlanks.has(p.id));
     if (activePlanks.length === 0) return;
 
-    // Pick top layer active plank
-    const targetPlank = activePlanks.reduce((top, p) => (p.layer > top.layer ? p : top), activePlanks[0]);
+    let targetPlank = activePlanks.find((p) => {
+      const remaining = p.holes.filter((hId) => !!screws[hId]).length;
+      return remaining === 1;
+    });
+
+    if (!targetPlank) {
+      targetPlank = activePlanks.reduce((top, p) => (p.layer > top.layer ? p : top), activePlanks[0]);
+    }
+
     const screwHole = targetPlank.holes.find((hId) => !!screws[hId]);
-
-    // Find an empty hole
-    const emptyHole = levelConfig.holes.find((h) => !screws[h.id]);
-
-    if (screwHole && emptyHole) {
+    if (screwHole) {
       setSelectedHoleId(screwHole);
-      juiceRef.current?.popup('💡 TACTICAL HINT', `Relocate bolt from ${targetPlank.name}`, targetPlank.color);
       playTapSound();
       triggerMediumHaptic();
+      juiceRef.current?.popup('💡 TACTICAL HINT', `Relocate screw from ${targetPlank.name}`, targetPlank.color);
     }
-  }, [isPaused, isWon, levelConfig.planks, levelConfig.holes, fallenPlanks, screws]);
+  }, [isPaused, isWon, levelConfig.planks, fallenPlanks, screws]);
 
   // Next level handler
   const handleNextLevel = useCallback(() => {
-    initLevel(currentLevel + 1);
-    setCurrentLevel((lvl) => lvl + 1);
-  }, [initLevel, currentLevel]);
+    const nextLvl = currentLevel + 1;
+    setCurrentLevel(nextLvl);
+    initLevel(nextLvl);
+  }, [currentLevel, initLevel]);
 
   // Calculate remaining struts count
   const remainingCount = levelConfig.planks.length - fallenPlanks.size;
@@ -915,16 +553,24 @@ export default function CyberScrewGame({
         {/* Board Arena */}
         <View style={styles.boardWrapper}>
           <View style={styles.boardCard}>
-            {/* Background Grid & Cyber Border */}
+            {/* SVG Visual Layer: Board, Spare Rack, Planks, Sockets, and Screws */}
             <Svg width={BOARD_W} height={BOARD_H} style={StyleSheet.absoluteFill}>
               <Defs>
-                <SvgRadialGradient id="bgGrad" cx="50%" cy="50%" r="60%">
+                {/* Background Radial Gradient */}
+                <SvgRadialGradient id="bgGrad" cx="50%" cy="50%" r="65%">
                   <Stop offset="0%" stopColor="#141829" stopOpacity="1" />
                   <Stop offset="100%" stopColor="#080A14" stopOpacity="1" />
                 </SvgRadialGradient>
+
+                {/* Metallic Screw Head Radial Gradient */}
+                <SvgRadialGradient id="screwCapGrad" cx="35%" cy="30%" r="60%">
+                  <Stop offset="0%" stopColor="#4A5568" />
+                  <Stop offset="65%" stopColor="#1A202C" />
+                  <Stop offset="100%" stopColor="#0A0E18" />
+                </SvgRadialGradient>
               </Defs>
 
-              {/* Panel Base */}
+              {/* Panel Base Plate */}
               <Rect
                 x={4}
                 y={4}
@@ -936,173 +582,224 @@ export default function CyberScrewGame({
                 strokeWidth={2}
               />
 
-              {/* High-tech Corner Decals */}
-              <Path d="M 8 28 L 8 8 L 28 8" stroke="#00F5FF" strokeWidth={2} fill="none" />
-              <Path
-                d={`M ${BOARD_W - 28} 8 L ${BOARD_W - 8} 8 L ${BOARD_W - 8} 28`}
-                stroke="#00F5FF"
-                strokeWidth={2}
-                fill="none"
-              />
-              <Path
-                d={`M 8 ${BOARD_H - 28} L 8 ${BOARD_H - 8} L 28 ${BOARD_H - 8}`}
-                stroke="#00F5FF"
-                strokeWidth={2}
-                fill="none"
-              />
-              <Path
-                d={`M ${BOARD_W - 28} ${BOARD_H - 8} L ${BOARD_W - 8} ${BOARD_H - 8} L ${BOARD_W - 8} ${BOARD_H - 28}`}
-                stroke="#00F5FF"
-                strokeWidth={2}
-                fill="none"
-              />
+              {/* Cyber Decal Corners */}
+              <Path d="M 10 30 L 10 10 L 30 10" stroke="#00F5FF" strokeWidth={2} fill="none" />
+              <Path d={`M ${BOARD_W - 30} 10 L ${BOARD_W - 10} 10 L ${BOARD_W - 10} 30`} stroke="#00F5FF" strokeWidth={2} fill="none" />
+              <Path d={`M 10 ${BOARD_H - 30} L 10 ${BOARD_H - 10} L 30 ${BOARD_H - 10}`} stroke="#00F5FF" strokeWidth={2} fill="none" />
+              <Path d={`M ${BOARD_W - 30} ${BOARD_H - 10} L ${BOARD_W - 10} ${BOARD_H - 10} L ${BOARD_W - 10} ${BOARD_H - 30}`} stroke="#00F5FF" strokeWidth={2} fill="none" />
 
-              {/* Subtle Tech Lines */}
-              <Line x1={20} y1={50} x2={BOARD_W - 20} y2={50} stroke="#00F5FF15" strokeDasharray="4 4" />
-              <Line
-                x1={20}
-                y1={BOARD_H - 50}
-                x2={BOARD_W - 20}
-                y2={BOARD_H - 50}
-                stroke="#00F5FF15"
-                strokeDasharray="4 4"
+              {/* Top Spare Sockets Tray Header */}
+              <Rect
+                x={40}
+                y={18}
+                width={BOARD_W - 80}
+                height={64}
+                rx={12}
+                fill="#0A0D1C"
+                stroke="rgba(0, 245, 255, 0.25)"
+                strokeWidth={1.5}
               />
+              <Line x1={40} y1={82} x2={BOARD_W - 40} y2={82} stroke="#00F5FF22" strokeWidth={1} strokeDasharray="4 4" />
 
-              {/* Base Sockets (Empty Holes Background) */}
-              {levelConfig.holes.map((h) => {
-                const isSelected = selectedHoleId === h.id;
+              {/* Base Sockets for All Holes (Spare Sockets + Board Holes) */}
+              {allHoles.map((h) => {
                 const hasBolt = !!screws[h.id];
+                const isTarget = selectedHoleId != null && !hasBolt;
+
                 return (
-                  <G key={`socket_bg_${h.id}`}>
+                  <G key={`socket_${h.id}`}>
                     {/* Socket Recessed Cavity */}
                     <Circle
                       cx={h.x}
                       cy={h.y}
-                      r={19}
-                      fill="#060810"
-                      stroke={isSelected ? '#FFE600' : hasBolt ? '#00F5FF33' : '#00F5FF66'}
-                      strokeWidth={isSelected ? 2.5 : 1.5}
+                      r={18}
+                      fill="#060812"
+                      stroke={h.isSpare ? 'rgba(255, 230, 0, 0.45)' : 'rgba(0, 245, 255, 0.35)'}
+                      strokeWidth={1.5}
                     />
-                    <Circle cx={h.x} cy={h.y} r={13} fill="#020306" />
-                    {/* Socket Thread Cross */}
-                    {!hasBolt && (
-                      <G opacity={0.4}>
-                        <Line x1={h.x - 7} y1={h.y} x2={h.x + 7} y2={h.y} stroke="#00F5FF" strokeWidth={1} />
-                        <Line x1={h.x} y1={h.y - 7} x2={h.x} y2={h.y + 7} stroke="#00F5FF" strokeWidth={1} />
+                    <Circle cx={h.x} cy={h.y} r={12} fill="#020306" />
+
+                    {/* Empty Socket Thread Details */}
+                    {!hasBolt && !isTarget && (
+                      <G opacity={0.35}>
+                        <Line x1={h.x - 6} y1={h.y} x2={h.x + 6} y2={h.y} stroke="#00F5FF" strokeWidth={1} />
+                        <Line x1={h.x} y1={h.y - 6} x2={h.x} y2={h.y + 6} stroke="#00F5FF" strokeWidth={1} />
+                      </G>
+                    )}
+
+                    {/* Pulsing Target Ring when a screw is selected and this socket is free */}
+                    {isTarget && (
+                      <G>
+                        <Circle
+                          cx={h.x}
+                          cy={h.y}
+                          r={18}
+                          fill="rgba(0, 245, 255, 0.16)"
+                          stroke="#00F5FF"
+                          strokeWidth={2}
+                          strokeDasharray="5 3"
+                        />
+                        <Circle cx={h.x} cy={h.y} r={4.5} fill="#00F5FF" />
                       </G>
                     )}
                   </G>
                 );
               })}
-            </Svg>
 
-            {/* Overlapping Planks / Struts Layer (Sorted by layer) */}
-            {levelConfig.planks
-              .slice()
-              .sort((a, b) => a.layer - b.layer)
-              .map((plank) => {
-                const h1 = holeMap[plank.holes[0]];
-                const h2 = holeMap[plank.holes[1]];
-                if (!h1 || !h2) return null;
+              {/* Layered Cyber Struts / Planks */}
+              {levelConfig.planks
+                .slice()
+                .sort((a, b) => a.layer - b.layer)
+                .map((plank) => {
+                  if (fallenPlanks.has(plank.id)) return null;
 
-                const remainingScrews = plank.holes.filter((hId) => !!screws[hId]).length;
+                  const h1 = holeMap[plank.holes[0]];
+                  const h2 = holeMap[plank.holes[1]];
+                  if (!h1 || !h2) return null;
+
+                  const hasS1 = !!screws[plank.holes[0]];
+                  const hasS2 = !!screws[plank.holes[1]];
+
+                  // Geometric calculations
+                  const dx = h2.x - h1.x;
+                  const dy = h2.y - h1.y;
+                  const length = Math.sqrt(dx * dx + dy * dy);
+                  const initialAngle = (Math.atan2(dy, dx) * 180) / Math.PI;
+
+                  // Determine pivot and rotation based on remaining screws
+                  let pivotX = h1.x;
+                  let pivotY = h1.y;
+                  let angle = initialAngle;
+
+                  if (hasS1 && !hasS2) {
+                    // Pinned ONLY at h1 -> h2 drops down under gravity
+                    pivotX = h1.x;
+                    pivotY = h1.y;
+                    angle = initialAngle + (dx >= 0 ? 35 : -35);
+                  } else if (!hasS1 && hasS2) {
+                    // Pinned ONLY at h2 -> h1 drops down under gravity
+                    pivotX = h2.x;
+                    pivotY = h2.y;
+                    const reverseAngle = (Math.atan2(-dy, -dx) * 180) / Math.PI;
+                    angle = reverseAngle + (-dx >= 0 ? 35 : -35);
+                  }
+
+                  return (
+                    <G
+                      key={`plank_${plank.id}`}
+                      transform={`translate(${pivotX}, ${pivotY}) rotate(${angle})`}
+                    >
+                      {/* Main Strut Capsule Body */}
+                      <Rect
+                        x={-18}
+                        y={-17}
+                        width={length + 36}
+                        height={34}
+                        rx={17}
+                        fill="#0A0E1C"
+                        stroke={plank.color}
+                        strokeWidth={2.5}
+                      />
+
+                      {/* Center Energy Core Line */}
+                      <Line
+                        x1={16}
+                        y1={0}
+                        x2={length - 16}
+                        y2={0}
+                        stroke={plank.color}
+                        strokeWidth={2}
+                        strokeDasharray="6 4"
+                        opacity={0.65}
+                      />
+
+                      {/* Grommet Cutout Holes at endpoints */}
+                      <Circle cx={0} cy={0} r={13} fill="#050711" stroke={plank.color} strokeWidth={1.5} />
+                      <Circle cx={length} cy={0} r={13} fill="#050711" stroke={plank.color} strokeWidth={1.5} />
+                    </G>
+                  );
+                })}
+
+              {/* Active Screws / Bolts */}
+              {allHoles.map((h) => {
+                const screw = screws[h.id];
+                if (!screw) return null;
+
+                const isSelected = selectedHoleId === h.id;
+                const r = isSelected ? 19 : 16;
 
                 return (
-                  <StrutPlank
-                    key={`plank_${plank.id}`}
-                    plank={plank}
-                    h1={h1}
-                    h2={h2}
-                    isFallen={fallenPlanks.has(plank.id)}
-                    remainingScrewsCount={remainingScrews}
-                    onPlankDropStarted={handlePlankDropStarted}
-                    onPlankDropFinished={handlePlankDropFinished}
-                  />
+                  <G key={`bolt_${h.id}`}>
+                    {/* Selected Glowing Halo */}
+                    {isSelected && (
+                      <Circle
+                        cx={h.x}
+                        cy={h.y}
+                        r={25}
+                        fill="none"
+                        stroke="#FFE600"
+                        strokeWidth={2}
+                        strokeDasharray="5 3"
+                      />
+                    )}
+
+                    {/* Screw Head Flange */}
+                    <Circle
+                      cx={h.x}
+                      cy={h.y}
+                      r={r}
+                      fill="url(#screwCapGrad)"
+                      stroke={isSelected ? '#FFE600' : screw.color}
+                      strokeWidth={isSelected ? 2.8 : 2}
+                    />
+
+                    {/* Phillips Head Cross Cut */}
+                    <Line
+                      x1={h.x - (isSelected ? 10 : 8)}
+                      y1={h.y}
+                      x2={h.x + (isSelected ? 10 : 8)}
+                      y2={h.y}
+                      stroke={isSelected ? '#FFE600' : '#FFFFFF'}
+                      strokeWidth={3}
+                      strokeLinecap="round"
+                    />
+                    <Line
+                      x1={h.x}
+                      y1={h.y - (isSelected ? 10 : 8)}
+                      x2={h.x}
+                      y2={h.y + (isSelected ? 10 : 8)}
+                      stroke={isSelected ? '#FFE600' : '#FFFFFF'}
+                      strokeWidth={3}
+                      strokeLinecap="round"
+                    />
+
+                    {/* Central Glowing Core */}
+                    <Circle
+                      cx={h.x}
+                      cy={h.y}
+                      r={isSelected ? 5 : 4}
+                      fill={isSelected ? '#FFE600' : screw.color}
+                    />
+                  </G>
                 );
               })}
+            </Svg>
 
-            {/* Interactive Screws & Sockets Layer */}
-            {levelConfig.holes.map((hole) => {
-              const screw = screws[hole.id];
-              const isSelected = selectedHoleId === hole.id;
-
-              return (
-                <Pressable
-                  key={`hole_touch_${hole.id}`}
-                  style={[
-                    styles.holeTouchTarget,
-                    {
-                      left: hole.x - 28,
-                      top: hole.y - 28,
-                    },
-                  ]}
-                  onPress={() => handleHolePress(hole.id)}
-                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-                >
-                  {/* Empty Hole Target Ring (when a screw is selected and this socket is empty) */}
-                  {!screw && selectedHoleId && (
-                    <View style={styles.openTargetPulse}>
-                      <View style={styles.openTargetInner} />
-                    </View>
-                  )}
-
-                  {/* Active Plasma Screw / Bolt */}
-                  {screw && (
-                    <View
-                      style={[
-                        styles.boltHead,
-                        isSelected && styles.boltHeadSelected,
-                        { borderColor: isSelected ? '#FFE600' : screw.color },
-                      ]}
-                    >
-                      <Svg width={36} height={36} viewBox="0 0 36 36">
-                        <Defs>
-                          <SvgRadialGradient id={`screwCap_${hole.id}`} cx="40%" cy="35%" r="60%">
-                            <Stop offset="0%" stopColor="#4A5568" />
-                            <Stop offset="70%" stopColor="#1A202C" />
-                            <Stop offset="100%" stopColor="#0D1117" />
-                          </SvgRadialGradient>
-                        </Defs>
-
-                        {/* Bolt Flange */}
-                        <Circle cx={18} cy={18} r={16} fill={`url(#screwCap_${hole.id})`} />
-                        <Circle
-                          cx={18}
-                          cy={18}
-                          r={16}
-                          fill="none"
-                          stroke={isSelected ? '#FFE600' : screw.color}
-                          strokeWidth={2}
-                        />
-
-                        {/* Metallic Phillips Head Cutouts (+) */}
-                        <Line
-                          x1={10}
-                          y1={18}
-                          x2={26}
-                          y2={18}
-                          stroke={isSelected ? '#FFE600' : '#FFFFFF'}
-                          strokeWidth={3.5}
-                          strokeLinecap="round"
-                        />
-                        <Line
-                          x1={18}
-                          y1={10}
-                          x2={18}
-                          y2={26}
-                          stroke={isSelected ? '#FFE600' : '#FFFFFF'}
-                          strokeWidth={3.5}
-                          strokeLinecap="round"
-                        />
-
-                        {/* Glowing Central Quantum Core */}
-                        <Circle cx={18} cy={18} r={4.5} fill={isSelected ? '#FFE600' : screw.color} />
-                      </Svg>
-                    </View>
-                  )}
-                </Pressable>
-              );
-            })}
+            {/* Direct Touch Targets Layer (Unobstructed, guaranteed high-precision mobile taps) */}
+            {allHoles.map((hole) => (
+              <Pressable
+                key={`touch_${hole.id}`}
+                style={[
+                  styles.holeTouchTarget,
+                  {
+                    left: hole.x - 26,
+                    top: hole.y - 26,
+                  },
+                ]}
+                onPress={() => handleHolePress(hole.id)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              />
+            ))}
           </View>
         </View>
 
@@ -1201,7 +898,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 10,
+    paddingVertical: 8,
   },
   boardCard: {
     width: BOARD_W,
@@ -1214,57 +911,13 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     elevation: 8,
   },
-  plankView: {
-    position: 'absolute',
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 10,
-  },
   holeTouchTarget: {
     position: 'absolute',
-    width: 56,
-    height: 56,
+    width: 52,
+    height: 52,
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 40,
-  },
-  boltHead: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    backgroundColor: '#101424',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.6,
-    shadowRadius: 5,
-    elevation: 6,
-  },
-  boltHeadSelected: {
-    transform: [{ scale: 1.25 }],
-    shadowColor: '#FFE600',
-    shadowOpacity: 0.85,
-    shadowRadius: 10,
-    elevation: 12,
-  },
-  openTargetPulse: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    borderWidth: 2,
-    borderStyle: 'dashed',
-    borderColor: '#00F5FF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(0, 245, 255, 0.12)',
-  },
-  openTargetInner: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: '#00F5FF',
+    zIndex: 100,
   },
   controlsBar: {
     flexDirection: 'row',
