@@ -39,11 +39,11 @@ const monoFont = Platform.select({
 
 const STORAGE_HIGH_SCORE_KEY = '@game_tower:best_dash_v1';
 
-// Cube and physics parameters
+// Cube and physics parameters (Fast & snappy arcade feel)
 const CUBE_SIZE = 22;
-const SPEED = 5.6;
-const GRAVITY = 0.52;
-const JUMP_VELOCITY = -8.2;
+const BASE_SPEED = 7.6;
+const GRAVITY = 0.60;
+const JUMP_VELOCITY = -9.2;
 const CORRIDOR_HEIGHT = 118;
 
 // Phase Thresholds in Distance (Endless Mode Progression)
@@ -135,119 +135,119 @@ function createGalaxyStars(count = 20) {
   return stars;
 }
 
-// Roaming space ships strictly outside the main corridor (in upper sky or bottom abyss)
-function createInitialNpcShips() {
+// Standing static space ships strictly outside the main corridor (upper sky or bottom abyss)
+function createInitialNpcShips(arenaW = 400, arenaH = 650) {
   return [
     {
       id: 'ship_ufo_1',
       zone: 'SKY_TOP',
       type: 'CUTE_UFO',
-      x: 70,
-      margin: 52,
-      speed: 1.1,
+      x: arenaW * 0.16,
+      y: 28,
+      speed: 0,
       dir: 1,
-      scale: 1.1,
+      scale: 1.05,
     },
     {
       id: 'ship_kitty_1',
       zone: 'SKY_TOP',
       type: 'STAR_KITTY',
-      x: 310,
-      margin: 68,
-      speed: 0.85,
+      x: arenaW * 0.50,
+      y: 32,
+      speed: 0,
       dir: -1,
-      scale: 1.05,
+      scale: 1.0,
     },
     {
       id: 'ship_fighter_1',
       zone: 'SKY_TOP',
       type: 'WARP_FIGHTER',
-      x: 180,
-      margin: 46,
-      speed: 1.4,
+      x: arenaW * 0.84,
+      y: 26,
+      speed: 0,
       dir: 1,
-      scale: 1.0,
+      scale: 0.95,
     },
     {
       id: 'ship_rocket_1',
       zone: 'SKY_BOTTOM',
       type: 'CHIBI_ROCKET',
-      x: 110,
-      margin: 48,
-      speed: 1.3,
+      x: arenaW * 0.22,
+      y: arenaH - 34,
+      speed: 0,
       dir: 1,
-      scale: 1.0,
+      scale: 0.95,
     },
     {
       id: 'ship_shuttle_1',
       zone: 'SKY_BOTTOM',
       type: 'CYBER_SHUTTLE',
-      x: 270,
-      margin: 60,
-      speed: 1.2,
+      x: arenaW * 0.74,
+      y: arenaH - 32,
+      speed: 0,
       dir: -1,
-      scale: 1.05,
+      scale: 1.0,
     },
   ];
 }
 
-// Fallen stars (shooting stars with luminous tails) strictly in sky (above top line) or abyss (below bottom line)
+// Fallen stars (shooting stars with luminous tails) strictly in sky or abyss flying completely outside the screen
 function createInitialFallingStars(arenaW = 400, arenaH = 650) {
   return [
     {
       id: 'fs_top_0',
       zone: 'SKY_TOP',
-      x: arenaW * 0.75,
-      y: 20,
-      vx: -4.8,
-      vy: 0.8,
-      len: 65,
+      x: arenaW * 0.85,
+      y: 22,
+      vx: -7.2,
+      vy: 0.35,
+      len: 75,
       color: '#00F5FF',
       opacity: 0.95,
     },
     {
       id: 'fs_top_1',
       zone: 'SKY_TOP',
-      x: arenaW * 0.45,
-      y: 35,
-      vx: -5.2,
-      vy: 0.6,
-      len: 75,
+      x: arenaW * 0.35,
+      y: 34,
+      vx: -7.8,
+      vy: 0.3,
+      len: 90,
       color: '#FFE600',
       opacity: 0.9,
     },
     {
       id: 'fs_top_2',
       zone: 'SKY_TOP',
-      x: arenaW * 0.9,
+      x: arenaW * 1.3,
       y: 18,
-      vx: -4.4,
-      vy: 0.9,
-      len: 60,
-      color: '#00F5D4',
-      opacity: 0.9,
-    },
-    {
-      id: 'fs_bot_0',
-      zone: 'SKY_BOTTOM',
-      x: arenaW * 0.82,
-      y: arenaH * 0.82,
-      vx: -4.6,
-      vy: 0.9,
+      vx: -7.0,
+      vy: 0.45,
       len: 70,
       color: '#FF007F',
       opacity: 0.85,
     },
     {
-      id: 'fs_bot_1',
+      id: 'fs_bot_0',
       zone: 'SKY_BOTTOM',
-      x: arenaW * 0.52,
-      y: arenaH * 0.88,
-      vx: -5.0,
-      vy: 0.7,
-      len: 65,
+      x: arenaW * 0.75,
+      y: arenaH - 38,
+      vx: -7.5,
+      vy: -0.3,
+      len: 80,
       color: '#00F5FF',
       opacity: 0.9,
+    },
+    {
+      id: 'fs_bot_1',
+      zone: 'SKY_BOTTOM',
+      x: arenaW * 1.25,
+      y: arenaH - 24,
+      vx: -8.0,
+      vy: -0.25,
+      len: 95,
+      color: '#39FF14',
+      opacity: 0.85,
     },
   ];
 }
@@ -286,7 +286,7 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
     turrets: [],
     projectiles: [],
     gaps: [],
-    npcShips: createInitialNpcShips(),
+    npcShips: createInitialNpcShips(arenaWidth, arenaHeight),
     stars: createGalaxyStars(),
     fallingStars: createInitialFallingStars(arenaWidth, arenaHeight),
   }));
@@ -314,7 +314,7 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
 
   // Ambient galaxy refs
   const starsRef = useRef(createGalaxyStars());
-  const npcShipsRef = useRef(createInitialNpcShips());
+  const npcShipsRef = useRef(createInitialNpcShips(arenaWidth, arenaHeight));
   const fallingStarsRef = useRef(createInitialFallingStars(arenaWidth, arenaHeight));
 
   // Load high score
@@ -627,7 +627,9 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
       }
       tickCountRef.current += 1;
 
-      const nextDist = distanceRef.current + SPEED;
+      // Dynamic speed progression: fast base speed that intensifies as distance grows
+      const currentSpeed = BASE_SPEED + Math.min(1.8, distanceRef.current / 4000);
+      const nextDist = distanceRef.current + currentSpeed;
       distanceRef.current = nextDist;
 
       const nextScore = Math.floor(nextDist / 5);
@@ -659,43 +661,28 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
         projectilesRef.current = projectilesRef.current.filter((p) => p.x > nextDist - 300);
       }
 
-      // Update roaming space ships
-      const ships = npcShipsRef.current;
-      for (let i = 0; i < ships.length; i++) {
-        const ship = ships[i];
-        ship.x += ship.speed * ship.dir;
-        if (ship.dir === 1 && ship.x > arenaWidth + 80) {
-          ship.x = -80;
-        } else if (ship.dir === -1 && ship.x < -80) {
-          ship.x = arenaWidth + 80;
-        }
-      }
+      // Space ships remain standing static in place (no positional update)
 
-      // Update falling stars (shooting stars with luminous tails) strictly outside gamearea
+      // Update falling stars (shooting stars with luminous tails): travel completely outside of the screen
       const fStars = fallingStarsRef.current;
       for (let i = 0; i < fStars.length; i++) {
         const fs = fStars[i];
         fs.x += fs.vx;
         fs.y += fs.vy;
 
-        const fsElev = getTrackElevation(nextDist + fs.x, segmentsRef.current);
-        const fsCeilY = baseFloorY - fsElev - CORRIDOR_HEIGHT;
-        const fsFloorY = baseFloorY - fsElev;
-
-        if (fs.zone === 'SKY_TOP') {
-          // If falling star leaves left edge OR approaches within 22px of the top ceiling line
-          if (fs.x < -80 || fs.y >= fsCeilY - 22) {
-            fs.x = arenaWidth + Math.random() * 80 + 30;
-            fs.y = Math.random() * Math.max(15, fsCeilY - 55) + 12;
-            fs.opacity = 0.8 + Math.random() * 0.2;
+        // When the falling star has flown COMPLETELY outside the screen borders:
+        if (fs.x < -120 || fs.y < -40 || fs.y > arenaHeight + 40) {
+          // Respawn outside the far right screen edge
+          fs.x = arenaWidth + 60 + Math.random() * 90;
+          if (fs.zone === 'SKY_TOP') {
+            fs.y = 14 + Math.random() * 26;
+            fs.vy = 0.3 + Math.random() * 0.3;
+          } else {
+            fs.y = arenaHeight - 44 + Math.random() * 24;
+            fs.vy = -0.3 - Math.random() * 0.3;
           }
-        } else {
-          // SKY_BOTTOM: If falling star leaves left/bottom edge OR approaches within 22px of bottom floor line
-          if (fs.x < -80 || fs.y > arenaHeight - 8 || fs.y <= fsFloorY + 22) {
-            fs.x = arenaWidth + Math.random() * 80 + 30;
-            fs.y = fsFloorY + 30 + Math.random() * Math.max(15, arenaHeight - (fsFloorY + 50));
-            fs.opacity = 0.75 + Math.random() * 0.25;
-          }
+          fs.vx = -7.0 - Math.random() * 1.5;
+          fs.opacity = 0.8 + Math.random() * 0.2;
         }
       }
 
@@ -971,7 +958,7 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
   } = frameState;
 
   // Viewport sampling for continuous corridor lines (top ceiling & bottom floor)
-  const sampleStep = 8;
+  const sampleStep = 12; // Smooth 60 FPS performance without per-frame trigonometric lag
   const numSteps = Math.ceil((arenaWidth + 60) / sampleStep) + 3;
   const samplePoints = [];
   for (let i = 0; i < numSteps; i++) {
@@ -1119,12 +1106,6 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
               <Stop offset="0%" stopColor="#14082C" stopOpacity="0.96" />
               <Stop offset="100%" stopColor="#060314" stopOpacity="0.96" />
             </LinearGradient>
-            <ClipPath id="skyTopClip">
-              <Path d={topWallPath} />
-            </ClipPath>
-            <ClipPath id="abyssBottomClip">
-              <Path d={botWallPath} />
-            </ClipPath>
           </Defs>
 
           {/* GALAXY DEEP SPACE BACKGROUND */}
@@ -1159,8 +1140,8 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
           {/* BOTTOM SOLID WALL (Curves dynamically with track elevations) */}
           <Path d={botWallPath} fill="url(#bottomWallGrad)" />
 
-          {/* UPPER SKY ZONE: Fallen Stars and Roaming Space Ships strictly ABOVE the top ceiling line */}
-          <G clipPath="url(#skyTopClip)">
+          {/* UPPER SKY ZONE: Fallen Stars and Static Space Ships strictly ABOVE the top ceiling line */}
+          <G>
             {fallingStars
               .filter((fs) => fs.zone === 'SKY_TOP')
               .map((fs) => (
@@ -1182,12 +1163,7 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
             {npcShips
               .filter((ship) => ship.zone === 'SKY_TOP')
               .map((ship) => {
-                const elevAtShip = getTrackElevation(distance + ship.x, segments);
-                const ceilY = baseFloorY - elevAtShip - CORRIDOR_HEIGHT;
-                // Strictly above ceiling line with at least 38px clearance
-                const candidateY = ceilY - (ship.margin || 52);
-                const sY = Math.max(18, Math.min(ceilY - 38, candidateY));
-
+                const sY = ship.y || 28;
                 const scaleX = ship.dir * ship.scale;
                 const scaleY = ship.scale;
 
@@ -1241,8 +1217,8 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
               })}
           </G>
 
-          {/* LOWER ABYSS ZONE: Fallen Stars and Roaming Space Ships strictly BELOW the bottom floor line */}
-          <G clipPath="url(#abyssBottomClip)">
+          {/* LOWER ABYSS ZONE: Fallen Stars and Static Space Ships strictly BELOW the bottom floor line */}
+          <G>
             {fallingStars
               .filter((fs) => fs.zone === 'SKY_BOTTOM')
               .map((fs) => (
@@ -1264,12 +1240,7 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
             {npcShips
               .filter((ship) => ship.zone === 'SKY_BOTTOM')
               .map((ship) => {
-                const elevAtShip = getTrackElevation(distance + ship.x, segments);
-                const floorY = baseFloorY - elevAtShip;
-                // Strictly below floor line with at least 26px clearance
-                const candidateY = floorY + (ship.margin || 42);
-                const sY = Math.min(arenaHeight - 20, Math.max(floorY + 26, candidateY));
-
+                const sY = ship.y || (arenaHeight - 34);
                 const scaleX = ship.dir * ship.scale;
                 const scaleY = ship.scale;
 
