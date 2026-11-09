@@ -98,7 +98,7 @@ const CURATED_LEVELS = [
     name: 'FUEL RESERVES',
     floorsCount: 3,
     requiresPetrol: true,
-    hasRival: false,
+    hasRival: true,
     stairs: [
       { fromFloor: 0, toFloor: 1, x: 75 },
       { fromFloor: 1, toFloor: 2, x: 265 },
@@ -236,6 +236,10 @@ export default function ThiefEscapeGame({
     facing: 1,
     hasDiamond: false,
     isAlive: levelConfig.hasRival,
+    isHiding: false,
+    hiddenWindowX: null,
+    hideTimer: 0,
+    snatchCooldown: 0,
     stepTimer: 0,
   }));
 
@@ -350,6 +354,10 @@ export default function ThiefEscapeGame({
         facing: 1,
         hasDiamond: false,
         isAlive: cfg.hasRival,
+        isHiding: false,
+        hiddenWindowX: null,
+        hideTimer: 0,
+        snatchCooldown: 0,
         stepTimer: 0,
       };
       setRival(initialRival);
@@ -409,7 +417,7 @@ export default function ThiefEscapeGame({
   }, [initLevel]);
 
   // Player Caught / Damaged
-  const handlePlayerBusted = useCallback(() => {
+  const handlePlayerBusted = useCallback((reason = 'BUSTED!') => {
     triggerGameOverHaptic();
     playGameOverSound();
     juiceRef.current?.shake(10, 10);
@@ -419,11 +427,11 @@ export default function ThiefEscapeGame({
       const nextLives = l - 1;
       if (nextLives <= 0) {
         setIsGameOver(true);
-        juiceRef.current?.popup('🚨 BUSTED!', 'Caught by security', COLORS.danger);
+        juiceRef.current?.popup(`🚨 ${reason}`, 'Caught or failed objective', COLORS.danger);
         return 0;
       } else {
         initLevel(level);
-        juiceRef.current?.popup('⚠️ DETECTED!', `${nextLives} Lives remaining`, COLORS.solarGold);
+        juiceRef.current?.popup(`⚠️ ${reason}`, `${nextLives} Lives remaining`, COLORS.solarGold);
         return nextLives;
       }
     });
@@ -689,49 +697,176 @@ export default function ThiefEscapeGame({
         });
       }
 
-      // 5. Update Rival AI Thief
+      // 5. Update Rival AI Thief: Sneaks, Hides from Guards, Snatches Diamond, Pursues Player, Escapes to Screen Edge
       if (levelConfig.hasRival && curRival.isAlive) {
-        const hasD = curRival.hasDiamond;
-        const targetFloor = hasD ? 0 : levelConfig.diamond.floor;
+        if (curRival.snatchCooldown > 0) curRival.snatchCooldown -= 1;
+        if (curRival.hideTimer > 0) curRival.hideTimer -= 1;
 
-        if (curRival.floor < targetFloor) {
-          const upStair = levelConfig.stairs.find((s) => s.fromFloor === curRival.floor);
-          if (upStair) {
-            if (Math.abs(curRival.x - upStair.x) < 6) {
-              curRival.floor += 1;
-              curRival.x = upStair.x;
-            } else {
-              curRival.facing = curRival.x < upStair.x ? 1 : -1;
-              curRival.x += curRival.facing * 1.6;
+        // Check if there is a guard on rival's floor
+        const guardOnFloor = curGuards.find((g) => g.floor === curRival.floor);
+        let guardThreat = false;
+        let distToGuard = 999;
+        let guardFacingRival = false;
+
+        if (guardOnFloor) {
+          distToGuard = curRival.x - guardOnFloor.x;
+          guardFacingRival =
+            (guardOnFloor.dir === 1 && distToGuard > 0) ||
+            (guardOnFloor.dir === -1 && distToGuard < 0);
+          const absDist = Math.abs(distToGuard);
+
+          // Threat if guard is facing rival within 110px
+          if (guardFacingRival && absDist < 110) {
+            guardThreat = true;
+          }
+
+          // Caught in guard flashlight cone while NOT hiding
+          if (!curRival.isHiding && guardFacingRival && absDist < FLASHLIGHT_LEN) {
+            guardOnFloor.alertTimer = 60;
+            if (curRival.hasDiamond) {
+              curRival.hasDiamond = false;
+              levelConfig.diamond.floor = curRival.floor;
+              levelConfig.diamond.x = Math.max(30, Math.min(ARENA_W - 30, curRival.x));
+              diamondTakenRef.current = false;
+              setDiamondTaken(false);
+              triggerSliceHaptic();
+              playSliceSound();
+              juiceRef.current?.popup('🚨 GUARD SPOTTED RIVAL!', 'Rival dropped the diamond!', '#FFE600');
             }
           }
-        } else if (curRival.floor > targetFloor) {
-          const downStair = levelConfig.stairs.find((s) => s.toFloor === curRival.floor);
-          if (downStair) {
-            if (Math.abs(curRival.x - downStair.x) < 6) {
-              curRival.floor -= 1;
-              curRival.x = downStair.x;
-            } else {
-              curRival.facing = curRival.x < downStair.x ? 1 : -1;
-              curRival.x += curRival.facing * 1.6;
+        }
+
+        // HIDING LOGIC:
+        if (curRival.isHiding) {
+          if (guardThreat) {
+            curRival.hideTimer = 35; // keep hiding while guard approaches
+          } else if (curRival.hideTimer <= 0) {
+            // Guard turned away or safe -> emerge from hiding
+            curRival.isHiding = false;
+            curRival.hiddenWindowX = null;
+          }
+        } else if (guardThreat) {
+          // Guard approaching! Find nearest window on this floor to HIDE!
+          let bestWin = WINDOW_X_LIST[0];
+          let bestDist = Infinity;
+          for (const wx of WINDOW_X_LIST) {
+            const d = Math.abs(curRival.x - wx);
+            if (d < bestDist) {
+              bestDist = d;
+              bestWin = wx;
             }
+          }
+
+          if (Math.abs(curRival.x - bestWin) <= 6) {
+            curRival.x = bestWin;
+            curRival.isHiding = true;
+            curRival.hiddenWindowX = bestWin;
+            curRival.hideTimer = 40;
+          } else {
+            // Sneak-sprint to window
+            curRival.facing = curRival.x < bestWin ? 1 : -1;
+            curRival.x += curRival.facing * 2.2;
           }
         } else {
-          if (!hasD && !diamondTakenRef.current) {
-            if (Math.abs(curRival.x - levelConfig.diamond.x) < 8) {
-              playSliceSound();
-              triggerMediumHaptic();
-              juiceRef.current?.popup('⚠️ RIVAL STOLE DIAMOND!', 'Intercept him!', '#FF0055');
-              curRival.hasDiamond = true;
-              setDiamondTaken(true);
-              diamondTakenRef.current = true;
-            } else {
-              curRival.facing = curRival.x < levelConfig.diamond.x ? 1 : -1;
-              curRival.x += curRival.facing * 1.6;
+          // SAFE TO SNEAK, PURSUE OR ESCAPE
+          const hasD = curRival.hasDiamond;
+          const playerHasD = curPlayer.hasDiamond || hasDiamondRef.current;
+
+          let targetFloor = 0;
+          let targetX = 0;
+          let isEscaping = false;
+
+          if (hasD) {
+            // Rival has diamond: Escape down to Floor 0, then run to screen end!
+            targetFloor = 0;
+            const exitX = levelConfig.car.x < 170 ? ARENA_W - 12 : 12;
+            targetX = exitX;
+            isEscaping = true;
+          } else if (playerHasD) {
+            // Player has diamond: Rival actively follows player to snatch it back!
+            targetFloor = curPlayer.floor;
+            targetX = curPlayer.x;
+          } else {
+            // Diamond uncollected: Rival sneaks up to steal it
+            targetFloor = levelConfig.diamond.floor;
+            targetX = levelConfig.diamond.x;
+          }
+
+          if (curRival.floor < targetFloor) {
+            const upStair = levelConfig.stairs.find((s) => s.fromFloor === curRival.floor);
+            if (upStair) {
+              if (Math.abs(curRival.x - upStair.x) < 6) {
+                curRival.floor += 1;
+                curRival.x = upStair.x;
+              } else {
+                curRival.facing = curRival.x < upStair.x ? 1 : -1;
+                const speed = playerHasD ? 2.0 : 1.5;
+                curRival.x += curRival.facing * speed;
+              }
             }
-          } else if (hasD) {
-            if (curRival.floor === 0 && Math.abs(curRival.x - levelConfig.car.x) < 25) {
-              handlePlayerBusted();
+          } else if (curRival.floor > targetFloor) {
+            const downStair = levelConfig.stairs.find((s) => s.toFloor === curRival.floor);
+            if (downStair) {
+              if (Math.abs(curRival.x - downStair.x) < 6) {
+                curRival.floor -= 1;
+                curRival.x = downStair.x;
+              } else {
+                curRival.facing = curRival.x < downStair.x ? 1 : -1;
+                const speed = isEscaping ? 2.4 : 1.6;
+                curRival.x += curRival.facing * speed;
+              }
+            }
+          } else {
+            // Same floor as target:
+            if (isEscaping && curRival.floor === 0) {
+              // SPRINT TOWARDS SCREEN END TO ESCAPE!
+              curRival.facing = curRival.x < targetX ? 1 : -1;
+              curRival.x += curRival.facing * 2.5;
+
+              // Check if reached screen edge
+              const reachedEdge =
+                (targetX > 170 && curRival.x >= targetX - 4) ||
+                (targetX < 170 && curRival.x <= targetX + 4);
+
+              if (reachedEdge) {
+                curRival.isAlive = false;
+                handlePlayerBusted('RIVAL THIEF ESCAPED WITH THE DIAMOND!');
+                juiceRef.current?.popup('❌ HEIST FAILED!', 'Rival escaped with the loot!', COLORS.danger);
+                return;
+              }
+            } else if (playerHasD && curRival.floor === curPlayer.floor) {
+              // PURSUING PLAYER TO SNATCH DIAMOND BACK!
+              curRival.facing = curRival.x < curPlayer.x ? 1 : -1;
+              curRival.x += curRival.facing * 2.0;
+
+              // If reaches player and player is NOT hiding: SNATCH BACK!
+              if (
+                Math.abs(curRival.x - curPlayer.x) < 22 &&
+                !curPlayer.isHiding &&
+                !curPlayer.isClimbing &&
+                curRival.snatchCooldown <= 0
+              ) {
+                curRival.hasDiamond = true;
+                curPlayer.hasDiamond = false;
+                hasDiamondRef.current = false;
+                curRival.snatchCooldown = 75;
+                triggerMediumHaptic();
+                playSliceSound();
+                juiceRef.current?.burst(curPlayer.x, getFloorY(curPlayer.floor), '#FF0055', 20);
+                juiceRef.current?.popup('⚠️ RIVAL SNATCHED DIAMOND!', 'Chase him before he reaches the exit!', '#FF0055');
+              }
+            } else if (!hasD && !diamondTakenRef.current && curRival.floor === levelConfig.diamond.floor) {
+              if (Math.abs(curRival.x - levelConfig.diamond.x) < 8) {
+                playSliceSound();
+                triggerMediumHaptic();
+                juiceRef.current?.popup('⚠️ RIVAL STOLE DIAMOND!', 'Intercept him before he escapes!', '#FF0055');
+                curRival.hasDiamond = true;
+                setDiamondTaken(true);
+                diamondTakenRef.current = true;
+              } else {
+                curRival.facing = curRival.x < levelConfig.diamond.x ? 1 : -1;
+                curRival.x += curRival.facing * 1.5;
+              }
             }
           }
         }
@@ -793,6 +928,7 @@ export default function ThiefEscapeGame({
           curRival.hasDiamond = false;
           curPlayer.hasDiamond = true;
           hasDiamondRef.current = true;
+          curRival.snatchCooldown = 75;
           triggerPerfectHaptic();
           playPerfectSound();
           juiceRef.current?.popup('🥷 TACKLED RIVAL!', 'Diamond reclaimed!', COLORS.matrixMint);
@@ -1067,6 +1203,7 @@ export default function ThiefEscapeGame({
                       if (f === 0 && Math.abs(wx - levelConfig.car.x) < 32) return null;
 
                       const isPlayerHiddenHere = player.isHiding && player.floor === f && player.hiddenWindowX === wx;
+                      const isRivalHiddenHere = rival.isHiding && rival.floor === f && rival.hiddenWindowX === wx;
                       const isPlayerNearHere = !player.isHiding && !player.isClimbing && player.floor === f && Math.abs(player.x - wx) <= WINDOW_PROXIMITY;
 
                       return (
@@ -1078,9 +1215,9 @@ export default function ThiefEscapeGame({
                             width={28}
                             height={40}
                             rx={4}
-                            fill={isPlayerHiddenHere ? '#0F1322' : (f % 2 === 0 && wx === 170 ? '#FFE60020' : '#070914')}
-                            stroke={isPlayerHiddenHere ? '#94A3B8' : isPlayerNearHere ? '#00F5FF' : 'rgba(0, 245, 255, 0.25)'}
-                            strokeWidth={isPlayerHiddenHere ? 2 : isPlayerNearHere ? 1.6 : 1.2}
+                            fill={isPlayerHiddenHere ? '#0F1322' : isRivalHiddenHere ? '#1A0A26' : (f % 2 === 0 && wx === 170 ? '#FFE60020' : '#070914')}
+                            stroke={isPlayerHiddenHere ? '#94A3B8' : isRivalHiddenHere ? '#9D4EDD' : isPlayerNearHere ? '#00F5FF' : 'rgba(0, 245, 255, 0.25)'}
+                            strokeWidth={isPlayerHiddenHere ? 2 : isRivalHiddenHere ? 2 : isPlayerNearHere ? 1.6 : 1.2}
                           />
 
                           {/* Subtle arrow prompt when standing close to this window */}
@@ -1132,6 +1269,39 @@ export default function ThiefEscapeGame({
                                   points={`${wx},${fy - 34} ${wx + 4},${fy - 30} ${wx},${fy - 26} ${wx - 4},${fy - 30}`}
                                   fill="#475569"
                                   stroke="#94A3B8"
+                                  strokeWidth={1}
+                                />
+                              )}
+                            </G>
+                          )}
+
+                          {/* Rival Hiding INSIDE the Window (Purple Shadow Silhouette) */}
+                          {isRivalHiddenHere && (
+                            <G>
+                              <Rect
+                                x={wx - 6}
+                                y={fy - 25}
+                                width={12}
+                                height={22}
+                                rx={3}
+                                fill="#2A0845"
+                                stroke="#9D4EDD"
+                                strokeWidth={1.5}
+                              />
+                              <Circle cx={wx} cy={fy - 27} r={5} fill="#4A1270" stroke="#9D4EDD" strokeWidth={1} />
+                              <Line
+                                x1={wx - 3}
+                                y1={fy - 27}
+                                x2={wx + rival.facing * 4}
+                                y2={fy - 27}
+                                stroke="#FF007F"
+                                strokeWidth={1.5}
+                              />
+                              {rival.hasDiamond && (
+                                <Polygon
+                                  points={`${wx},${fy - 34} ${wx + 4},${fy - 30} ${wx},${fy - 26} ${wx - 4},${fy - 30}`}
+                                  fill="#00F5FF"
+                                  stroke="#FFFFFF"
                                   strokeWidth={1}
                                 />
                               )}
@@ -1402,7 +1572,7 @@ export default function ThiefEscapeGame({
               ))}
 
               {/* Rival Thief */}
-              {levelConfig.hasRival && rival.isAlive && (
+              {levelConfig.hasRival && rival.isAlive && !rival.isHiding && (
                 <G>
                   <Rect x={rival.x - 6} y={getFloorY(rival.floor) - 24} width={12} height={22} rx={3} fill="#2A0845" stroke="#9D4EDD" strokeWidth={1.4} />
                   <Circle cx={rival.x} cy={getFloorY(rival.floor) - 26} r={5} fill="#9D4EDD" />
