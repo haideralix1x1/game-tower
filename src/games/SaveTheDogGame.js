@@ -62,6 +62,22 @@ function linesIntersect(x1, y1, x2, y2, x3, y3, x4, y4) {
   return ua >= 0 && ua <= 1 && ub >= 0 && ub <= 1;
 }
 
+// Ray-casting test: is point (px, py) inside a polygon/closed loop?
+function isPointInPoly(px, py, points) {
+  if (!points || points.length < 3) return false;
+  let inside = false;
+  for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+    const xi = points[i].x;
+    const yi = points[i].y;
+    const xj = points[j].x;
+    const yj = points[j].y;
+    const intersect =
+      yi > py !== yj > py && px < ((xj - xi) * (py - yi)) / (yj - yi) + xi;
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
 export default function SaveTheDogGame({ onBackToHub, onScoreUpdate, isPaused = false }) {
   const isPausedRef = useRef(isPaused);
   useEffect(() => {
@@ -400,6 +416,25 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate, isPaused = 
       let lines = savedLinesRef.current;
       const lVel = linesVelocityRef.current;
 
+      // Check if dog is enclosed inside any drawn shield/circle
+      let enclosedLine = null;
+      let centroidX = 0;
+      let centroidY = 0;
+      for (const line of lines) {
+        if (line.length >= 6 && isPointInPoly(currentDog.x, currentDog.y, line)) {
+          enclosedLine = line;
+          let sumX = 0;
+          let sumY = 0;
+          for (const pt of line) {
+            sumX += pt.x;
+            sumY += pt.y;
+          }
+          centroidX = sumX / line.length;
+          centroidY = sumY / line.length;
+          break;
+        }
+      }
+
       // 1. Calculate Intelligent Bees Pathfinding & Flanking Movement
       let pushForceX = 0;
       let pushForceY = 0;
@@ -457,6 +492,10 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate, isPaused = 
             }
           }
           if (isDirectBlocked) break;
+        }
+
+        if (enclosedLine && !isPointInPoly(b.x, b.y, enclosedLine)) {
+          isDirectBlocked = true;
         }
 
         // Sting check: A bee CANNOT sting through a barrier into the safe area!
@@ -531,9 +570,9 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate, isPaused = 
             const d = distPointToSegment(nextBeeX, nextBeeY, p1.x, p1.y, p2.x, p2.y);
 
             if (crossed || d < BEE_RADIUS + 5) {
-              // Apply physical push force to the line from the outside
-              pushForceX += (dxToDog / (distToDog || 1)) * 0.95;
-              pushForceY += (dyToDog / (distToDog || 1)) * 0.95;
+              // Apply gentle, physically balanced push force to the line from the outside
+              pushForceX += (dxToDog / (distToDog || 1)) * 0.35;
+              pushForceY += (dyToDog / (distToDog || 1)) * 0.35;
 
               const segDx = p2.x - p1.x;
               const segDy = p2.y - p1.y;
@@ -601,16 +640,20 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate, isPaused = 
       }
 
       if (totalPts > 0) {
-        const mass = Math.max(1, totalPts / 10);
+        const mass = Math.max(6, totalPts * 0.25);
         lVel.vx += pushForceX / mass;
         lVel.vy += pushForceY / mass;
 
         // Snappy Line Gravity
-        lVel.vy += 0.75;
+        lVel.vy += 0.55;
 
         // Air drag
-        lVel.vx *= 0.91;
-        lVel.vy *= 0.94;
+        lVel.vx *= 0.88;
+        lVel.vy *= 0.92;
+
+        // Limit terminal velocity of drawn barrier so it never slams into the dog
+        lVel.vx = Math.max(-5, Math.min(5, lVel.vx));
+        lVel.vy = Math.max(-5, Math.min(7, lVel.vy));
 
         // Platform & Acid surface collision check for line
         const plat = platformRef.current;
@@ -664,12 +707,23 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate, isPaused = 
           );
           savedLinesRef.current = lines;
           setSavedLines(lines);
+
+          // If dog is safely enclosed inside the barrier, carry the dog with the shield!
+          if (enclosedLine) {
+            currentDog.x += dx;
+            currentDog.y += dy;
+            centroidX += dx;
+            centroidY += dy;
+          }
         }
       }
 
-      // 3. DOG GRAVITY & TRUE 2D CONTAINER ENCLOSURE PHYSICS
-      // Apply gravity to the dog so it falls naturally
-      currentDog.vy += 0.65;
+      // 3. DOG GRAVITY & RIGID BARRIER CONTAINMENT
+      if (!enclosedLine) {
+        currentDog.vy += 0.65;
+      } else {
+        currentDog.vy += 0.3;
+      }
       currentDog.vx *= 0.88;
       currentDog.vy *= 0.96;
 
@@ -694,12 +748,14 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate, isPaused = 
 
       checkPlatformLanding();
 
-      // MULTI-PASS RIGID BARRIER CONTAINMENT:
-      // The dog is completely trapped inside the drawn circle/shield.
-      // Every line segment pushes the dog away from the wall along the normal.
-      // Bees pushing on the outside can NEVER force the dog through the drawn lines!
+      // CONTACT RESOLUTION: Find the single maximum penetration per pass (up to 3 passes).
+      // We NEVER accumulate multiple raw segment overlaps in a single pass to eliminate pressure popping!
       const targetDist = DOG_RADIUS + 2;
       for (let pass = 0; pass < 3; pass++) {
+        let maxOverlap = 0;
+        let pushNormX = 0;
+        let pushNormY = 0;
+
         for (const line of lines) {
           for (let i = 0; i < line.length - 1; i++) {
             const p1 = line[i];
@@ -722,23 +778,44 @@ export default function SaveTheDogGame({ onBackToHub, onScoreUpdate, isPaused = 
 
             if (dist < targetDist) {
               const overlap = targetDist - dist;
-              const nx = dist > 0.001 ? toDogX / dist : 0;
-              const ny = dist > 0.001 ? toDogY / dist : -1;
-
-              currentDog.x += nx * overlap;
-              currentDog.y += ny * overlap;
-
-              const dotV = currentDog.vx * nx + currentDog.vy * ny;
-              if (dotV < 0) {
-                currentDog.vx -= dotV * nx * 0.95;
-                currentDog.vy -= dotV * ny * 0.95;
+              if (overlap > maxOverlap) {
+                maxOverlap = overlap;
+                pushNormX = dist > 0.001 ? toDogX / dist : 0;
+                pushNormY = dist > 0.001 ? toDogY / dist : -1;
               }
             }
           }
         }
+
+        if (maxOverlap > 0) {
+          // Bounded gentle penetration impulse (max 3.5px per pass)
+          const pushAmt = Math.min(maxOverlap, 3.5);
+          currentDog.x += pushNormX * pushAmt;
+          currentDog.y += pushNormY * pushAmt;
+
+          const dotV = currentDog.vx * pushNormX + currentDog.vy * pushNormY;
+          if (dotV < 0) {
+            currentDog.vx -= dotV * pushNormX * 0.95;
+            currentDog.vy -= dotV * pushNormY * 0.95;
+          }
+        } else {
+          break; // Fully resolved
+        }
       }
 
       // Re-enforce platform landing after line repulsion
+      checkPlatformLanding();
+
+      // Enforce containment: Dog inside an enclosed circle CANNOT pop out!
+      if (enclosedLine) {
+        if (!isPointInPoly(currentDog.x, currentDog.y, enclosedLine)) {
+          // If dog crossed line boundary due to pressure, gently pull back inside towards center
+          currentDog.x = currentDog.x * 0.65 + centroidX * 0.35;
+          currentDog.y = currentDog.y * 0.65 + centroidY * 0.35;
+          currentDog.vx *= 0.2;
+          currentDog.vy *= 0.2;
+        }
+      }
       checkPlatformLanding();
 
       // Acid Water Hazard
