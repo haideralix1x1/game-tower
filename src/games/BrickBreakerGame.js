@@ -315,6 +315,7 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
     pierceTimer: 0,
     magnetTimer: 0,
     explosiveTimer: 0,
+    levelClearing: false,
     // Sphere duel ability timer (Mode 3)
     abilityTimer: 5.0,
     nextAbilityIdx: 0,
@@ -436,18 +437,23 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
 
   // Reset or Start Game
   const resetGame = useCallback(
-    (chosenMode = mode, nextLvl = 1) => {
+    (chosenMode = mode, nextLvl = 1, keepScore = false) => {
       const eng = engineRef.current;
       const startPadX = (arenaWidth - basePaddleW) / 2;
       const safeLvl = Math.max(1, Math.min(BRICK_DESIGNS.length, nextLvl));
 
       eng.running = true;
+      eng.levelClearing = false;
       eng.mode = chosenMode;
       eng.level = safeLvl;
-      eng.score = 0;
-      eng.aiScore = 0;
-      eng.playerHearts = INITIAL_HEARTS;
-      eng.aiHearts = INITIAL_HEARTS;
+      if (!keepScore) {
+        eng.score = 0;
+        eng.aiScore = 0;
+        eng.playerHearts = INITIAL_HEARTS;
+        eng.aiHearts = INITIAL_HEARTS;
+      } else {
+        eng.playerHearts = Math.min(INITIAL_HEARTS, eng.playerHearts + 1);
+      }
       eng.paddleX = startPadX;
       eng.paddleW = basePaddleW;
       eng.paddleRecoil = 0;
@@ -564,10 +570,15 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
 
       setMode(chosenMode);
       setLevel(safeLvl);
-      setScore(0);
-      setAiScore(0);
-      setPlayerHearts(INITIAL_HEARTS);
-      setAiHearts(INITIAL_HEARTS);
+      if (!keepScore) {
+        setScore(0);
+        setAiScore(0);
+        setPlayerHearts(INITIAL_HEARTS);
+        setAiHearts(INITIAL_HEARTS);
+      } else {
+        setScore(eng.score);
+        setPlayerHearts(eng.playerHearts);
+      }
       setBallLaunched(false);
       setNextAbilityCountdown(5);
       setActiveAbility(null);
@@ -595,6 +606,49 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
       }
     },
     [arenaWidth, basePaddleW, paddleY, aiPaddleY, createBricksForLevel, mode]
+  );
+
+  // Seamless Level Clear Transition
+  const handleLevelClear = useCallback(
+    (clearedLvl) => {
+      const eng = engineRef.current;
+      if (eng.levelClearing) return;
+      eng.levelClearing = true;
+      eng.running = false;
+
+      const clearBonus = 150;
+      eng.score += clearBonus;
+      setScore(eng.score);
+      persistBest(eng.score);
+
+      safeSound(playPerfectSound);
+      safeHaptic(triggerPerfectHaptic);
+
+      const nextLvl = (clearedLvl % BRICK_DESIGNS.length) + 1;
+
+      if (juiceRef.current) {
+        juiceRef.current.flash(COLORS.matrixMint);
+        juiceRef.current.burst(arenaWidth / 2, arenaHeight / 2, COLORS.matrixMint, 36);
+        juiceRef.current.popup(
+          '🎉 DESIGN CLEARED!',
+          `+${clearBonus} PTS! ADVANCING TO LEVEL ${nextLvl}...`,
+          COLORS.matrixMint
+        );
+      }
+
+      setTimeout(() => {
+        eng.levelClearing = false;
+        if (clearedLvl < BRICK_DESIGNS.length) {
+          resetGame('SINGLE_BRICKS', clearedLvl + 1, true);
+        } else {
+          setModalType('win');
+          setModalTitle('CHAMPION VICTORY!');
+          setModalSubtitle(`ALL ${BRICK_DESIGNS.length} DESIGNS CONQUERED!\nFINAL SCORE: ${eng.score}`);
+          setModalVisible(true);
+        }
+      }, 1200);
+    },
+    [arenaWidth, arenaHeight, persistBest, resetGame]
   );
 
   useEffect(() => {
@@ -1197,6 +1251,29 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
             eng.aiPaddleX = Math.max(4, Math.min(arenaWidth - eng.aiPaddleW - 4, eng.aiPaddleX + moveStep));
           }
 
+          // --- 5B. GLOBAL LEVEL CLEAR CHECK (ALL BREAKABLE BRICKS DESTROYED BY ANY SOURCE) ---
+          if (eng.mode !== 'HARD_SPHERE_DUEL' && eng.ballLaunched && !eng.levelClearing) {
+            const breakableLeft = eng.bricks.filter((bk) => bk.type !== 'UNBREAKABLE').length;
+            if (breakableLeft === 0) {
+              if (eng.mode === 'SINGLE_BRICKS') {
+                handleLevelClear(eng.level);
+                frameId = requestAnimationFrame(tick);
+                return;
+              } else if (eng.mode === 'AI_BRICK_DUEL') {
+                eng.running = false;
+                eng.levelClearing = true;
+                const won = eng.score >= eng.aiScore;
+                safeSound(won ? playPerfectSound : playGameOverSound);
+                setModalType(won ? 'win' : 'gameover');
+                setModalTitle(won ? 'DUEL VICTORY!' : 'AI RIVAL WON!');
+                setModalSubtitle(`FINAL SCORE: ${eng.score} VS AI: ${eng.aiScore}`);
+                setModalVisible(true);
+                frameId = requestAnimationFrame(tick);
+                return;
+              }
+            }
+          }
+
           // --- 6. BALL PHYSICS & COLLISIONS ---
           const nextBalls = [];
 
@@ -1512,17 +1589,13 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
                     const breakableLeft = eng.bricks.filter((bk) => bk.type !== 'UNBREAKABLE').length;
                     if (breakableLeft === 0) {
                       if (eng.mode === 'SINGLE_BRICKS') {
-                        eng.running = false;
-                        const nextLvl = (eng.level % BRICK_DESIGNS.length) + 1;
-                        safeSound(playGameOverSound);
-                        setModalType('win');
-                        setModalTitle('DESIGN CLEARED!');
-                        setModalSubtitle(`SCORE: ${eng.score} // READY FOR LEVEL ${nextLvl}?`);
-                        setModalVisible(true);
+                        handleLevelClear(eng.level);
                         return;
                       } else if (eng.mode === 'AI_BRICK_DUEL') {
                         eng.running = false;
+                        eng.levelClearing = true;
                         const won = eng.score >= eng.aiScore;
+                        safeSound(won ? playPerfectSound : playGameOverSound);
                         setModalType(won ? 'win' : 'gameover');
                         setModalTitle(won ? 'DUEL VICTORY!' : 'AI RIVAL WON!');
                         setModalSubtitle(`FINAL SCORE: ${eng.score} VS AI: ${eng.aiScore}`);
@@ -1795,7 +1868,7 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
     return () => {
       if (frameId) cancelAnimationFrame(frameId);
     };
-  }, [arenaWidth, arenaHeight, paddleY, aiPaddleY, persistBest, basePaddleW]);
+  }, [arenaWidth, arenaHeight, paddleY, aiPaddleY, persistBest, basePaddleW, handleLevelClear]);
 
   // PanResponder for smooth 1:1 paddle dragging & tap-to-start detection
   const dragStartRef = useRef({ startX: 0, startPaddleX: 0, hasMoved: false });
@@ -2286,14 +2359,14 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
           accentColor={mode === 'HARD_SPHERE_DUEL' ? '#FF0055' : '#00F5FF'}
           onNextLevel={() => {
             const nextLvl = ((engineRef.current.level - 1 + 1) % BRICK_DESIGNS.length) + 1;
-            resetGame(mode, nextLvl);
+            resetGame(mode, nextLvl, true);
           }}
           onRetry={() => {
             if (modalType === 'win' && mode === 'SINGLE_BRICKS') {
               const nextLvl = ((engineRef.current.level - 1 + 1) % BRICK_DESIGNS.length) + 1;
-              resetGame(mode, nextLvl);
+              resetGame(mode, nextLvl, true);
             } else {
-              resetGame(mode, engineRef.current.level);
+              resetGame(mode, engineRef.current.level, false);
             }
           }}
           retryLabel={
