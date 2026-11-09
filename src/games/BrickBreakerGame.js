@@ -611,21 +611,18 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
     // Wake up physics engine immediately
     eng.running = true;
 
-    // Check if there are any actively moving balls
-    const hasMovingBall = eng.balls.some(
-      (b) => Math.abs(b.vx) > 1 || Math.abs(b.vy) > 1
-    );
-
-    // If ball is already launched and moving, check for magnet-caught balls to release
-    if (eng.ballLaunched && hasMovingBall) {
+    // Check for any magnet-caught balls on player paddle to release immediately
+    const hasCaughtBall = eng.balls.some((b) => b.caught);
+    if (hasCaughtBall) {
       let releasedAny = false;
       for (const b of eng.balls) {
         if (b.caught) {
           b.caught = false;
+          b.caughtTimer = 0;
           const hitOffset = (b.x - (eng.paddleX + eng.paddleW / 2)) / (eng.paddleW / 2);
           const maxAngle = Math.PI * 0.38;
-          const angle = -Math.PI / 2 + hitOffset * maxAngle;
-          const spd = 320;
+          const angle = -Math.PI / 2 + Math.max(-1, Math.min(1, hitOffset)) * maxAngle;
+          const spd = 340;
           b.vx = Math.cos(angle) * spd;
           b.vy = Math.sin(angle) * spd;
           releasedAny = true;
@@ -635,6 +632,8 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
         safeSound(playTapSound);
         safeHaptic(triggerLightHaptic);
       }
+      eng.ballLaunched = true;
+      setBallLaunched(true);
       return;
     }
 
@@ -696,6 +695,8 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
     if (eng.mode === 'SINGLE_BRICKS') {
       if (eng.balls.length > 0) {
         const b = eng.balls[0];
+        b.caught = false;
+        b.caughtTimer = 0;
         const speed = 320;
         const angle = -Math.PI / 2 + (Math.random() - 0.5) * 0.5;
         b.vx = Math.cos(angle) * speed;
@@ -1202,8 +1203,25 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
           for (let i = 0; i < eng.balls.length; i++) {
             const b = eng.balls[i];
 
-            // If ball is magnet-caught on player paddle, stick to paddle
+            // If ball is magnet-caught on player paddle, stick to paddle or auto-release after 2s
             if (b.caught) {
+              b.caughtTimer = (b.caughtTimer || 0) + dt;
+              // Auto-launch after 2.0s timeout or if magnet powerup expired so ball never stays stuck
+              if (b.caughtTimer >= 2.0 || eng.magnetTimer <= 0) {
+                b.caught = false;
+                b.caughtTimer = 0;
+                const hitOffset = (b.x - (eng.paddleX + eng.paddleW / 2)) / (eng.paddleW / 2);
+                const maxAngle = Math.PI * 0.38;
+                const angle = -Math.PI / 2 + Math.max(-1, Math.min(1, hitOffset)) * maxAngle;
+                const spd = 340;
+                b.vx = Math.cos(angle) * spd;
+                b.vy = Math.sin(angle) * spd;
+                safeSound(playTapSound);
+                safeHaptic(triggerLightHaptic);
+                nextBalls.push(b);
+                continue;
+              }
+
               const offsetX = b.caughtOffset ?? eng.paddleW / 2;
               b.x = Math.max(
                 eng.paddleX + b.r,
@@ -1364,6 +1382,7 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
               // Magnet Paddle Catch
               if (eng.magnetTimer > 0) {
                 b.caught = true;
+                b.caughtTimer = 0;
                 b.caughtOffset = nextX - eng.paddleX;
                 b.x = nextX;
                 b.y = pTop - b.r - 2;
@@ -1372,7 +1391,7 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
                 safeSound(playSpeedUpSound);
                 safeHaptic(triggerPerfectHaptic);
                 if (juiceRef.current) {
-                  juiceRef.current.popup('🧲 MAGNET LOCKED!', 'TAP/DRAG TO LAUNCH', '#FFB703');
+                  juiceRef.current.popup('🧲 MAGNET LOCKED!', 'TAP OR RELEASE TO LAUNCH', '#FFB703');
                 }
                 nextBalls.push(b);
                 continue;
@@ -1815,8 +1834,8 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
           dragStartRef.current.startPaddleX = engineRef.current.paddleX;
           dragStartRef.current.hasMoved = false;
 
-          // If ball is not launched, tapping anywhere on the arena launches immediately!
-          if (!engineRef.current.ballLaunched) {
+          // If ball is not launched or caught by magnet, tapping launches immediately!
+          if (!engineRef.current.ballLaunched || engineRef.current.balls.some((b) => b.caught)) {
             handleLaunchBall();
           }
         },
@@ -1831,12 +1850,12 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
           eng.paddleX = clamped;
         },
         onPanResponderRelease: () => {
-          if (!engineRef.current.ballLaunched) {
+          if (!engineRef.current.ballLaunched || engineRef.current.balls.some((b) => b.caught)) {
             handleLaunchBall();
           }
         },
         onPanResponderTerminate: () => {
-          if (!engineRef.current.ballLaunched) {
+          if (!engineRef.current.ballLaunched || engineRef.current.balls.some((b) => b.caught)) {
             handleLaunchBall();
           }
         },
