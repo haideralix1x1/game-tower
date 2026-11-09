@@ -5,6 +5,9 @@ import {
   Pressable,
   StyleSheet,
   Platform,
+  Dimensions,
+  Modal,
+  ScrollView,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Svg, {
@@ -29,6 +32,7 @@ import {
   triggerPerfectHaptic,
   triggerGameOverHaptic,
   triggerSelectionHaptic,
+  triggerSliceHaptic,
 } from '../utils/haptics';
 import {
   playTapSound,
@@ -36,6 +40,7 @@ import {
   playSliceSound,
   playGameOverSound,
   playSnapTickSound,
+  playSpeedUpSound,
 } from '../utils/sound';
 
 const STORAGE_KEY = '@game_tower:best_thief_v1';
@@ -47,68 +52,206 @@ const monoFont = Platform.select({
   default: 'monospace',
 });
 
-// Arena Dimensions
-const ARENA_W = 340;
-const ARENA_H = 420;
-const FLASHLIGHT_LEN = 60; // 60px flashlight beam ensures ladder corridors stay safe
+// Standard Arena Base Dimensions
+const ARENA_BASE_W = 340;
+const ARENA_H = 430;
+const FLASHLIGHT_LEN = 65;
+const SNIPER_VISION_LEN = 145;
 
-// Architectural Windows: players can ONLY hide inside these windows
-const WINDOW_X_LIST = [50, 120, 170, 220, 290];
-const WINDOW_PROXIMITY = 18; // Must be within 18px of window center to hide
+/**
+ * Generate window X positions for any arena width
+ */
+const getWindowListForWidth = (arenaW) => {
+  const margin = 50;
+  const usable = arenaW - margin * 2;
+  const count = Math.max(5, Math.floor(usable / 55));
+  const step = usable / (count - 1);
+  const list = [];
+  for (let i = 0; i < count; i++) {
+    list.push(Math.round(margin + i * step));
+  }
+  return list;
+};
 
-const getNearestWindowX = (playerX) => {
+const getNearestWindowX = (playerX, winList) => {
   let nearest = null;
   let minDist = Infinity;
-  for (const wx of WINDOW_X_LIST) {
+  for (const wx of winList) {
     const d = Math.abs(playerX - wx);
     if (d < minDist) {
       minDist = d;
       nearest = wx;
     }
   }
-  return minDist <= WINDOW_PROXIMITY ? nearest : null;
+  return minDist <= 22 ? nearest : null;
 };
 
 /**
- * Curated Levels with Escalating Guards, Petrol Missions, Rival Thieves & Full-Floor Patrols
- * Guards patrol the full floor (minX: 45 to maxX: 295), bypassing ladders to give clear stealth timing windows.
+ * Generates 100 fully predefined, graduated heist levels according to exact user tier specification:
+ * - Levels 1-10: No thief, only guards (up to 3 guards), up to 3 floors.
+ * - Levels 11-20: No thief, only guards (up to 5 guards), floors up to 3, fuel required, building width increased & zooms out.
+ * - Levels 21-35: 1 rival thief, 5 guards min, 5 to 6 floors, big building width.
+ * - Levels 36-50: 8 guards, at least 3 ladder paths, 3 rival thieves (one from each path), big building, CCTV cameras that alert floor guards. Weapons introduced (guns & bombs); firing summons police in 5s!
+ * - Levels 51-70: 2 guards with guns and high vision shooting projectiles, big building, rival thieves, CCTV, weapons.
+ * - Levels 71-80: 2 diamonds to collect, multiple armed guards with guns, CCTV, big building, multiple thieves.
+ * - Levels 81-98: Diamond locked in case! Key carried by a guard. Must distract with stone, stand near for 2s to steal key. 2 thieves, multiple guards, CCTV.
+ * - Levels 99-100: Final Boss / Treasure Hunt! Big Boss Guards with health bars. Must kill with guns & bombs to seize royal treasure, then escape within 5s before police car arrives!
  */
 /**
- * Generates 100 fully predefined, graduated heist levels with progressive difficulty:
- * - Levels 1-4: 2 floors (Ground + Vault). Beginner infiltration, 0-1 guards.
- * - Levels 5-18: 3 floors. Dual ladder shafts, introducing Rival Thief, fuel canisters & distractor stones.
- * - Levels 19-45: 4 floors. 2-3 guards, triple ladder paths on select sectors, faster patrols.
- * - Levels 46-75: 5 floors. High-security skyscraper complexes, multi-patrol convergence, cunning rival AI.
- * - Levels 76-100: 5-6 floors apex towers. Up to 5 guards, triple vertical escape shafts, elite stealth gauntlets.
+ * Generates organically staggered ladders across floors so consecutive floors
+ * never share aligned vertical ladder positions. This prevents climbing directly
+ * up through an uninterrupted vertical shaft, requiring players and rivals to
+ * cross catwalk floors and evade guards.
  */
+function generateStaggeredLadders(floorsCount, arenaW, ladderPathsCount) {
+  const stairs = [];
+  for (let f = 0; f < floorsCount - 1; f++) {
+    if (ladderPathsCount === 1) {
+      // 1 ladder per floor: alternate between right side and left side
+      const xPos = f % 2 === 0 ? arenaW - 80 : 80;
+      stairs.push({ fromFloor: f, toFloor: f + 1, x: xPos });
+    } else if (ladderPathsCount === 2) {
+      // 2 ladders per floor: alternate between outer sides and inner offset positions
+      if (f % 2 === 0) {
+        stairs.push({ fromFloor: f, toFloor: f + 1, x: 80 });
+        stairs.push({ fromFloor: f, toFloor: f + 1, x: arenaW - 80 });
+      } else {
+        const x1 = Math.round(arenaW * 0.32);
+        const x2 = Math.round(arenaW * 0.68);
+        stairs.push({ fromFloor: f, toFloor: f + 1, x: x1 });
+        stairs.push({ fromFloor: f, toFloor: f + 1, x: x2 });
+      }
+    } else {
+      // 3 ladders per floor: 3-way rotation offset so no consecutive floors share any X
+      if (f % 3 === 0) {
+        stairs.push({ fromFloor: f, toFloor: f + 1, x: 75 });
+        stairs.push({ fromFloor: f, toFloor: f + 1, x: Math.round(arenaW * 0.44) });
+        stairs.push({ fromFloor: f, toFloor: f + 1, x: arenaW - 110 });
+      } else if (f % 3 === 1) {
+        stairs.push({ fromFloor: f, toFloor: f + 1, x: 135 });
+        stairs.push({ fromFloor: f, toFloor: f + 1, x: Math.round(arenaW * 0.56) });
+        stairs.push({ fromFloor: f, toFloor: f + 1, x: arenaW - 65 });
+      } else {
+        stairs.push({ fromFloor: f, toFloor: f + 1, x: 95 });
+        stairs.push({ fromFloor: f, toFloor: f + 1, x: Math.round(arenaW * 0.50) });
+        stairs.push({ fromFloor: f, toFloor: f + 1, x: arenaW - 145 });
+      }
+    }
+  }
+  return stairs;
+}
+
+/**
+ * Distributes guards across patrol floors with strictly non-overlapping
+ * starting positions: if 2 guards are on 1 floor, 1 starts on the LEFT
+ * and the other starts on the RIGHT facing each other.
+ */
+function generateLevelGuards({
+  floorsCount,
+  guardCount,
+  arenaW,
+  armedGuardIndices = [],
+  keyGuardIndex = null,
+  lvl = 1,
+}) {
+  const guards = [];
+  const patrolFloorsCount = Math.max(1, floorsCount - 1);
+  const floorAssignments = {};
+  for (let f = 1; f < floorsCount; f++) {
+    floorAssignments[f] = [];
+  }
+
+  // Distribute guards evenly across patrol floors
+  for (let g = 0; g < guardCount; g++) {
+    const f = 1 + (g % patrolFloorsCount);
+    floorAssignments[f].push(g);
+  }
+
+  // Assign non-overlapping starting positions on each floor
+  for (let f = 1; f < floorsCount; f++) {
+    const floorGuards = floorAssignments[f];
+    const countOnFloor = floorGuards.length;
+
+    floorGuards.forEach((gIdx, posIdx) => {
+      let x = 65;
+      let dir = 1;
+
+      if (countOnFloor === 1) {
+        // Single guard on floor: alternate left/right by floor
+        x = f % 2 === 1 ? 70 : arenaW - 70;
+        dir = f % 2 === 1 ? 1 : -1;
+      } else if (countOnFloor === 2) {
+        // 2 guards on 1 floor: 1 starts on LEFT, other on RIGHT!
+        if (posIdx === 0) {
+          x = 65;
+          dir = 1;
+        } else {
+          x = arenaW - 65;
+          dir = -1;
+        }
+      } else {
+        // 3 or more guards on 1 floor: spread evenly across catwalk width
+        const step = (arenaW - 130) / (countOnFloor - 1);
+        x = Math.round(65 + posIdx * step);
+        dir = posIdx % 2 === 0 ? 1 : -1;
+      }
+
+      const hasGun = armedGuardIndices.includes(gIdx);
+      const hasKey = keyGuardIndex === gIdx;
+      const baseSpeed = 1.05 + Math.min(0.35, lvl * 0.005);
+      const speed = hasKey ? 1.0 : hasGun ? 1.1 : Math.round((baseSpeed + (gIdx % 3) * 0.06) * 100) / 100;
+
+      guards.push({
+        id: `g_${gIdx}`,
+        floor: f,
+        x,
+        dir,
+        speed,
+        minX: 45,
+        maxX: arenaW - 45,
+        hasGun,
+        shootCooldown: 0,
+        hasKey,
+        isBoss: false,
+        pauseTimer: posIdx * 12,
+      });
+    });
+  }
+
+  return guards;
+}
+
 function generate100CuratedLevels() {
   const LEVEL_NAMES = [
-    // Tier 1: Ground Operations (Levels 1-5)
-    'GROUND ZERO', 'FIRST HAUL', 'CANOPY ROOF', 'SHADOW ALLEY', 'NEON DEPOT',
-    // Tier 2: Low-Rise Infiltrations (Levels 6-20)
-    'RIVAL EMERGENCE', 'MIDNIGHT VAULT', 'FUEL HEIST', 'DOUBLE LADDER', 'CROSSFIRE CATWALK',
-    'CYBER LOUNGE', 'STEALTH CORRIDOR', 'TWIN LADDERS', 'ROOFTOP AMBUSH', 'HIGH-RISE DEPOSIT',
-    'SHADOW RUNNER', 'GRID LOCK', 'FUEL INFILTRATION', 'SILENT NIGHT', 'RIVAL SHOWDOWN',
-    // Tier 3: Mid-Town Corporate Towers (Levels 21-40)
-    'WEST END PLAZA', 'EAST WING SKYWAY', 'TRIPLE PATHS', 'SECURITY SECTOR 4', 'NEON SPIRE',
-    'NIGHTFALL HEIST', 'DISTRACTION ALLEY', 'VAULT APEX', 'PATROL CONVERGENCE', 'CHRONO TOWER',
-    'GHOST PROTOCOL', 'TITANIUM SHAFT', 'HIGH-SPEED PURSUIT', 'MID-TOWN VAULT', 'RIVAL AMBUSH',
-    'FOURTH DIMENSION', 'LASER ROOF', 'STEALTH SHUFFLE', 'FUEL CRISIS', 'APEX LEDGE',
-    // Tier 4: Sky-Rise Complexes (Levels 41-65)
-    'SECTOR 7 TOWER', 'FIVE TIER HEIST', 'SHADOW LABYRINTH', 'RAPID RESPONSE', 'HEAVY PATROL',
-    'PENTHOUSE INFILTRATION', 'NIGHT RUNNER', 'RIVAL CHASE', 'QUANTUM RESERVE', 'LOCKDOWN PROTOCOL',
-    'MIDNIGHT CHOPPER', 'NEO MANHATTAN', 'CATWALK MAZE', 'DOUBLE BLUFF', 'VAULT GUARDIAN',
-    'SHADOW STALKER', 'HIGH TENSION', 'FUEL DROP', 'VERTICAL ASCENT', 'SKY HIGHWAY',
-    'CYBER PANORAMA', 'TITAN COMPLEX', 'HEAVY SECURITY', 'SMOKE AND MIRRORS', 'RIVAL VENDETTA',
-    // Tier 5: High-Sec Megastructures (Levels 66-85)
-    'BLIND RUN', 'SIXTH LEVEL', 'HIGH VOLTAGE', 'SHADOW APEX', 'CITADEL LOWER',
-    'SENTINEL BASTION', 'PERFECT CRIME', 'GHOST FLIGHT', 'VAULT INTERCEPT', 'DEEP SECTOR',
-    'LASER LABYRINTH', 'HIGH SPEED GETAWAY', 'NIGHT PATROL MAX', 'OMEGA ROOFTOP', 'TITAN REACH',
-    'MASTER INFILTRATOR', 'SHADOW SYNDICATE', 'LIGHTNING ESCAPE', 'CITADEL APEX', 'FINAL PROTOCOL',
-    // Tier 6: The Apex Citadel (Levels 86-100)
-    'PENTHOUSE LOCKDOWN', 'QUANTUM HEIST', 'STEALTH MASTER', 'HYPER RUNNER', 'BLACKOUT TOWER',
-    'CYBER FORTRESS', 'APEX INTRUDER', 'NIGHTMARE SHAFT', 'RIVAL GAUNTLET', 'TITAN OVERLORD',
-    'MAXIMUM OVERDRIVE', 'THE VAULT MONOLITH', 'SHADOW ASCENSION', 'ZERO HOUR HEIST', 'THE OLYMPUS APEX'
+    // 1-10: Ground Infiltrations (No Thieves, Up to 3 Guards, Up to 3 Floors)
+    'TRAINING GROUND', 'FIRST SHADOW', 'LOW ROOFTOP', 'PATROL ALLEY', 'SOLO INTRUSION',
+    'GUARDED MEZZANINE', 'NIGHT RUNNER', 'OFFICE HEIST', 'TRI-FLOOR SEC', 'ROOFTOP OUTPOST',
+    // 11-20: Fuel Runs (Wider Building Zoomed Out, Up to 5 Guards, Petrol Required)
+    'FUEL SHORTAGE', 'WIDE SPRAWL', 'DIESEL DEPOSIT', 'EXPANDED DEPOT', 'FUEL CATWALK',
+    'HEAVY PATROL FUEL', 'MIDNIGHT CANISTER', 'WIDE CORRIDORS', 'OCTANE EXTRACTION', 'FIVE-GUARD RUN',
+    // 21-35: The Rival Arrives (1 Thief, 5+ Guards, 5-6 Floors, Wide)
+    'RIVAL INTERCEPT', 'FIVE-TIER TOWER', 'SHADOW COMPETITOR', 'PENTHOUSE ASCENT', 'CATWALK DUEL',
+    'SIXTH FLOOR CHASE', 'CROSSFIRE SPIRE', 'RIVAL SHADOW', 'VAULT RACE', 'APEX PURSUIT',
+    'TITAN INFILTRATION', 'DOUBLE CATWALK', 'SKYLINE DUEL', 'RIVAL PURSUIT II', 'SIX-TIER SKYSCRAPER',
+    // 36-50: Tri-Path & CCTVs & Weapons (8 Guards, 3 Paths, 3 Thieves, CCTVs, Guns/Bombs)
+    'TRIPLE THREAT', 'CCTV SURVEILLANCE', 'GUNS AND ALARMS', 'CAMERA SWEEP', 'TRI-SHAFT SIEGE',
+    'SECURITY NETWORK', 'BOMB DISPATCH', 'ALARM INTRUSION', 'TRIPLE PURSUIT', 'CCTV LABYRINTH',
+    'FIREPOWER PROTOCOL', 'THREE SHADOWS', 'SIREN WARNING', 'MEGA TOWER LOCKDOWN', 'FIFTY-LEVEL MILESTONE',
+    // 51-70: Armed Guards & Sniper Vision (2+ Guards with Guns Shooting Projectiles)
+    'SNIPER SIGHT', 'ARMED SURVEILLANCE', 'PROJECTILE CORRIDOR', 'BULLETPROOF WINDOW', 'HIGH-CALIBER FLOOR',
+    'DEADLY FLASH', 'SNIPER CATWALK', 'HEAVY CROSSFIRE', 'LASER SCOPES', 'ARMED RIVAL RACE',
+    'BULLET DODGER', 'RIFLE OUTPOST', 'DEADLINE PROTOCOL', 'SHARPSHOOTER COMPLEX', 'EXTREME DANGER',
+    'GUNSLINGER CATWALK', 'BALLISTIC SEC', 'HIGH-VELOCITY ESCAPE', 'SNIPER AMBUSH', 'SEVENTY MARK',
+    // 71-80: Twin Diamonds (2 Diamonds to Secure, Multiple Armed Guards, CCTVs, Multi Thieves)
+    'TWIN DIAMONDS', 'DOUBLE VAULT', 'DUAL HAUL', 'GEMINI INFILTRATION', 'TWO-JEWEL TOWER',
+    'DOUBLE OR NOTHING', 'TWIN APEX', 'DUAL HEIST RUN', 'HIGH-SECURITY TWINS', 'EIGHTIETH SUMMIT',
+    // 81-98: Locked Case & Guard Key Pickpocket (Distract with Stone for 2s to Steal Key)
+    'KEYCARD ENIGMA', 'LOCKED VAULT', 'STONE PICKPOCKET', 'DISTRACTION THEFT', 'VAULT KEY PROTOCOL',
+    'KEYMASTER GUARD', 'TWO-SECOND STEAL', 'SAFE CRACKER', 'SHADOW KEY', 'GLASS CASE LOCKDOWN',
+    'DISTRACT AND STEAL', 'MASTER KEY HEIST', 'PEBBLE TRICK', 'HIGH-SEC SAFE', 'KEY STEAL LABYRINTH',
+    'STEALTH PICKPOCKET', 'LOCKBOX APEX', 'PENULTIMATE HEIST',
+    // 99-100: Final Boss / Treasure Hunt (Big Boss Guards, Kill with Guns/Bombs, 5s Escape Run)
+    'THE TREASURE HUNT BOSS', 'THE APEX MASTER HEIST'
   ];
 
   const levels = [];
@@ -116,111 +259,400 @@ function generate100CuratedLevels() {
   for (let lvl = 1; lvl <= 100; lvl++) {
     const name = LEVEL_NAMES[lvl - 1] || `SECTOR ${lvl}`;
 
-    // 1. Escalating Floor Count
-    let floorsCount = 2;
-    if (lvl >= 5 && lvl <= 18) floorsCount = 3;
-    else if (lvl >= 19 && lvl <= 45) floorsCount = 4;
-    else if (lvl >= 46 && lvl <= 75) floorsCount = 5;
-    else if (lvl >= 76) floorsCount = (lvl % 2 === 0 || lvl >= 95) ? 6 : 5;
+    // --- Tier 1: Levels 1 - 10 ---
+    if (lvl <= 10) {
+      const floorsCount = lvl <= 3 ? 2 : 3;
+      const arenaW = ARENA_BASE_W;
+      const ladderPathsCount = 1;
+      const guardCount = lvl === 1 ? 1 : lvl <= 4 ? 2 : 3;
+      const stairs = generateStaggeredLadders(floorsCount, arenaW, ladderPathsCount);
+      const guards = generateLevelGuards({
+        floorsCount,
+        guardCount,
+        arenaW,
+        lvl,
+      });
 
-    // 2. Ladder Paths (Horizontal Ways: 1 ladder, 2 ladders, or 3 ladders)
-    const isTripleLadder = lvl >= 25 && (lvl % 3 === 0);
-    const stairs = [];
-
-    for (let f = 0; f < floorsCount - 1; f++) {
-      if (lvl <= 3) {
-        // Single ladder path
-        const xPos = f % 2 === 0 ? 265 : 75;
-        stairs.push({ fromFloor: f, toFloor: f + 1, x: xPos });
-      } else if (isTripleLadder) {
-        // 3 horizontal shafts
-        stairs.push({ fromFloor: f, toFloor: f + 1, x: 65 });
-        stairs.push({ fromFloor: f, toFloor: f + 1, x: 170 });
-        stairs.push({ fromFloor: f, toFloor: f + 1, x: 275 });
-      } else {
-        // 2 distinct vertical paths
-        stairs.push({ fromFloor: f, toFloor: f + 1, x: 75 });
-        stairs.push({ fromFloor: f, toFloor: f + 1, x: 265 });
-      }
+      levels.push({
+        name,
+        floorsCount,
+        arenaW,
+        ladderPathsCount: 1,
+        stairs,
+        guards,
+        rivalCount: 0,
+        requiresPetrol: false,
+        diamondsCount: 1,
+        diamondLockedInCase: false,
+        hasWeapons: false,
+        isBossLevel: false,
+        cctvs: [],
+        car: { floor: 0, x: 70 },
+        stonePickup: guardCount >= 2 ? { floor: 1, x: arenaW - 50 } : null,
+      });
     }
+    // --- Tier 2: Levels 11 - 20 ---
+    else if (lvl <= 20) {
+      const floorsCount = 3;
+      const arenaW = 430; // Increased width, SVG scales nicely (zooming out)
+      const ladderPathsCount = 2;
+      const guardCount = 3 + Math.floor((lvl - 11) / 3); // 3 to 5 guards
+      const stairs = generateStaggeredLadders(floorsCount, arenaW, ladderPathsCount);
+      const guards = generateLevelGuards({
+        floorsCount,
+        guardCount,
+        arenaW,
+        lvl,
+      });
 
-    // 3. Rival Thief Appearance
-    let hasRival = false;
-    if (lvl >= 6 && lvl <= 20) hasRival = (lvl % 2 === 0);
-    else if (lvl >= 21 && lvl <= 60) hasRival = (lvl % 3 !== 1);
-    else if (lvl >= 61) hasRival = (lvl % 5 !== 0);
+      levels.push({
+        name,
+        floorsCount,
+        arenaW,
+        ladderPathsCount: 2,
+        stairs,
+        guards,
+        rivalCount: 0,
+        requiresPetrol: true, // Have to take fuel
+        petrol: { floor: 1, x: arenaW - 70 },
+        diamondsCount: 1,
+        diamondLockedInCase: false,
+        hasWeapons: false,
+        isBossLevel: false,
+        cctvs: [],
+        car: { floor: 0, x: 80 },
+        stonePickup: { floor: 2, x: 60 },
+      });
+    }
+    // --- Tier 3: Levels 21 - 35 ---
+    else if (lvl <= 35) {
+      const floorsCount = lvl <= 28 ? 5 : 6;
+      const arenaW = 490; // Big horizontal width
+      const ladderPathsCount = 2;
+      const guardCount = Math.max(5, Math.min(7, 5 + Math.floor((lvl - 21) / 5))); // 5 min
+      const stairs = generateStaggeredLadders(floorsCount, arenaW, ladderPathsCount);
+      const guards = generateLevelGuards({
+        floorsCount,
+        guardCount,
+        arenaW,
+        lvl,
+      });
 
-    // 4. Guards Scaling & Speed Ramp
-    let guardCount = 0;
-    if (lvl === 1) guardCount = 0;
-    else if (lvl <= 10) guardCount = 1;
-    else if (lvl <= 25) guardCount = 2;
-    else if (lvl <= 55) guardCount = 3;
-    else if (lvl <= 80) guardCount = 4;
-    else guardCount = Math.min(floorsCount - 1, (lvl >= 90 ? 5 : 4));
+      levels.push({
+        name,
+        floorsCount,
+        arenaW,
+        ladderPathsCount: 2,
+        stairs,
+        guards,
+        rivalCount: 1, // 1 rival thief
+        requiresPetrol: lvl % 3 === 0,
+        petrol: lvl % 3 === 0 ? { floor: 2, x: arenaW / 2 } : null,
+        diamondsCount: 1,
+        diamondLockedInCase: false,
+        hasWeapons: false,
+        isBossLevel: false,
+        cctvs: [],
+        car: { floor: 0, x: 90 },
+        stonePickup: { floor: 3, x: arenaW / 2 },
+      });
+    }
+    // --- Tier 4: Levels 36 - 50 ---
+    else if (lvl <= 50) {
+      const floorsCount = 5;
+      const arenaW = 540; // Big size building
+      const ladderPathsCount = 3;
+      const guardCount = 8; // 8 guards!
+      const stairs = generateStaggeredLadders(floorsCount, arenaW, ladderPathsCount);
+      const guards = generateLevelGuards({
+        floorsCount,
+        guardCount,
+        arenaW,
+        lvl,
+      });
 
-    const guards = [];
-    const baseSpeed = 1.0 + Math.min(0.55, (lvl - 1) * 0.0055);
+      // CCTV cameras on floors 2 & 3
+      const cctvs = [
+        { floor: 2, x: 190, sweepDir: 1, angle: -25, maxAngle: 30, speed: 0.8 },
+        { floor: 3, x: arenaW - 190, sweepDir: -1, angle: 25, maxAngle: 30, speed: 0.8 },
+      ];
 
-    const availableFloors = [];
-    for (let f = 1; f < floorsCount; f++) availableFloors.push(f);
+      levels.push({
+        name,
+        floorsCount,
+        arenaW,
+        ladderPathsCount: 3,
+        stairs,
+        guards,
+        rivalCount: 3, // 3 rival thieves (one from each path!)
+        rivalStartShafts: [90, arenaW / 2, arenaW - 90],
+        requiresPetrol: false,
+        diamondsCount: 1,
+        diamondLockedInCase: false,
+        hasWeapons: true, // Gun & Bomb pickups active!
+        gunPickup: { floor: 1, x: arenaW / 2, ammo: 4 },
+        bombPickup: { floor: 3, x: 90, count: 2 },
+        isBossLevel: false,
+        cctvs,
+        car: { floor: 0, x: 90 },
+        stonePickup: { floor: 2, x: arenaW - 90 },
+      });
+    }
+    // --- Tier 5: Levels 51 - 70 ---
+    else if (lvl <= 70) {
+      const floorsCount = 6;
+      const arenaW = 550;
+      const ladderPathsCount = 3;
+      const guardCount = 8;
+      const stairs = generateStaggeredLadders(floorsCount, arenaW, ladderPathsCount);
+      // 2 guards with guns and high vision
+      const guards = generateLevelGuards({
+        floorsCount,
+        guardCount,
+        arenaW,
+        armedGuardIndices: [0, 4],
+        lvl,
+      });
 
-    for (let g = 0; g < guardCount; g++) {
-      const gFloor = availableFloors[g % availableFloors.length];
-      const dir = (g % 2 === 0) ? 1 : -1;
-      const startX = dir === 1 ? 60 : 280;
-      const speed = Math.round((baseSpeed + g * 0.04) * 100) / 100;
-      guards.push({
-        id: `g${g}`,
-        floor: gFloor,
-        minX: 45,
-        maxX: 295,
-        x: startX,
-        dir,
-        speed,
-        pauseTimer: 0,
-        alertTimer: 0,
+      const cctvs = [
+        { floor: 2, x: 180, sweepDir: 1, angle: -25, maxAngle: 30, speed: 0.9 },
+        { floor: 4, x: arenaW - 180, sweepDir: -1, angle: 25, maxAngle: 30, speed: 0.9 },
+      ];
+
+      levels.push({
+        name,
+        floorsCount,
+        arenaW,
+        ladderPathsCount: 3,
+        stairs,
+        guards,
+        rivalCount: 2,
+        rivalStartShafts: [90, arenaW - 90],
+        requiresPetrol: false,
+        diamondsCount: 1,
+        diamondLockedInCase: false,
+        hasWeapons: true,
+        gunPickup: { floor: 1, x: arenaW - 110, ammo: 4 },
+        bombPickup: { floor: 3, x: 120, count: 2 },
+        isBossLevel: false,
+        cctvs,
+        car: { floor: 0, x: 90 },
+        stonePickup: { floor: 2, x: arenaW / 2 },
+      });
+    }
+    // --- Tier 6: Levels 71 - 80 ---
+    else if (lvl <= 80) {
+      const floorsCount = 6;
+      const arenaW = 560;
+      const ladderPathsCount = 3;
+      const guardCount = 8;
+      const stairs = generateStaggeredLadders(floorsCount, arenaW, ladderPathsCount);
+      // Multiple armed guards with guns
+      const guards = generateLevelGuards({
+        floorsCount,
+        guardCount,
+        arenaW,
+        armedGuardIndices: [0, 3, 6],
+        lvl,
+      });
+
+      const cctvs = [
+        { floor: 2, x: 170, sweepDir: 1, angle: -28, maxAngle: 32, speed: 0.9 },
+        { floor: 3, x: arenaW / 2, sweepDir: -1, angle: 20, maxAngle: 30, speed: 0.9 },
+        { floor: 4, x: arenaW - 170, sweepDir: 1, angle: -28, maxAngle: 32, speed: 0.9 },
+      ];
+
+      levels.push({
+        name,
+        floorsCount,
+        arenaW,
+        ladderPathsCount: 3,
+        stairs,
+        guards,
+        rivalCount: 2,
+        rivalStartShafts: [90, arenaW - 90],
+        requiresPetrol: false,
+        diamondsCount: 2, // 2 Diamonds!
+        extraDiamond: { floor: 3, x: arenaW / 2 },
+        diamondLockedInCase: false,
+        hasWeapons: true,
+        gunPickup: { floor: 1, x: arenaW / 2, ammo: 5 },
+        bombPickup: { floor: 4, x: 100, count: 2 },
+        isBossLevel: false,
+        cctvs,
+        car: { floor: 0, x: 90 },
+        stonePickup: { floor: 2, x: 80 },
+      });
+    }
+    // --- Tier 7: Levels 81 - 98 ---
+    else if (lvl <= 98) {
+      const floorsCount = 6;
+      const arenaW = 560;
+      const ladderPathsCount = 3;
+      const guardCount = 8;
+      const stairs = generateStaggeredLadders(floorsCount, arenaW, ladderPathsCount);
+      // Armed guards and designated key guard
+      const guards = generateLevelGuards({
+        floorsCount,
+        guardCount,
+        arenaW,
+        armedGuardIndices: [1, 5],
+        keyGuardIndex: 2,
+        lvl,
+      });
+
+      const cctvs = [
+        { floor: 2, x: 180, sweepDir: 1, angle: -25, maxAngle: 30, speed: 0.95 },
+        { floor: 4, x: arenaW - 180, sweepDir: -1, angle: 25, maxAngle: 30, speed: 0.95 },
+      ];
+
+      levels.push({
+        name,
+        floorsCount,
+        arenaW,
+        ladderPathsCount: 3,
+        stairs,
+        guards,
+        rivalCount: 2,
+        rivalStartShafts: [90, arenaW - 90],
+        requiresPetrol: false,
+        diamondsCount: 1,
+        diamondLockedInCase: true, // Locked in glass case!
+        hasWeapons: true,
+        gunPickup: { floor: 1, x: 110, ammo: 4 },
+        bombPickup: { floor: 3, x: arenaW - 110, count: 2 },
+        isBossLevel: false,
+        cctvs,
+        car: { floor: 0, x: 90 },
+        stonePickup: { floor: 2, x: 80 },
+      });
+    }
+    // --- Tier 8: Levels 99 - 100 (Final Boss / Treasure Hunt) ---
+    else {
+      const floorsCount = 6;
+      const arenaW = 580;
+      const stairs = generateStaggeredLadders(floorsCount, arenaW, 3);
+
+      // 2 Giant Boss Guards on the Vault floor + 4 elite armed guards
+      const guards = [
+        // Boss 1 on top vault floor guarding the royal treasure (starts LEFT facing right)
+        {
+          id: 'boss_1',
+          floor: 5,
+          x: 100,
+          dir: 1,
+          speed: 0.9,
+          minX: 80,
+          maxX: arenaW - 80,
+          hasGun: true,
+          shootCooldown: 40,
+          hasKey: false,
+          isBoss: true,
+          maxHp: 3,
+          hp: 3,
+        },
+        // Boss 2 on top vault floor (starts RIGHT facing left - no overlap!)
+        {
+          id: 'boss_2',
+          floor: 5,
+          x: arenaW - 100,
+          dir: -1,
+          speed: 0.9,
+          minX: 80,
+          maxX: arenaW - 80,
+          hasGun: true,
+          shootCooldown: 60,
+          hasKey: false,
+          isBoss: true,
+          maxHp: 3,
+          hp: 3,
+        },
+        // Elite armed patrolling lower floors
+        {
+          id: 'g_elite_1',
+          floor: 1,
+          x: 100,
+          dir: 1,
+          speed: 1.25,
+          minX: 45,
+          maxX: arenaW - 45,
+          hasGun: true,
+          shootCooldown: 0,
+          hasKey: false,
+          isBoss: false,
+        },
+        {
+          id: 'g_elite_2',
+          floor: 2,
+          x: arenaW - 100,
+          dir: -1,
+          speed: 1.35,
+          minX: 45,
+          maxX: arenaW - 45,
+          hasGun: false,
+          hasKey: false,
+          isBoss: false,
+        },
+        {
+          id: 'g_elite_3',
+          floor: 3,
+          x: 140,
+          dir: 1,
+          speed: 1.25,
+          minX: 45,
+          maxX: arenaW - 45,
+          hasGun: true,
+          shootCooldown: 0,
+          hasKey: false,
+          isBoss: false,
+        },
+        {
+          id: 'g_elite_4',
+          floor: 4,
+          x: arenaW - 140,
+          dir: -1,
+          speed: 1.4,
+          minX: 45,
+          maxX: arenaW - 45,
+          hasGun: false,
+          hasKey: false,
+          isBoss: false,
+        },
+      ];
+
+      const cctvs = [
+        { floor: 2, x: 190, sweepDir: 1, angle: -25, maxAngle: 30, speed: 1.0 },
+        { floor: 4, x: arenaW - 190, sweepDir: -1, angle: 25, maxAngle: 30, speed: 1.0 },
+      ];
+
+      levels.push({
+        name,
+        floorsCount,
+        arenaW,
+        ladderPathsCount: 3,
+        stairs,
+        guards,
+        rivalCount: 0, // In boss level, spotlight is on defeating the Big Guards & fleeing police
+        requiresPetrol: false,
+        diamondsCount: 1,
+        isMasterCrown: true,
+        diamondLockedInCase: false,
+        hasWeapons: true,
+        gunPickup: { floor: 1, x: arenaW / 2, ammo: 6 },
+        bombPickup: { floor: 3, x: arenaW / 2, count: 4 },
+        isBossLevel: true,
+        cctvs,
+        car: { floor: 0, x: 95 },
+        stonePickup: { floor: 2, x: arenaW - 110 },
       });
     }
 
-    // 5. Petrol Requirement
-    const requiresPetrol = lvl === 3 || (lvl >= 7 && (lvl % 2 === 1 || lvl >= 80));
-    let petrol = null;
-    if (requiresPetrol) {
-      const petrolFloor = Math.max(1, Math.min(floorsCount - 2, Math.floor(floorsCount / 2)));
-      const petrolX = (lvl % 2 === 0) ? 65 : 270;
-      petrol = { floor: petrolFloor, x: petrolX };
-    }
-
-    // 6. Diamond Vault (Top Floor)
-    const diamondFloor = floorsCount - 1;
-    const diamondX = (lvl % 3 === 0) ? 170 : (lvl % 2 === 0) ? 250 : 85;
-    const diamond = { floor: diamondFloor, x: diamondX };
-
-    // 7. Getaway Car (Floor 0)
-    const carX = (lvl <= 3) ? 60 : isTripleLadder ? 120 : 170;
-    const car = { floor: 0, x: carX };
-
-    // 8. Distractor Stone Refill Stash
-    let stonePickup = null;
-    if (guardCount >= 2) {
-      const stoneFloor = Math.max(1, Math.min(floorsCount - 2, 2));
-      const stoneX = (lvl % 2 === 0) ? 45 : 290;
-      stonePickup = { floor: stoneFloor, x: stoneX };
-    }
-
-    levels.push({
-      name,
-      floorsCount,
-      requiresPetrol,
-      hasRival,
-      stairs,
-      guards,
-      diamond,
-      petrol,
-      car,
-      stonePickup,
-    });
+    // Default Diamond location (Top Floor)
+    const curLevel = levels[levels.length - 1];
+    curLevel.diamond = {
+      floor: curLevel.floorsCount - 1,
+      x: curLevel.arenaW / 2,
+    };
   }
 
   return levels;
@@ -241,71 +673,80 @@ export default function ThiefEscapeGame({
   const [lives, setLives] = useState(3);
   const [isGameOver, setIsGameOver] = useState(false);
   const [victoryModal, setVictoryModal] = useState(false);
+  /* --- [TEST_BUTTON_START] --- */
+  const [showLevelPicker, setShowLevelPicker] = useState(false);
+  /* --- [TEST_BUTTON_END] --- */
 
   // Distractor stones
   const [stones, setStones] = useState(3);
   const [thrownStones, setThrownStones] = useState([]);
   const [stonePickupTaken, setStonePickupTaken] = useState(false);
 
+  // Weapon Pickups & Arsenal
+  const [ammo, setAmmo] = useState(0);
+  const [bombs, setBombs] = useState(0);
+  const [gunTaken, setGunTaken] = useState(false);
+  const [bombTaken, setBombTaken] = useState(false);
+  const [bullets, setBullets] = useState([]);
+  const [thrownBombs, setThrownBombs] = useState([]);
+
+  // Police Emergency Alert (5s countdown after gun shot / bomb / final treasure)
+  const [policeTimer, setPoliceTimer] = useState(0); // in frames (250 frames = 5.0s)
+  const [policeActive, setPoliceActive] = useState(false);
+
+  // Key Stealing & Locked Case State
+  const [hasKey, setHasKey] = useState(false);
+  const [keyStealProgress, setKeyStealProgress] = useState(0); // 0 to 100 (2 seconds)
+
   // Active Level Config
   const levelConfig = CURATED_LEVELS[Math.min(level - 1, CURATED_LEVELS.length - 1)];
+  const arenaW = levelConfig.arenaW;
+  const windowList = getWindowListForWidth(arenaW);
 
-  // Floor Height Calculator
-  const floorHeight = ARENA_H / (levelConfig.floorsCount + 0.3);
+  // Dynamic Floor Height
+  const floorHeight = ARENA_H / (levelConfig.floorsCount + 0.35);
   const getFloorY = useCallback(
     (floorIdx) => ARENA_H - 35 - floorIdx * floorHeight,
     [floorHeight]
   );
 
-  // Player State: supports smooth ladder climbing & window hiding
+  // Player State
   const [player, setPlayer] = useState({
     floor: 0,
-    x: levelConfig.car.x + (levelConfig.car.x < 150 ? 50 : -50),
-    y: null, // null when on floor; continuous coordinate when climbing
-    isClimbing: false,
-    stairIdx: null,
-    isHiding: false,
-    hiddenWindowX: null,
-    hasDiamond: false,
-    hasPetrol: !levelConfig.requiresPetrol,
-    facing: 1, // 1 = right, -1 = left
-  });
-
-  // Guards State
-  const [guards, setGuards] = useState(() =>
-    levelConfig.guards.map((g) => ({ ...g }))
-  );
-
-  // Rival Thief State
-  const [rival, setRival] = useState(() => ({
-    floor: 0,
-    x: levelConfig.car.x + (levelConfig.car.x < 150 ? 140 : -140),
+    x: levelConfig.car.x + 50,
     y: null,
     isClimbing: false,
     stairIdx: null,
-    climbDir: 0,
-    facing: 1,
-    hasDiamond: false,
-    isAlive: levelConfig.hasRival,
     isHiding: false,
     hiddenWindowX: null,
-    hideTimer: 0,
-    snatchCooldown: 0,
-    stepTimer: 0,
-  }));
+    hasDiamond: false,
+    diamondsHeld: 0,
+    hasPetrol: !levelConfig.requiresPetrol,
+    facing: 1,
+  });
 
-  // Loot items state
+  // Multiple Rival Thieves
+  const [rivals, setRivals] = useState([]);
+
+  // Guards State
+  const [guards, setGuards] = useState([]);
+
+  // CCTV State
+  const [cctvs, setCctvs] = useState([]);
+
+  // Loot Items State
   const [diamondTaken, setDiamondTaken] = useState(false);
+  const [extraDiamondTaken, setExtraDiamondTaken] = useState(false);
   const [petrolTaken, setPetrolTaken] = useState(!levelConfig.requiresPetrol);
 
-  // Getaway Car State: drives off screen once thief jumps inside!
+  // Getaway Car State
   const [carState, setCarState] = useState(() => ({
     x: levelConfig.car.x,
     isEscaping: false,
     thiefInside: false,
     jumpPhase: 0,
-    vx: 3,
-    escapeDir: levelConfig.car.x < 150 ? -1 : 1,
+    vx: 3.5,
+    escapeDir: levelConfig.car.x < arenaW / 2 ? -1 : 1,
   }));
   const carStateRef = useRef(carState);
   useEffect(() => {
@@ -313,8 +754,8 @@ export default function ThiefEscapeGame({
   }, [carState]);
 
   // Movement & Action Input Refs
-  const inputDirRef = useRef(0); // -1 = left, 0 = idle, 1 = right
-  const climbDirRef = useRef(0); // -1 = climb up, 0 = hold/stop, 1 = climb down
+  const inputDirRef = useRef(0);
+  const climbDirRef = useRef(0);
   const isSneakRef = useRef(false);
 
   const playerRef = useRef(player);
@@ -327,38 +768,52 @@ export default function ThiefEscapeGame({
     guardsRef.current = guards;
   }, [guards]);
 
-  const rivalRef = useRef(rival);
+  const rivalsRef = useRef(rivals);
   useEffect(() => {
-    rivalRef.current = rival;
-  }, [rival]);
+    rivalsRef.current = rivals;
+  }, [rivals]);
 
-  const diamondTakenRef = useRef(diamondTaken);
+  const cctvsRef = useRef(cctvs);
   useEffect(() => {
-    diamondTakenRef.current = diamondTaken;
-  }, [diamondTaken]);
+    cctvsRef.current = cctvs;
+  }, [cctvs]);
 
-  const petrolTakenRef = useRef(petrolTaken);
+  const bulletsRef = useRef(bullets);
   useEffect(() => {
-    petrolTakenRef.current = petrolTaken;
-  }, [petrolTaken]);
+    bulletsRef.current = bullets;
+  }, [bullets]);
 
+  const thrownBombsRef = useRef(thrownBombs);
+  useEffect(() => {
+    thrownBombsRef.current = thrownBombs;
+  }, [thrownBombs]);
+
+  const policeTimerRef = useRef(0);
+  const policeActiveRef = useRef(false);
+  const keyStealProgressRef = useRef(0);
+  const hasKeyRef = useRef(false);
+
+  const diamondTakenRef = useRef(false);
+  const extraDiamondTakenRef = useRef(false);
+  const petrolTakenRef = useRef(false);
   const stonesRef = useRef(stones);
   useEffect(() => {
     stonesRef.current = stones;
   }, [stones]);
-
   const thrownStonesRef = useRef(thrownStones);
   useEffect(() => {
     thrownStonesRef.current = thrownStones;
   }, [thrownStones]);
 
-  const stonePickupTakenRef = useRef(stonePickupTaken);
+  const ammoRef = useRef(ammo);
   useEffect(() => {
-    stonePickupTakenRef.current = stonePickupTaken;
-  }, [stonePickupTaken]);
+    ammoRef.current = ammo;
+  }, [ammo]);
+  const bombsRef = useRef(bombs);
+  useEffect(() => {
+    bombsRef.current = bombs;
+  }, [bombs]);
 
-  const hasDiamondRef = useRef(false);
-  const hasPetrolRef = useRef(!levelConfig.requiresPetrol);
   const fuelWarningCooldownRef = useRef(false);
 
   // Save current level to persistent storage
@@ -368,77 +823,126 @@ export default function ThiefEscapeGame({
     } catch {}
   }, []);
 
-  // Initialize Level
+  // Initialize / Reset Level
   const initLevel = useCallback(
     (lvl) => {
       const cfg = CURATED_LEVELS[Math.min(lvl - 1, CURATED_LEVELS.length - 1)];
+      const w = cfg.arenaW;
+
       const initialPlayer = {
         floor: 0,
-        x: cfg.car.x + (cfg.car.x < 150 ? 50 : -50),
+        x: cfg.car.x + (cfg.car.x < w / 2 ? 50 : -50),
         y: null,
         isClimbing: false,
         stairIdx: null,
         isHiding: false,
         hiddenWindowX: null,
         hasDiamond: false,
+        diamondsHeld: 0,
         hasPetrol: !cfg.requiresPetrol,
-        facing: cfg.car.x < 150 ? 1 : -1,
+        facing: cfg.car.x < w / 2 ? 1 : -1,
       };
       setPlayer(initialPlayer);
       playerRef.current = initialPlayer;
 
       const initialGuards = cfg.guards.map((g) => ({
         ...g,
+        isDefeated: false,
         alertTimer: 0,
         pauseTimer: 0,
         isInvestigating: false,
         investigateTargetX: g.x,
         investigateTimer: 0,
         investigateSpeed: g.speed,
+        isChasing: false,
+        chaseTimer: 0,
+        shootCooldown: 0,
+        hp: g.hp || 1,
       }));
       setGuards(initialGuards);
       guardsRef.current = initialGuards;
 
-      const initialRival = {
-        floor: 0,
-        x: cfg.car.x + (cfg.car.x < 150 ? 140 : -140),
-        y: null,
-        isClimbing: false,
-        stairIdx: null,
-        climbDir: 0,
-        facing: 1,
-        hasDiamond: false,
-        isAlive: cfg.hasRival,
-        isHiding: false,
-        hiddenWindowX: null,
-        hideTimer: 0,
-        snatchCooldown: 0,
-        stepTimer: 0,
-      };
-      setRival(initialRival);
-      rivalRef.current = initialRival;
+      // Rivals
+      const initialRivals = [];
+      for (let r = 0; r < cfg.rivalCount; r++) {
+        const startX = cfg.rivalStartShafts ? cfg.rivalStartShafts[r % cfg.rivalStartShafts.length] : (cfg.car.x + 130 + r * 60);
+        initialRivals.push({
+          id: `rival_${r}`,
+          floor: 0,
+          x: Math.max(50, Math.min(w - 50, startX)),
+          y: null,
+          isClimbing: false,
+          stairIdx: null,
+          climbDir: 0,
+          facing: 1,
+          hasDiamond: false,
+          isAlive: true,
+          isHiding: false,
+          hiddenWindowX: null,
+          hideTimer: 0,
+          snatchCooldown: 0,
+          isSearching: false,
+          searchFloor: 0,
+          searchTargetX: null,
+          searchTimer: 0,
+        });
+      }
+      setRivals(initialRivals);
+      rivalsRef.current = initialRivals;
 
+      // CCTVs
+      const initialCctvs = (cfg.cctvs || []).map((c) => ({
+        ...c,
+        angle: c.angle || 0,
+        alertCooldown: 0,
+      }));
+      setCctvs(initialCctvs);
+      cctvsRef.current = initialCctvs;
+
+      // Weapons & Police Alert
+      setAmmo(0);
+      ammoRef.current = 0;
+      setBombs(0);
+      bombsRef.current = 0;
+      setGunTaken(false);
+      setBombTaken(false);
+      setBullets([]);
+      bulletsRef.current = [];
+      setThrownBombs([]);
+      thrownBombsRef.current = [];
+
+      setPoliceTimer(0);
+      policeTimerRef.current = 0;
+      setPoliceActive(false);
+      policeActiveRef.current = false;
+
+      // Key & Locked Case
+      setHasKey(false);
+      hasKeyRef.current = false;
+      setKeyStealProgress(0);
+      keyStealProgressRef.current = 0;
+
+      // Diamonds & Fuel
       setDiamondTaken(false);
       diamondTakenRef.current = false;
-      hasDiamondRef.current = false;
+      setExtraDiamondTaken(false);
+      extraDiamondTakenRef.current = false;
       setPetrolTaken(!cfg.requiresPetrol);
       petrolTakenRef.current = !cfg.requiresPetrol;
-      hasPetrolRef.current = !cfg.requiresPetrol;
 
       setStones(3);
       stonesRef.current = 3;
       setThrownStones([]);
       thrownStonesRef.current = [];
       setStonePickupTaken(false);
-      stonePickupTakenRef.current = false;
 
       const initialCar = {
         x: cfg.car.x,
         isEscaping: false,
         thiefInside: false,
         jumpPhase: 0,
-        vx: 3,
-        escapeDir: cfg.car.x < 150 ? -1 : 1,
+        vx: 3.5,
+        escapeDir: cfg.car.x < w / 2 ? -1 : 1,
       };
       setCarState(initialCar);
       carStateRef.current = initialCar;
@@ -466,61 +970,89 @@ export default function ThiefEscapeGame({
           const l = Math.max(1, parseInt(savedLvl, 10) || 1);
           setLevel(l);
           initLevel(l);
+        } else {
+          initLevel(1);
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        initLevel(1);
+      });
   }, [initLevel]);
 
-  // Player Caught / Damaged: Only reset player position to start; guards and rival continue seamlessly!
-  const handlePlayerBusted = useCallback((reason = 'BUSTED!') => {
-    triggerGameOverHaptic();
-    playGameOverSound();
-    juiceRef.current?.shake(10, 10);
-    juiceRef.current?.flash(COLORS.danger);
+  // Player Caught / Damaged: Only reset player position to start; guards and rivals continue seamlessly!
+  const handlePlayerBusted = useCallback(
+    (reason = 'BUSTED!') => {
+      triggerGameOverHaptic();
+      playGameOverSound();
+      juiceRef.current?.shake(12, 12);
+      juiceRef.current?.flash(COLORS.danger);
 
-    setLives((l) => {
-      const nextLives = l - 1;
-      if (nextLives <= 0) {
-        setIsGameOver(true);
-        juiceRef.current?.popup(`🚨 ${reason}`, 'Caught or failed objective', COLORS.danger);
-        return 0;
-      } else {
-        // Reset ONLY player position to ground floor start; guards & rival continue from where they are!
-        const curP = playerRef.current;
-        if (curP.hasDiamond) {
-          levelConfig.diamond.floor = curP.floor;
-          levelConfig.diamond.x = Math.max(30, Math.min(ARENA_W - 30, curP.x));
-          diamondTakenRef.current = false;
-          setDiamondTaken(false);
-          hasDiamondRef.current = false;
+      setLives((l) => {
+        const nextLives = l - 1;
+        if (nextLives <= 0) {
+          setIsGameOver(true);
+          juiceRef.current?.popup(`🚨 ${reason}`, 'Caught by security or police backup', COLORS.danger);
+          return 0;
+        } else {
+          // Return diamond to starting vault position on top floor when player is caught
+          const curP = playerRef.current;
+          if (curP.hasDiamond) {
+            levelConfig.diamond.floor = levelConfig.floorsCount - 1;
+            levelConfig.diamond.x = Math.round(arenaW / 2);
+            diamondTakenRef.current = false;
+            setDiamondTaken(false);
+          }
+          if (levelConfig.extraDiamond && extraDiamondTakenRef.current) {
+            levelConfig.extraDiamond.floor = 3;
+            levelConfig.extraDiamond.x = Math.round(arenaW / 2);
+            extraDiamondTakenRef.current = false;
+            setExtraDiamondTaken(false);
+          }
+
+          const resetPlayer = {
+            floor: 0,
+            x: levelConfig.car.x + (levelConfig.car.x < arenaW / 2 ? 50 : -50),
+            y: null,
+            isClimbing: false,
+            stairIdx: null,
+            isHiding: false,
+            hiddenWindowX: null,
+            hasDiamond: false,
+            diamondsHeld: 0,
+            hasPetrol: !levelConfig.requiresPetrol || curP.hasPetrol,
+            facing: levelConfig.car.x < arenaW / 2 ? 1 : -1,
+          };
+          setPlayer(resetPlayer);
+          playerRef.current = resetPlayer;
+
+          inputDirRef.current = 0;
+          climbDirRef.current = 0;
+          isSneakRef.current = false;
+
+          juiceRef.current?.popup(`⚠️ ${reason}`, `${nextLives} Lives left (Respawned at Ground)`, COLORS.solarGold);
+          return nextLives;
         }
+      });
+    },
+    [arenaW, levelConfig]
+  );
 
-        const resetPlayer = {
-          floor: 0,
-          x: levelConfig.car.x + (levelConfig.car.x < 150 ? 50 : -50),
-          y: null,
-          isClimbing: false,
-          stairIdx: null,
-          isHiding: false,
-          hiddenWindowX: null,
-          hasDiamond: false,
-          hasPetrol: !levelConfig.requiresPetrol || curP.hasPetrol,
-          facing: levelConfig.car.x < 150 ? 1 : -1,
-        };
-        setPlayer(resetPlayer);
-        playerRef.current = resetPlayer;
+  // Trigger Police 5-Second Emergency Dispatch
+  const triggerPoliceEmergency = useCallback((reason = 'GUNFIRE REPORTED!') => {
+    if (policeActiveRef.current) return;
+    policeActiveRef.current = true;
+    setPoliceActive(true);
+    // 250 frames = exactly 5.0 seconds at 50 ticks/s (20ms interval)
+    policeTimerRef.current = 250;
+    setPoliceTimer(250);
 
-        inputDirRef.current = 0;
-        climbDirRef.current = 0;
-        isSneakRef.current = false;
+    triggerGameOverHaptic();
+    playSpeedUpSound();
+    juiceRef.current?.shake(10, 8);
+    juiceRef.current?.popup(`🚨 ${reason}`, 'POLICE DISPATCHED IN 5 SECONDS! ESCAPE NOW!', '#FF0055');
+  }, []);
 
-        juiceRef.current?.popup(`⚠️ ${reason}`, `${nextLives} Lives remaining (Respawned at Ground)`, COLORS.solarGold);
-        return nextLives;
-      }
-    });
-  }, [levelConfig]);
-
-  // Throw Distractor Stone in player's facing direction
+  // Throw Distractor Stone
   const handleThrowStone = useCallback(() => {
     if (isGameOver || isPaused || victoryModal) return;
     if (stonesRef.current <= 0) {
@@ -537,8 +1069,8 @@ export default function ThiefEscapeGame({
       id: Date.now() + Math.random(),
       x: curP.x + dir * 8,
       y: curY - 14,
-      vx: dir * 2.8, // Shorter, controlled throw distance (lands ~55-70px away instead of 180px!)
-      vy: -2.4, // Gentle upward arc
+      vx: dir * 3.2,
+      vy: -2.5,
       active: true,
       life: 60,
     };
@@ -554,7 +1086,97 @@ export default function ThiefEscapeGame({
 
     playSliceSound();
     triggerMediumHaptic();
-    juiceRef.current?.popup('🪨 DISTRACTOR THROWN!', dir > 0 ? 'Towards Right ➔' : 'Towards Left ⬅', '#FFE600');
+    juiceRef.current?.popup('🪨 STONE THROWN!', dir > 0 ? 'Right ➔' : 'Left ⬅', '#FFE600');
+  }, [isGameOver, isPaused, victoryModal, getFloorY]);
+
+  // Shoot Gun: Fires fast bullet, knocks out guards, alerts police in 5 seconds!
+  const handleShootGun = useCallback(() => {
+    if (isGameOver || isPaused || victoryModal) return;
+    if (ammoRef.current <= 0) {
+      triggerLightHaptic();
+      juiceRef.current?.popup('OUT OF AMMO!', 'Collect gun pickup', '#FF0055');
+      return;
+    }
+
+    const curP = playerRef.current;
+    if (curP.isHiding) {
+      triggerLightHaptic();
+      juiceRef.current?.popup('CANNOT SHOOT FROM WINDOW', 'Step out to aim', '#FF0055');
+      return;
+    }
+
+    const curY = curP.isClimbing && curP.y != null ? curP.y : getFloorY(curP.floor);
+    const dir = curP.facing || 1;
+
+    setAmmo((a) => {
+      const next = a - 1;
+      ammoRef.current = next;
+      return next;
+    });
+
+    const newBullet = {
+      id: Date.now() + Math.random(),
+      isPlayerBullet: true,
+      x: curP.x + dir * 10,
+      y: curY - 18,
+      vx: dir * 8.5,
+      floor: curP.floor,
+      life: 50,
+    };
+
+    bulletsRef.current = [...bulletsRef.current, newBullet];
+    setBullets(bulletsRef.current);
+
+    playSliceSound();
+    triggerPerfectHaptic();
+    juiceRef.current?.burst(curP.x + dir * 14, curY - 18, '#FFE600', 16);
+
+    // Gunshot triggers 5-second police arrival!
+    triggerPoliceEmergency('LOUD GUNFIRE DETECTED!');
+  }, [isGameOver, isPaused, victoryModal, getFloorY, triggerPoliceEmergency]);
+
+  // Throw Bomb: Throws explosive, blast area knocks out guards & bosses, alerts police in 5s!
+  const handleThrowBomb = useCallback(() => {
+    if (isGameOver || isPaused || victoryModal) return;
+    if (bombsRef.current <= 0) {
+      triggerLightHaptic();
+      juiceRef.current?.popup('NO BOMBS!', 'Collect bomb pickup', '#FF0055');
+      return;
+    }
+
+    const curP = playerRef.current;
+    if (curP.isHiding) {
+      triggerLightHaptic();
+      juiceRef.current?.popup('CANNOT THROW FROM WINDOW', 'Step out first', '#FF0055');
+      return;
+    }
+
+    const curY = curP.isClimbing && curP.y != null ? curP.y : getFloorY(curP.floor);
+    const dir = curP.facing || 1;
+
+    setBombs((b) => {
+      const next = b - 1;
+      bombsRef.current = next;
+      return next;
+    });
+
+    const newBomb = {
+      id: Date.now() + Math.random(),
+      x: curP.x + dir * 10,
+      y: curY - 16,
+      vx: dir * 3.8,
+      vy: -3.5,
+      floor: curP.floor,
+      life: 55,
+      active: true,
+    };
+
+    thrownBombsRef.current = [...thrownBombsRef.current, newBomb];
+    setThrownBombs(thrownBombsRef.current);
+
+    playSliceSound();
+    triggerMediumHaptic();
+    juiceRef.current?.popup('💣 BOMB THROWN!', 'Detonating in 1.5s', '#FF0055');
   }, [isGameOver, isPaused, victoryModal, getFloorY]);
 
   // Main 60 FPS Game Loop
@@ -564,24 +1186,38 @@ export default function ThiefEscapeGame({
     const interval = setInterval(() => {
       const curPlayer = { ...playerRef.current };
       const curGuards = guardsRef.current.map((g) => ({ ...g }));
-      const curRival = { ...rivalRef.current };
+      const curRivals = rivalsRef.current.map((r) => ({ ...r }));
+      const curCctvs = cctvsRef.current.map((c) => ({ ...c }));
 
-      // 1. Update Player Movement (Smooth Ladder Climbing OR Walking / Window Hiding)
+      // --- 1. Police 5-Second Emergency Countdown ---
+      if (policeActiveRef.current) {
+        policeTimerRef.current -= 1;
+        setPoliceTimer(policeTimerRef.current);
+        if (policeTimerRef.current <= 0) {
+          policeActiveRef.current = false;
+          setPoliceActive(false);
+          // If player hasn't escaped inside the car, police arrives & arrests player!
+          if (!carStateRef.current.isEscaping && !carStateRef.current.thiefInside) {
+            handlePlayerBusted('POLICE CRIME SQUAD SURROUNDED BUILDING!');
+            return;
+          }
+        }
+      }
+
+      // --- 2. Update Player Movement (Catwalks, Ladders, Hiding) ---
       if (curPlayer.isClimbing && curPlayer.stairIdx != null) {
         const stair = levelConfig.stairs[curPlayer.stairIdx];
         const yBottom = getFloorY(stair.fromFloor);
         const yTop = getFloorY(stair.toFloor);
 
-        // Cannot hide while climbing on ladders
         curPlayer.isHiding = false;
         curPlayer.hiddenWindowX = null;
 
-        // Continuous vertical climbing movement
         if (climbDirRef.current !== 0) {
-          curPlayer.y += climbDirRef.current * 2.4; // -1 moves up towards yTop, +1 moves down towards yBottom
+          curPlayer.y += climbDirRef.current * 2.5;
         }
 
-        // Stepping off onto Top Floor
+        // Reached Top Floor
         if (curPlayer.y <= yTop) {
           curPlayer.y = null;
           curPlayer.floor = stair.toFloor;
@@ -590,7 +1226,7 @@ export default function ThiefEscapeGame({
           triggerLightHaptic();
           playSnapTickSound();
         }
-        // Stepping off onto Bottom Floor
+        // Reached Bottom Floor
         else if (curPlayer.y >= yBottom) {
           curPlayer.y = null;
           curPlayer.floor = stair.fromFloor;
@@ -599,26 +1235,25 @@ export default function ThiefEscapeGame({
           triggerLightHaptic();
           playSnapTickSound();
         }
-        // Optional quick horizontal step off if near platform edge
+        // Horizontal step-off near platform
         else if (inputDirRef.current !== 0) {
           if (Math.abs(curPlayer.y - yTop) < 14) {
             curPlayer.y = null;
             curPlayer.floor = stair.toFloor;
             curPlayer.isClimbing = false;
             curPlayer.stairIdx = null;
-            curPlayer.x += inputDirRef.current * 2.0;
+            curPlayer.x += inputDirRef.current * 2.2;
           } else if (Math.abs(curPlayer.y - yBottom) < 14) {
             curPlayer.y = null;
             curPlayer.floor = stair.fromFloor;
             curPlayer.isClimbing = false;
             curPlayer.stairIdx = null;
-            curPlayer.x += inputDirRef.current * 2.0;
+            curPlayer.x += inputDirRef.current * 2.2;
           }
         }
       } else {
-        // Player is on a floor catwalk: check window hiding vs walking
+        // Player is on catwalk floor
         if (curPlayer.isHiding) {
-          // If player is currently hidden inside a window, movement steps out of the window
           if (inputDirRef.current !== 0) {
             curPlayer.isHiding = false;
             curPlayer.hiddenWindowX = null;
@@ -627,17 +1262,16 @@ export default function ThiefEscapeGame({
             curPlayer.facing = inputDirRef.current;
           }
         } else {
-          // Normal horizontal walking on platform
           if (inputDirRef.current !== 0) {
-            curPlayer.x += inputDirRef.current * 2.6;
+            curPlayer.x += inputDirRef.current * 2.7;
             curPlayer.facing = inputDirRef.current;
           }
-          curPlayer.x = Math.max(30, Math.min(ARENA_W - 30, curPlayer.x));
+          curPlayer.x = Math.max(30, Math.min(arenaW - 30, curPlayer.x));
 
-          // Ladder Climb Up Entry Check: near stair going up
+          // Ladder Climb Up Check
           if (climbDirRef.current === -1) {
             const upIdx = levelConfig.stairs.findIndex(
-              (s) => s.fromFloor === curPlayer.floor && Math.abs(curPlayer.x - s.x) < 24
+              (s) => s.fromFloor === curPlayer.floor && Math.abs(curPlayer.x - s.x) < 25
             );
             if (upIdx !== -1) {
               const stair = levelConfig.stairs[upIdx];
@@ -649,10 +1283,10 @@ export default function ThiefEscapeGame({
               triggerLightHaptic();
             }
           }
-          // Ladder Climb Down Entry Check: near stair going down
+          // Ladder Climb Down Check
           else if (climbDirRef.current === 1) {
             const downIdx = levelConfig.stairs.findIndex(
-              (s) => s.toFloor === curPlayer.floor && Math.abs(curPlayer.x - s.x) < 24
+              (s) => s.toFloor === curPlayer.floor && Math.abs(curPlayer.x - s.x) < 25
             );
             if (downIdx !== -1) {
               const stair = levelConfig.stairs[downIdx];
@@ -667,29 +1301,136 @@ export default function ThiefEscapeGame({
         }
       }
 
-      // 2. Update Guards Patrol & Alert Distractions
-      curGuards.forEach((g) => {
-        if (g.alertTimer > 0) {
-          g.alertTimer -= 1;
+      // --- 3. Key Steal Mechanic (Standing 2 Seconds Near Distracted Key Guard) ---
+      if (levelConfig.diamondLockedInCase && !hasKeyRef.current) {
+        const keyGuard = curGuards.find((g) => g.hasKey && !g.isDefeated);
+        if (keyGuard && keyGuard.floor === curPlayer.floor && !curPlayer.isClimbing) {
+          const distToKeyGuard = Math.abs(curPlayer.x - keyGuard.x);
+          const isDistracted = keyGuard.isInvestigating;
+
+          if (distToKeyGuard < 26) {
+            if (isDistracted) {
+              // Valid sneak: increment steal progress
+              keyStealProgressRef.current += 1;
+              setKeyStealProgress(keyStealProgressRef.current);
+
+              if (keyStealProgressRef.current >= 100) {
+                // Steal complete!
+                hasKeyRef.current = true;
+                setHasKey(true);
+                keyGuard.hasKey = false;
+                triggerPerfectHaptic();
+                playPerfectSound();
+                juiceRef.current?.burst(curPlayer.x, getFloorY(curPlayer.floor) - 15, '#FFE600', 22);
+                juiceRef.current?.popup('🗝️ VAULT KEY STOLEN!', 'Sneak to diamond case to unlock!', COLORS.matrixMint);
+              }
+            } else if (!curPlayer.isHiding) {
+              // Guard is NOT distracted by stone trick -> Caught!
+              handlePlayerBusted('GUARD NOTICED YOU REACHING FOR HIS KEY!');
+              return;
+            }
+          } else {
+            // Moved away: slowly decay progress
+            if (keyStealProgressRef.current > 0) {
+              keyStealProgressRef.current = Math.max(0, keyStealProgressRef.current - 1);
+              setKeyStealProgress(keyStealProgressRef.current);
+            }
+          }
+        }
+      }
+
+      // --- 4. CCTV Camera Sweeps & Floor Guard Alerts ---
+      curCctvs.forEach((cam) => {
+        cam.angle += cam.sweepDir * cam.speed;
+        if (cam.angle >= cam.maxAngle) {
+          cam.angle = cam.maxAngle;
+          cam.sweepDir = -1;
+        } else if (cam.angle <= -cam.maxAngle) {
+          cam.angle = -cam.maxAngle;
+          cam.sweepDir = 1;
         }
 
-        if (g.isInvestigating) {
-          // Guard is actively moving towards where the stone landed!
+        // Detection cone check against Player
+        if (!curPlayer.isHiding && curPlayer.floor === cam.floor && !curPlayer.isClimbing) {
+          // Projected cone center on floor
+          const projectedX = cam.x + Math.tan((cam.angle * Math.PI) / 180) * 45;
+          if (Math.abs(curPlayer.x - projectedX) < 32) {
+            // Player detected by CCTV!
+            cam.alertCooldown = 60;
+            // Alert all guards on this floor to sprint/chase towards player!
+            curGuards.forEach((g) => {
+              if (g.floor === cam.floor && !g.isDefeated) {
+                g.isChasing = true;
+                g.chaseTimer = 120;
+                g.alertTimer = 120;
+                g.dir = curPlayer.x > g.x ? 1 : -1;
+              }
+            });
+            triggerGameOverHaptic();
+            juiceRef.current?.shake(6, 6);
+            juiceRef.current?.popup('🚨 CCTV DETECTED YOU!', 'Floor guards alerted!', '#FF0055');
+          }
+        }
+
+        // Check if CCTV spots unhidden rival thief
+        curRivals.forEach((riv) => {
+          if (!riv.isAlive || riv.isHiding || riv.isClimbing) return;
+          if (riv.floor === cam.floor) {
+            const projectedX = cam.x + Math.tan((cam.angle * Math.PI) / 180) * 45;
+            if (Math.abs(riv.x - projectedX) < 32) {
+              cam.alertCooldown = 60;
+              curGuards.forEach((g) => {
+                if (g.floor === cam.floor && !g.isDefeated) {
+                  g.isChasing = true;
+                  g.chaseTimer = 100;
+                  g.alertTimer = 100;
+                  g.dir = riv.x > g.x ? 1 : -1;
+                }
+              });
+              juiceRef.current?.popup('🚨 CCTV SPOTTED RIVAL THIEF!', 'Guards alerted on floor!', '#FF0055');
+            }
+          }
+        });
+      });
+
+      // --- 5. Update Guards: Patrol, Stone Distraction, CCTV Chase, Gun Shooting ---
+      const nextBullets = [...bulletsRef.current];
+
+      curGuards.forEach((g) => {
+        if (g.isDefeated) return;
+
+        if (g.alertTimer > 0) g.alertTimer -= 1;
+        if (g.shootCooldown > 0) g.shootCooldown -= 1;
+
+        // A. Guard Chasing Player due to CCTV or Sound Alert
+        if (g.isChasing && g.chaseTimer > 0) {
+          g.chaseTimer -= 1;
+          const distToPlayer = curPlayer.x - g.x;
+          if (Math.abs(distToPlayer) > 8) {
+            g.dir = distToPlayer > 0 ? 1 : -1;
+            g.x += g.dir * (g.speed * 1.35);
+            g.x = Math.max(g.minX, Math.min(g.maxX, g.x));
+          }
+          if (g.chaseTimer <= 0) g.isChasing = false;
+        }
+        // B. Guard Investigating Thrown Stone Sound
+        else if (g.isInvestigating) {
           const distToNoise = g.investigateTargetX - g.x;
-          if (Math.abs(distToNoise) > 5) {
+          if (Math.abs(distToNoise) > 6) {
             g.dir = distToNoise > 0 ? 1 : -1;
             g.x += g.dir * (g.investigateSpeed || g.speed * 0.95);
             g.x = Math.max(g.minX, Math.min(g.maxX, g.x));
           } else {
-            // Reached the spot where stone landed! Looks around
             g.x = g.investigateTargetX;
             g.investigateTimer = (g.investigateTimer || 0) - 1;
             if (g.investigateTimer <= 0) {
               g.isInvestigating = false;
-              g.pauseTimer = 25; // brief pause before resuming normal patrol
+              g.pauseTimer = 30;
             }
           }
-        } else if (g.pauseTimer > 0) {
+        }
+        // C. Normal Catwalk Patrol
+        else if (g.pauseTimer > 0) {
           g.pauseTimer -= 1;
         } else {
           g.x += g.dir * g.speed;
@@ -703,448 +1444,674 @@ export default function ThiefEscapeGame({
             g.pauseTimer = 35;
           }
         }
+
+        // D. Armed Guard / Sniper Vision & Projectile Shooting
+        if (g.hasGun && g.shootCooldown <= 0 && !curPlayer.isHiding && !carStateRef.current.isEscaping) {
+          const playerY = curPlayer.isClimbing && curPlayer.y != null ? curPlayer.y : getFloorY(curPlayer.floor);
+          const gy = getFloorY(g.floor);
+
+          if (Math.abs(playerY - gy) < 18) {
+            const dist = curPlayer.x - g.x;
+            const inSniperSight = g.dir === 1 ? dist > 0 && dist < SNIPER_VISION_LEN : dist < 0 && dist > -SNIPER_VISION_LEN;
+
+            if (inSniperSight) {
+              // Fire bullet at player!
+              g.shootCooldown = g.isBoss ? 55 : 85;
+              const bDir = g.dir;
+              nextBullets.push({
+                id: Date.now() + Math.random(),
+                isPlayerBullet: false,
+                x: g.x + bDir * 12,
+                y: gy - 18,
+                vx: bDir * 6.0,
+                floor: g.floor,
+                life: 60,
+              });
+              playSliceSound();
+              triggerMediumHaptic();
+              juiceRef.current?.popup('💥 GUARD FIRED!', 'Dodge or hide!', '#FF0055');
+            }
+          }
+        }
+
+        // E. Flashlight Vision Detection against Player
+        if (!curPlayer.isHiding && !carStateRef.current.isEscaping && !carStateRef.current.thiefInside) {
+          const playerY = curPlayer.isClimbing && curPlayer.y != null ? curPlayer.y : getFloorY(curPlayer.floor);
+          const gy = getFloorY(g.floor);
+
+          if (Math.abs(playerY - gy) < 18) {
+            const dist = curPlayer.x - g.x;
+            const visLen = g.hasGun ? SNIPER_VISION_LEN : FLASHLIGHT_LEN;
+            const inCone = g.dir === 1 ? dist > 0 && dist < visLen : dist < 0 && dist > -visLen;
+
+            if (inCone) {
+              handlePlayerBusted('SPOTTED BY PATROL GUARD!');
+            }
+          }
+        }
+
+        // F. Guard Detection / Catch against Unhidden Rival Thieves
+        curRivals.forEach((riv) => {
+          if (!riv.isAlive || riv.isHiding) return;
+          const rivY = riv.isClimbing && riv.y != null ? riv.y : getFloorY(riv.floor);
+          const gy = getFloorY(g.floor);
+
+          if (Math.abs(rivY - gy) < 18) {
+            const dist = riv.x - g.x;
+            const visLen = g.hasGun ? SNIPER_VISION_LEN : FLASHLIGHT_LEN;
+            const inCone = g.dir === 1 ? dist > 0 && dist < visLen : dist < 0 && dist > -visLen;
+            const physicalTouch = Math.abs(dist) < 22;
+
+            if (physicalTouch || (inCone && g.hasGun && g.shootCooldown <= 0)) {
+              // Guard catches unhidden rival!
+              riv.isAlive = false;
+              juiceRef.current?.burst(riv.x, gy - 12, '#FF0055', 20);
+              if (riv.hasDiamond) {
+                riv.hasDiamond = false;
+                levelConfig.diamond.floor = riv.floor;
+                levelConfig.diamond.x = Math.max(40, Math.min(arenaW - 40, riv.x));
+                diamondTakenRef.current = false;
+                setDiamondTaken(false);
+                juiceRef.current?.popup('🚨 GUARD BUSTED RIVAL THIEF!', 'Diamond dropped on catwalk!', '#FF0055');
+              } else {
+                juiceRef.current?.popup('🚨 GUARD BUSTED RIVAL THIEF!', '1 Rival thief eliminated!', '#FF9900');
+              }
+            }
+          }
+        });
       });
 
-      // 3. Update Thrown Stones Projectile Physics & Guard Distraction
+      // --- 6. Update Bullets & Projectiles Physics ---
+      const activeBullets = [];
+      nextBullets.forEach((b) => {
+        b.x += b.vx;
+        b.life -= 1;
+
+        if (b.life <= 0 || b.x < 15 || b.x > arenaW - 15) return;
+
+        // Player Bullet Hit Guard / Boss
+        if (b.isPlayerBullet) {
+          let hit = false;
+          curGuards.forEach((g) => {
+            if (g.isDefeated || g.floor !== b.floor) return;
+            if (Math.abs(b.x - g.x) < 16) {
+              hit = true;
+              g.hp -= 1;
+              triggerPerfectHaptic();
+              playSliceSound();
+              juiceRef.current?.burst(g.x, getFloorY(g.floor) - 15, '#FFE600', 16);
+
+              if (g.hp <= 0) {
+                g.isDefeated = true;
+                juiceRef.current?.popup(g.isBoss ? '👑 BOSS KNOCKED OUT!' : '💥 GUARD NEUTRALIZED!', '+300 PTS', COLORS.matrixMint);
+                setScore((s) => s + (g.isBoss ? 1500 : 300));
+              } else {
+                juiceRef.current?.popup('💥 BOSS HIT!', `HP: ${g.hp}/${g.maxHp}`, '#FFE600');
+              }
+            }
+          });
+          if (!hit) activeBullets.push(b);
+        }
+        // Guard Bullet Hit Player or Unhidden Rival
+        else {
+          const pY = curPlayer.isClimbing && curPlayer.y != null ? curPlayer.y : getFloorY(curPlayer.floor);
+          const bFloorY = getFloorY(b.floor);
+
+          if (!curPlayer.isHiding && Math.abs(pY - bFloorY) < 18 && Math.abs(b.x - curPlayer.x) < 14) {
+            handlePlayerBusted('HIT BY GUARD BULLET!');
+            return;
+          } else {
+            // Check if bullet hit unhidden rival thief
+            let hitRival = false;
+            curRivals.forEach((riv) => {
+              if (!riv.isAlive || riv.isHiding) return;
+              const rivY = riv.isClimbing && riv.y != null ? riv.y : getFloorY(riv.floor);
+              if (Math.abs(rivY - bFloorY) < 18 && Math.abs(b.x - riv.x) < 14) {
+                hitRival = true;
+                riv.isAlive = false;
+                juiceRef.current?.burst(riv.x, rivY - 12, '#FF0055', 20);
+                if (riv.hasDiamond) {
+                  riv.hasDiamond = false;
+                  levelConfig.diamond.floor = riv.floor;
+                  levelConfig.diamond.x = Math.max(40, Math.min(arenaW - 40, riv.x));
+                  diamondTakenRef.current = false;
+                  setDiamondTaken(false);
+                  juiceRef.current?.popup('💥 GUARD SHOT RIVAL THIEF!', 'Diamond dropped on catwalk!', '#FF0055');
+                }
+              }
+            });
+
+            if (!hitRival) activeBullets.push(b);
+          }
+        }
+      });
+      bulletsRef.current = activeBullets;
+      setBullets(activeBullets);
+
+      // --- 7. Update Thrown Bombs ---
+      const nextBombs = [];
+      thrownBombsRef.current.forEach((bm) => {
+        if (!bm.active) return;
+        bm.x += bm.vx;
+        bm.y += bm.vy;
+        bm.vy += 0.25; // gravity
+        bm.life -= 1;
+
+        // Bomb detonates on timeout or ground contact
+        const groundY = getFloorY(bm.floor);
+        if (bm.life <= 0 || bm.y >= groundY - 4) {
+          bm.active = false;
+          playSliceSound();
+          triggerPerfectHaptic();
+          juiceRef.current?.shake(14, 14);
+          juiceRef.current?.burst(bm.x, groundY - 14, '#FF0055', 28);
+
+          // Detonation blasts all guards in 70px radius
+          curGuards.forEach((g) => {
+            if (g.isDefeated || g.floor !== bm.floor) return;
+            if (Math.abs(g.x - bm.x) < 70) {
+              g.hp -= 2; // Bombs deal 2 damage!
+              if (g.hp <= 0) {
+                g.isDefeated = true;
+                juiceRef.current?.popup(g.isBoss ? '👑 BOSS DESTROYED BY BOMB!' : '💣 GUARD KNOCKED OUT!', '+500 PTS', COLORS.matrixMint);
+                setScore((s) => s + (g.isBoss ? 2000 : 500));
+              } else {
+                juiceRef.current?.popup('💣 BOSS BLASTED!', `HP: ${g.hp}/${g.maxHp}`, '#FFE600');
+              }
+            }
+          });
+
+          // Bomb sound triggers 5s police emergency!
+          triggerPoliceEmergency('EXPLOSION REPORTED!');
+        } else {
+          nextBombs.push(bm);
+        }
+      });
+      thrownBombsRef.current = nextBombs;
+      setThrownBombs(nextBombs);
+
+      // --- 8. Update Thrown Distractor Stones ---
       const nextStones = [];
       thrownStonesRef.current.forEach((st) => {
         if (!st.active) return;
-
         st.x += st.vx;
         st.y += st.vy;
-        st.vy += 0.24; // gravity
+        st.vy += 0.24;
         st.life -= 1;
 
-        // Check impact with metal catwalk floors
         let hitFloor = null;
         for (let f = 0; f < levelConfig.floorsCount; f++) {
           const fy = getFloorY(f);
-          if (st.vy > 0 && st.y >= fy - 6 && st.y <= fy + 14 && st.x >= 20 && st.x <= ARENA_W - 20) {
+          if (st.vy > 0 && st.y >= fy - 6 && st.y <= fy + 14 && st.x >= 20 && st.x <= arenaW - 20) {
             hitFloor = f;
             st.y = fy - 2;
             break;
           }
         }
-
-        const groundY = getFloorY(0);
-        if (st.y >= groundY) {
+        if (st.y >= getFloorY(0)) {
           hitFloor = 0;
-          st.y = groundY;
+          st.y = getFloorY(0);
         }
 
         if (hitFloor !== null && st.life > 0) {
-          // Stone hit floor: make sound & alert guards on this floor to walk towards it!
           playSnapTickSound();
           triggerLightHaptic();
           juiceRef.current?.burst(st.x, st.y, '#FFE600', 14);
 
           curGuards.forEach((g) => {
-            if (g.floor === hitFloor) {
+            if (g.floor === hitFloor && !g.isDefeated) {
               const dist = Math.abs(g.x - st.x);
-              if (dist < 180) {
-                // Guard hears stone! Walk towards impact point to investigate
+              if (dist < 190) {
                 g.isInvestigating = true;
                 g.investigateTargetX = Math.max(g.minX, Math.min(g.maxX, st.x));
-                g.investigateTimer = 110;
-                g.alertTimer = 110;
-                g.pauseTimer = 0; // Don't stay frozen!
+                g.investigateTimer = 115;
+                g.alertTimer = 115;
+                g.pauseTimer = 0;
                 g.dir = g.investigateTargetX > g.x ? 1 : -1;
                 g.investigateSpeed = Math.max(0.85, g.speed * 0.95);
               }
             }
           });
-
           st.active = false;
-        } else if (st.life > 0 && st.x > 10 && st.x < ARENA_W - 10) {
+        } else if (st.life > 0 && st.x > 10 && st.x < arenaW - 10) {
           nextStones.push(st);
         }
       });
       thrownStonesRef.current = nextStones;
       setThrownStones(nextStones);
 
-      // 4. Update Vision Detection against Player
-      // Only detected if player is NOT hidden in a window, not escaping in car, and aligns with guard level
-      if (!curPlayer.isHiding && !carStateRef.current.isEscaping && !carStateRef.current.thiefInside) {
-        const playerY = curPlayer.isClimbing && curPlayer.y != null ? curPlayer.y : getFloorY(curPlayer.floor);
+      // --- 9. Update Multiple Rival Thieves (Bot Player-like AI) ---
+      curRivals.forEach((riv, rIdx) => {
+        if (!riv.isAlive) return;
+        if (riv.snatchCooldown > 0) riv.snatchCooldown -= 1;
+        if (riv.hideTimer > 0) riv.hideTimer -= 1;
+        if (riv.searchTimer > 0) riv.searchTimer -= 1;
 
-        curGuards.forEach((g) => {
-          const gy = getFloorY(g.floor);
-          // Only detected if player's vertical position aligns with guard's eye level (within 18px)
-          if (Math.abs(playerY - gy) < 18) {
-            const dist = curPlayer.x - g.x;
-            const inCone = g.dir === 1 ? dist > 0 && dist < FLASHLIGHT_LEN : dist < 0 && dist > -FLASHLIGHT_LEN;
-            if (inCone) {
-              handlePlayerBusted();
+        const curRivY = riv.isClimbing && riv.y != null ? riv.y : getFloorY(riv.floor);
+        const curPlyY = curPlayer.isClimbing && curPlayer.y != null ? curPlayer.y : getFloorY(curPlayer.floor);
+
+        // Universal Physical Touch Check between Rival and Player (only when neither is hiding)
+        const touchDistX = Math.abs(riv.x - curPlayer.x);
+        const touchDistY = Math.abs(curRivY - curPlyY);
+        const isTouching = touchDistX < 24 && touchDistY < 22;
+
+        if (isTouching && !curPlayer.isHiding && !riv.isHiding && !carStateRef.current.isEscaping && !carStateRef.current.thiefInside) {
+          // 1. Rival touches player holding diamond -> STEAL & SNATCH!
+          if (curPlayer.hasDiamond && !riv.hasDiamond && riv.snatchCooldown <= 0) {
+            riv.hasDiamond = true;
+            curPlayer.hasDiamond = false;
+            curPlayer.diamondsHeld = Math.max(0, (curPlayer.diamondsHeld || 1) - 1);
+            riv.snatchCooldown = 95;
+            riv.isSearching = false;
+            riv.searchTimer = 0;
+            triggerMediumHaptic();
+            playSliceSound();
+            juiceRef.current?.burst(curPlayer.x, curPlyY, '#FF0055', 24);
+            juiceRef.current?.popup('⚠️ RIVAL TOUCHED & SNATCHED DIAMOND!', 'Intercept him before he escapes!', '#FF0055');
+          }
+          // 2. Player touches rival holding diamond -> TACKLE & RECLAIM!
+          else if (riv.hasDiamond && !curPlayer.hasDiamond && riv.snatchCooldown <= 0) {
+            riv.hasDiamond = false;
+            curPlayer.hasDiamond = true;
+            curPlayer.diamondsHeld = (curPlayer.diamondsHeld || 0) + 1;
+            riv.snatchCooldown = 95;
+            triggerPerfectHaptic();
+            playPerfectSound();
+            juiceRef.current?.burst(riv.x, curRivY, '#00F5FF', 24);
+            juiceRef.current?.popup('🥷 TACKLED RIVAL!', 'Diamond reclaimed from rival thief!', COLORS.matrixMint);
+          }
+          // 3. Rival touches player when neither has diamond -> steals item (pebble / bullet)
+          else if (!riv.hasDiamond && !curPlayer.hasDiamond && riv.snatchCooldown <= 0) {
+            if (stonesRef.current > 0 && Math.random() < 0.6) {
+              setStones((s) => Math.max(0, s - 1));
+              stonesRef.current = Math.max(0, stonesRef.current - 1);
+              riv.snatchCooldown = 90;
+              triggerMediumHaptic();
+              playSliceSound();
+              juiceRef.current?.popup('⚠️ RIVAL PICKPOCKETED YOU!', 'Stole 1 distractor pebble!', '#FF9900');
+            } else if (ammoRef.current > 0) {
+              setAmmo((a) => Math.max(0, a - 1));
+              ammoRef.current = Math.max(0, ammoRef.current - 1);
+              riv.snatchCooldown = 90;
+              triggerMediumHaptic();
+              playSliceSound();
+              juiceRef.current?.popup('⚠️ RIVAL PICKPOCKETED YOU!', 'Stole 1 bullet from your bag!', '#FF9900');
             }
           }
-        });
-      }
+        }
 
-      // 5. Update Rival AI Thief: Sneaks, Hides from Guards, Snatches Diamond, Dual-Ladder Climbing, Evasive Downward Escape
-      if (levelConfig.hasRival && curRival.isAlive) {
-        if (curRival.snatchCooldown > 0) curRival.snatchCooldown -= 1;
-        if (curRival.hideTimer > 0) curRival.hideTimer -= 1;
-
-        const curRivalY = curRival.isClimbing && curRival.y != null ? curRival.y : getFloorY(curRival.floor);
-        const curPlayerY = curPlayer.isClimbing && curPlayer.y != null ? curPlayer.y : getFloorY(curPlayer.floor);
-
-        // A. Handle Physical Climbing Movement on Ladders
-        if (curRival.isClimbing && curRival.stairIdx != null) {
-          const stair = levelConfig.stairs[curRival.stairIdx];
+        // A. Ladder Climbing
+        if (riv.isClimbing && riv.stairIdx != null) {
+          const stair = levelConfig.stairs[riv.stairIdx];
           const yBottom = getFloorY(stair.fromFloor);
           const yTop = getFloorY(stair.toFloor);
-          const climbSpeed = curRival.hasDiamond ? 2.3 : 1.8;
+          const climbSpeed = riv.hasDiamond ? 2.3 : 1.8;
 
-          curRival.isHiding = false;
-          curRival.hiddenWindowX = null;
-          curRival.x = stair.x;
+          riv.x = stair.x;
+          if (riv.y == null) riv.y = riv.climbDir === -1 ? yBottom - 4 : yTop + 4;
+          riv.y += riv.climbDir * climbSpeed;
 
-          if (curRival.y == null) {
-            curRival.y = curRival.climbDir === -1 ? yBottom - 4 : yTop + 4;
+          if (riv.climbDir === -1 && riv.y <= yTop) {
+            riv.y = null;
+            riv.floor = stair.toFloor;
+            riv.isClimbing = false;
+            riv.stairIdx = null;
+            riv.climbDir = 0;
+          } else if (riv.climbDir === 1 && riv.y >= yBottom) {
+            riv.y = null;
+            riv.floor = stair.fromFloor;
+            riv.isClimbing = false;
+            riv.stairIdx = null;
+            riv.climbDir = 0;
           }
+        }
+        // B. Bot Stealth: Hiding in Windows from Guards and CCTVs
+        else {
+          const windowList = getWindowListForWidth(arenaW);
+          const validWindows = windowList.filter((wx) => !(riv.floor === 0 && Math.abs(wx - levelConfig.car.x) < 36));
 
-          curRival.y += curRival.climbDir * climbSpeed;
+          // If Bot Rival is already hidden inside a window
+          if (riv.isHiding) {
+            const winX = riv.hiddenWindowX != null ? riv.hiddenWindowX : riv.x;
+            let dangerStillPresent = false;
 
-          // Stepping off onto Top Floor (climbing up, dir = -1)
-          if (curRival.climbDir === -1 && curRival.y <= yTop) {
-            curRival.y = null;
-            curRival.floor = stair.toFloor;
-            curRival.isClimbing = false;
-            curRival.stairIdx = null;
-            curRival.climbDir = 0;
-          }
-          // Stepping off onto Bottom Floor (climbing down, dir = 1)
-          else if (curRival.climbDir === 1 && curRival.y >= yBottom) {
-            curRival.y = null;
-            curRival.floor = stair.fromFloor;
-            curRival.isClimbing = false;
-            curRival.stairIdx = null;
-            curRival.climbDir = 0;
-          }
-        } else {
-          // B. Catwalk Navigation & Guard Evasion
-          const guardOnFloor = curGuards.find((g) => g.floor === curRival.floor);
-          let guardThreat = false;
-          let distToGuard = 999;
-          let guardFacingRival = false;
-
-          if (guardOnFloor) {
-            distToGuard = curRival.x - guardOnFloor.x;
-            guardFacingRival =
-              (guardOnFloor.dir === 1 && distToGuard > 0) ||
-              (guardOnFloor.dir === -1 && distToGuard < 0);
-            const absDist = Math.abs(distToGuard);
-
-            // Threat if guard is facing rival within 110px
-            if (guardFacingRival && absDist < 110) {
-              guardThreat = true;
-            }
-
-            // Caught in guard flashlight cone while NOT hiding
-            if (!curRival.isHiding && guardFacingRival && absDist < FLASHLIGHT_LEN) {
-              guardOnFloor.alertTimer = 60;
-              if (curRival.hasDiamond) {
-                curRival.hasDiamond = false;
-                levelConfig.diamond.floor = curRival.floor;
-                levelConfig.diamond.x = Math.max(30, Math.min(ARENA_W - 30, curRival.x));
-                diamondTakenRef.current = false;
-                setDiamondTaken(false);
-                triggerSliceHaptic();
-                playSliceSound();
-                juiceRef.current?.popup('🚨 GUARD SPOTTED RIVAL!', 'Rival dropped the diamond!', '#FFE600');
-              }
-            }
-          }
-
-          // HIDING LOGIC:
-          if (curRival.isHiding) {
-            if (guardThreat) {
-              curRival.hideTimer = 35; // keep hiding while guard approaches
-            } else if (curRival.hideTimer <= 0) {
-              // Guard turned away or safe -> emerge from hiding
-              curRival.isHiding = false;
-              curRival.hiddenWindowX = null;
-            }
-          } else if (guardThreat) {
-            // Guard approaching! Find nearest window on this floor to HIDE!
-            let bestWin = WINDOW_X_LIST[0];
-            let bestDist = Infinity;
-            for (const wx of WINDOW_X_LIST) {
-              const d = Math.abs(curRival.x - wx);
-              if (d < bestDist) {
-                bestDist = d;
-                bestWin = wx;
+            // Check if any guard on this floor is still near or facing the window
+            for (const g of curGuards) {
+              if (g.floor === riv.floor && !g.isDefeated) {
+                const distToGuard = Math.abs(g.x - winX);
+                const guardFacingWin = (g.dir === 1 && g.x < winX) || (g.dir === -1 && g.x > winX);
+                const visionLen = g.hasGun ? SNIPER_VISION_LEN : FLASHLIGHT_LEN;
+                if (distToGuard < 45 || (guardFacingWin && distToGuard < visionLen + 15)) {
+                  dangerStillPresent = true;
+                  break;
+                }
               }
             }
 
-            if (Math.abs(curRival.x - bestWin) <= 6) {
-              curRival.x = bestWin;
-              curRival.isHiding = true;
-              curRival.hiddenWindowX = bestWin;
-              curRival.hideTimer = 40;
+            // Check if any CCTV on this floor is still sweeping across window
+            if (!dangerStillPresent) {
+              for (const cam of curCctvs) {
+                if (cam.floor === riv.floor) {
+                  const projectedX = cam.x + Math.tan((cam.angle * Math.PI) / 180) * 45;
+                  if (Math.abs(winX - projectedX) < 42) {
+                    dangerStillPresent = true;
+                    break;
+                  }
+                }
+              }
+            }
+
+            if (dangerStillPresent) {
+              // Threat still active: stay safely tucked in window
+              return;
+            } else if (riv.hideTimer <= 0) {
+              // Coast is clear! Step out of the window like a smart player
+              riv.isHiding = false;
+              riv.hiddenWindowX = null;
             } else {
-              // Sneak-sprint to window
-              curRival.facing = curRival.x < bestWin ? 1 : -1;
-              curRival.x += curRival.facing * 2.2;
+              return;
             }
-          } else {
-            // SAFE TO SNEAK, PURSUE OR ESCAPE
-            const hasD = curRival.hasDiamond;
-            const playerHasD = curPlayer.hasDiamond || hasDiamondRef.current;
+          }
 
-            let targetFloor = 0;
-            let targetX = 0;
-            let isEscaping = false;
+          // If Bot Rival is walking on Catwalk Floor: Detect threats and evade into nearest window!
+          if (!riv.isClimbing && !riv.isHiding) {
+            let threatSpotted = false;
 
-            if (hasD) {
-              // Rival has diamond: Escape down to Floor 0, then run to screen end!
-              targetFloor = 0;
-              const playerX = curPlayer.x;
-              // Sprint towards screen edge opposite to player's current side
-              const exitX = playerX > 170 ? 12 : ARENA_W - 12;
-              targetX = exitX;
-              isEscaping = true;
-            } else if (playerHasD) {
-              // Player has diamond: Rival actively follows player to snatch it back!
+            for (const g of curGuards) {
+              if (g.floor === riv.floor && !g.isDefeated) {
+                const dist = Math.abs(g.x - riv.x);
+                const facingRival = (g.dir === 1 && g.x < riv.x) || (g.dir === -1 && g.x > riv.x);
+                const visionLen = g.hasGun ? SNIPER_VISION_LEN : FLASHLIGHT_LEN;
+                if (dist < 48 || (facingRival && dist < visionLen + 20) || (g.isChasing && dist < 120)) {
+                  threatSpotted = true;
+                  break;
+                }
+              }
+            }
+
+            if (!threatSpotted) {
+              for (const cam of curCctvs) {
+                if (cam.floor === riv.floor) {
+                  const projectedX = cam.x + Math.tan((cam.angle * Math.PI) / 180) * 45;
+                  if (Math.abs(riv.x - projectedX) < 46) {
+                    threatSpotted = true;
+                    break;
+                  }
+                }
+              }
+            }
+
+            // If threat spotted, find closest window and dive in!
+            if (threatSpotted && validWindows.length > 0) {
+              let closestWin = validWindows[0];
+              let closestDist = Infinity;
+              for (const wx of validWindows) {
+                const d = Math.abs(riv.x - wx);
+                if (d < closestDist) {
+                  closestDist = d;
+                  closestWin = wx;
+                }
+              }
+
+              if (closestDist <= 18) {
+                // Arrived at window: hide!
+                riv.isHiding = true;
+                riv.hiddenWindowX = closestWin;
+                riv.x = closestWin;
+                riv.hideTimer = 45;
+                return;
+              } else if (closestDist < 110) {
+                // Dash towards window to hide!
+                riv.facing = riv.x < closestWin ? 1 : -1;
+                riv.x += riv.facing * 2.2;
+                return;
+              }
+            }
+          }
+
+          // C. Catwalk Navigation & Target Evaluation
+          let targetFloor = 0;
+          let targetX = 0;
+          let isEscaping = false;
+
+          if (riv.hasDiamond) {
+            // Escapes down to ground floor exit
+            targetFloor = 0;
+            targetX = curPlayer.x > arenaW / 2 ? 15 : arenaW - 15;
+            isEscaping = true;
+          } else if (curPlayer.hasDiamond) {
+            if (curPlayer.isHiding) {
+              // PLAYER IS HIDDEN IN WINDOW: Rival loses sight and goes somewhere else to find player!
+              if (!riv.isSearching || riv.searchTimer <= 0) {
+                riv.isSearching = true;
+                riv.searchTimer = 160;
+                // Pick a different floor or opposite end of building to search
+                const altFloors = [];
+                for (let f = 0; f < levelConfig.floorsCount; f++) {
+                  if (f !== curPlayer.floor) altFloors.push(f);
+                }
+                riv.searchFloor = altFloors.length > 0 ? altFloors[(rIdx + 1) % altFloors.length] : riv.floor;
+                riv.searchTargetX = curPlayer.x < arenaW / 2 ? arenaW - 65 : 65;
+              }
+              targetFloor = riv.searchFloor != null ? riv.searchFloor : 0;
+              targetX = riv.searchTargetX != null ? riv.searchTargetX : 80;
+            } else {
+              // Player in plain sight: rival spots player and chases!
+              riv.isSearching = false;
+              riv.searchTimer = 0;
               targetFloor = curPlayer.floor;
               targetX = curPlayer.x;
-            } else {
-              // Diamond uncollected: Rival sneaks up to steal it
-              targetFloor = levelConfig.diamond.floor;
-              targetX = levelConfig.diamond.x;
             }
+          } else {
+            // Diamond uncollected
+            targetFloor = levelConfig.diamond.floor;
+            targetX = levelConfig.diamond.x;
+          }
 
-            if (curRival.floor < targetFloor) {
-              // CLIMB UP: Find all upward ladders from this floor
-              const upStairs = levelConfig.stairs
-                .map((s, idx) => ({ ...s, idx }))
-                .filter((s) => s.fromFloor === curRival.floor);
-
-              if (upStairs.length > 0) {
-                let chosenStair = upStairs[0];
-                if (upStairs.length > 1) {
-                  // Choose ladder optimizing path to target
-                  let bestScore = -Infinity;
-                  for (const s of upStairs) {
-                    const dRival = Math.abs(curRival.x - s.x);
-                    const dTarget = Math.abs(s.x - targetX);
-                    const score = -(dRival * 0.7 + dTarget * 0.3);
-                    if (score > bestScore) {
-                      bestScore = score;
-                      chosenStair = s;
-                    }
-                  }
-                }
-
-                if (Math.abs(curRival.x - chosenStair.x) < 6) {
-                  curRival.isClimbing = true;
-                  curRival.stairIdx = chosenStair.idx;
-                  curRival.climbDir = -1;
-                  curRival.x = chosenStair.x;
-                  curRival.y = getFloorY(chosenStair.fromFloor) - 4;
-                } else {
-                  curRival.facing = curRival.x < chosenStair.x ? 1 : -1;
-                  const speed = playerHasD ? 2.0 : 1.5;
-                  curRival.x += curRival.facing * speed;
+          if (riv.floor < targetFloor) {
+            const upStairs = levelConfig.stairs
+              .map((s, idx) => ({ ...s, idx }))
+              .filter((s) => s.fromFloor === riv.floor);
+            if (upStairs.length > 0) {
+              let chosen = upStairs[0];
+              let best = -Infinity;
+              for (const s of upStairs) {
+                const score = -(Math.abs(riv.x - s.x) * 0.7 + Math.abs(s.x - targetX) * 0.3);
+                if (score > best) {
+                  best = score;
+                  chosen = s;
                 }
               }
-            } else if (curRival.floor > targetFloor) {
-              // CLIMB DOWN: Rival escapes down using 2 distinct ladder paths
-              // Evaluates player & guard positions so player has a hard time catching him!
-              const downStairs = levelConfig.stairs
-                .map((s, idx) => ({ ...s, idx }))
-                .filter((s) => s.toFloor === curRival.floor);
 
-              if (downStairs.length > 0) {
-                let chosenStair = downStairs[0];
-
-                if (downStairs.length > 1) {
-                  let bestEvasionScore = -Infinity;
-                  for (const s of downStairs) {
-                    const distToLadder = Math.abs(curRival.x - s.x);
-                    const playerDistToLadder = Math.abs(curPlayer.x - s.x);
-
-                    let evasionScore = 0;
-
-                    // If player is on the same floor, run to the ladder AWAY from player
-                    if (curPlayer.floor === curRival.floor) {
-                      const ladderDir = s.x > curRival.x ? 1 : -1;
-                      const playerDir = curPlayer.x > curRival.x ? 1 : -1;
-                      if (ladderDir !== playerDir) {
-                        evasionScore += 120;
-                      }
-                      evasionScore += playerDistToLadder * 0.8;
-                    }
-                    // If player is on the floor below, pick the ladder that avoids landing near player
-                    else if (curPlayer.floor === curRival.floor - 1) {
-                      evasionScore += playerDistToLadder * 1.5;
-                    } else {
-                      evasionScore += playerDistToLadder * 0.6;
-                    }
-
-                    // Penalize extra walking distance to ladder
-                    evasionScore -= distToLadder * 0.45;
-
-                    // Avoid guard stationed at ladder exit
-                    const guardBelow = curGuards.find((g) => g.floor === s.fromFloor);
-                    if (guardBelow && Math.abs(guardBelow.x - s.x) < 70) {
-                      evasionScore -= 60;
-                    }
-
-                    if (evasionScore > bestEvasionScore) {
-                      bestEvasionScore = evasionScore;
-                      chosenStair = s;
-                    }
-                  }
-                }
-
-                if (Math.abs(curRival.x - chosenStair.x) < 6) {
-                  curRival.isClimbing = true;
-                  curRival.stairIdx = chosenStair.idx;
-                  curRival.climbDir = 1;
-                  curRival.x = chosenStair.x;
-                  curRival.y = getFloorY(chosenStair.toFloor) + 4;
-                } else {
-                  curRival.facing = curRival.x < chosenStair.x ? 1 : -1;
-                  const speed = isEscaping ? 2.3 : 1.6;
-                  curRival.x += curRival.facing * speed;
+              if (Math.abs(riv.x - chosen.x) < 8) {
+                riv.isClimbing = true;
+                riv.stairIdx = chosen.idx;
+                riv.climbDir = -1;
+                riv.x = chosen.x;
+                riv.y = getFloorY(chosen.fromFloor) - 4;
+              } else {
+                riv.facing = riv.x < chosen.x ? 1 : -1;
+                riv.x += riv.facing * 1.6;
+              }
+            }
+          } else if (riv.floor > targetFloor) {
+            const downStairs = levelConfig.stairs
+              .map((s, idx) => ({ ...s, idx }))
+              .filter((s) => s.toFloor === riv.floor);
+            if (downStairs.length > 0) {
+              let chosen = downStairs[0];
+              let best = -Infinity;
+              for (const s of downStairs) {
+                const score = Math.abs(curPlayer.x - s.x) * 0.8 - Math.abs(riv.x - s.x) * 0.4;
+                if (score > best) {
+                  best = score;
+                  chosen = s;
                 }
               }
-            } else {
-              // Same floor as target:
-              if (isEscaping && curRival.floor === 0) {
-                // SPRINT TOWARDS SCREEN END TO ESCAPE!
-                curRival.facing = curRival.x < targetX ? 1 : -1;
-                curRival.x += curRival.facing * 2.5;
 
-                // Check if reached screen edge
-                const reachedEdge =
-                  (targetX > 170 && curRival.x >= targetX - 4) ||
-                  (targetX < 170 && curRival.x <= targetX + 4);
+              if (Math.abs(riv.x - chosen.x) < 8) {
+                riv.isClimbing = true;
+                riv.stairIdx = chosen.idx;
+                riv.climbDir = 1;
+                riv.x = chosen.x;
+                riv.y = getFloorY(chosen.toFloor) + 4;
+              } else {
+                riv.facing = riv.x < chosen.x ? 1 : -1;
+                riv.x += riv.facing * 1.8;
+              }
+            }
+          } else {
+            // Same floor
+            if (isEscaping && riv.floor === 0) {
+              riv.facing = riv.x < targetX ? 1 : -1;
+              riv.x += riv.facing * 2.5;
 
-                if (reachedEdge) {
-                  curRival.isAlive = false;
-                  handlePlayerBusted('RIVAL THIEF ESCAPED WITH THE DIAMOND!');
-                  juiceRef.current?.popup('❌ HEIST FAILED!', 'Rival escaped with the loot!', COLORS.danger);
-                  return;
-                }
-              } else if (playerHasD) {
-                // PURSUING PLAYER TO SNATCH DIAMOND BACK!
-                curRival.facing = curRival.x < curPlayer.x ? 1 : -1;
-                curRival.x += curRival.facing * 2.0;
-
-                // If reaches player and player is NOT hiding: SNATCH BACK!
-                if (
-                  Math.abs(curRival.x - curPlayer.x) < 22 &&
-                  Math.abs(curRivalY - curPlayerY) < 22 &&
-                  !curPlayer.isHiding &&
-                  curRival.snatchCooldown <= 0
-                ) {
-                  curRival.hasDiamond = true;
-                  curPlayer.hasDiamond = false;
-                  hasDiamondRef.current = false;
-                  curRival.snatchCooldown = 75;
-                  triggerMediumHaptic();
-                  playSliceSound();
-                  juiceRef.current?.burst(curPlayer.x, curPlayerY, '#FF0055', 20);
-                  juiceRef.current?.popup('⚠️ RIVAL SNATCHED DIAMOND!', 'Chase him before he reaches the exit!', '#FF0055');
-                }
-              } else if (!hasD && !diamondTakenRef.current && curRival.floor === levelConfig.diamond.floor) {
-                if (Math.abs(curRival.x - levelConfig.diamond.x) < 8) {
-                  playSliceSound();
-                  triggerMediumHaptic();
-                  juiceRef.current?.popup('⚠️ RIVAL STOLE DIAMOND!', 'Intercept him before he escapes!', '#FF0055');
-                  curRival.hasDiamond = true;
-                  setDiamondTaken(true);
-                  diamondTakenRef.current = true;
-                } else {
-                  curRival.facing = curRival.x < levelConfig.diamond.x ? 1 : -1;
-                  curRival.x += curRival.facing * 1.5;
-                }
+              const reached = (targetX > arenaW / 2 && riv.x >= targetX - 5) || (targetX < arenaW / 2 && riv.x <= targetX + 5);
+              if (reached) {
+                // RIVAL ESCAPED WITH LOOT: Instant Game Over!
+                riv.isAlive = false;
+                triggerGameOverHaptic();
+                playGameOverSound();
+                juiceRef.current?.shake(14, 14);
+                juiceRef.current?.flash(COLORS.danger);
+                setIsGameOver(true);
+                setLives(0);
+                juiceRef.current?.popup('🚨 HEIST FAILED!', 'Rival thief looted diamond and escaped!', COLORS.danger);
+                return;
+              }
+            } else if (curPlayer.hasDiamond && !curPlayer.isHiding) {
+              // Run toward player to snatch!
+              riv.facing = riv.x < curPlayer.x ? 1 : -1;
+              riv.x += riv.facing * 2.1;
+            } else if (riv.isSearching) {
+              // Walking to search point away from player's window
+              riv.facing = riv.x < targetX ? 1 : -1;
+              riv.x += riv.facing * 1.4;
+              if (Math.abs(riv.x - targetX) < 8) {
+                // Reached search point, look around or change search target
+                riv.searchTargetX = riv.x < arenaW / 2 ? arenaW - 65 : 65;
+              }
+            } else if (!riv.hasDiamond && !diamondTakenRef.current && riv.floor === levelConfig.diamond.floor && !levelConfig.diamondLockedInCase) {
+              if (Math.abs(riv.x - levelConfig.diamond.x) < 10) {
+                riv.hasDiamond = true;
+                diamondTakenRef.current = true;
+                setDiamondTaken(true);
+                playSliceSound();
+                triggerMediumHaptic();
+                juiceRef.current?.popup('⚠️ RIVAL STOLE DIAMOND!', 'Intercept him!', '#FF0055');
+              } else {
+                riv.facing = riv.x < levelConfig.diamond.x ? 1 : -1;
+                riv.x += riv.facing * 1.6;
               }
             }
           }
         }
-      }
+      });
 
-      // 6. Check Item Pickups: Diamond
+      // --- 10. Diamond & Item Pickups ---
+      // A. Primary Diamond
       if (!curPlayer.hasDiamond && !diamondTakenRef.current && curPlayer.floor === levelConfig.diamond.floor && !curPlayer.isClimbing) {
         if (Math.abs(curPlayer.x - levelConfig.diamond.x) < 26) {
-          curPlayer.hasDiamond = true;
-          hasDiamondRef.current = true;
-          setDiamondTaken(true);
-          diamondTakenRef.current = true;
-          try {
+          // If locked in case, must have unlocked case first
+          if (levelConfig.diamondLockedInCase && !hasKeyRef.current) {
+            triggerLightHaptic();
+            juiceRef.current?.popup('🔒 DIAMOND LOCKED IN CASE!', 'Steal key from guard with stone trick!', '#FF0055');
+          } else {
+            curPlayer.hasDiamond = true;
+            curPlayer.diamondsHeld += 1;
+            setDiamondTaken(true);
+            diamondTakenRef.current = true;
             triggerPerfectHaptic();
             playPerfectSound();
             juiceRef.current?.burst(levelConfig.diamond.x, getFloorY(curPlayer.floor), '#00F5FF', 24);
-          } catch {}
-          if (!levelConfig.requiresPetrol || curPlayer.hasPetrol) {
-            juiceRef.current?.popup('💎 DIAMOND SECURED!', 'Escape to the getaway car on Floor 0!', '#00F5FF');
-          } else {
-            juiceRef.current?.popup('💎 DIAMOND SECURED!', `Now get fuel on Floor ${levelConfig.petrol?.floor || 1}!`, '#00F5FF');
+
+            if (levelConfig.isMasterCrown) {
+              // Master Crown triggers the 5-second escape countdown!
+              triggerPoliceEmergency('ROYAL CROWN STOLEN!');
+              juiceRef.current?.popup('👑 ROYAL CROWN SECURED!', 'RUN TO CAR BEFORE 5.0s POLICE LOCKDOWN!', '#FFE600');
+            } else if (!levelConfig.requiresPetrol || curPlayer.hasPetrol) {
+              juiceRef.current?.popup('💎 DIAMOND SECURED!', 'Escape to getaway car on Floor 0!', '#00F5FF');
+            } else {
+              juiceRef.current?.popup('💎 DIAMOND SECURED!', 'Need fuel before escaping!', '#FFE600');
+            }
           }
         }
       }
 
-      // 7. Check Item Pickups: Petrol Canister
+      // B. Extra Diamond (Levels 71-80)
+      if (levelConfig.extraDiamond && !extraDiamondTakenRef.current && curPlayer.floor === levelConfig.extraDiamond.floor && !curPlayer.isClimbing) {
+        if (Math.abs(curPlayer.x - levelConfig.extraDiamond.x) < 26) {
+          curPlayer.diamondsHeld += 1;
+          setExtraDiamondTaken(true);
+          extraDiamondTakenRef.current = true;
+          triggerPerfectHaptic();
+          playPerfectSound();
+          juiceRef.current?.burst(levelConfig.extraDiamond.x, getFloorY(curPlayer.floor), '#00F5FF', 22);
+          juiceRef.current?.popup('💎 SECOND DIAMOND SECURED!', 'Both diamonds acquired!', COLORS.matrixMint);
+        }
+      }
+
+      // C. Fuel Canister (Levels 11-20)
       if (levelConfig.requiresPetrol && !curPlayer.hasPetrol && levelConfig.petrol && curPlayer.floor === levelConfig.petrol.floor && !curPlayer.isClimbing) {
         if (Math.abs(curPlayer.x - levelConfig.petrol.x) < 26) {
           curPlayer.hasPetrol = true;
-          hasPetrolRef.current = true;
           setPetrolTaken(true);
           petrolTakenRef.current = true;
           triggerSelectionHaptic();
           playTapSound();
-          juiceRef.current?.burst(levelConfig.petrol.x, getFloorY(curPlayer.floor), '#FFE600', 16);
-          juiceRef.current?.popup('⛽ FUEL CANISTER SECURED!', 'Car fueled! Head to Floor 0 to escape!', '#FFE600');
+          juiceRef.current?.burst(levelConfig.petrol.x, getFloorY(curPlayer.floor), '#FFE600', 18);
+          juiceRef.current?.popup('⛽ FUEL TANK SECURED!', 'Car fueled! Head to Floor 0 to escape!', '#FFE600');
         }
       }
 
-      // 8. Check Item Pickups: Stone Cache Refill
-      if (levelConfig.stonePickup && !stonePickupTakenRef.current && curPlayer.floor === levelConfig.stonePickup.floor && !curPlayer.isClimbing) {
+      // D. Gun Pickup
+      if (levelConfig.gunPickup && !gunTaken && curPlayer.floor === levelConfig.gunPickup.floor && !curPlayer.isClimbing) {
+        if (Math.abs(curPlayer.x - levelConfig.gunPickup.x) < 26) {
+          setGunTaken(true);
+          setAmmo((a) => a + levelConfig.gunPickup.ammo);
+          ammoRef.current += levelConfig.gunPickup.ammo;
+          triggerSelectionHaptic();
+          playTapSound();
+          juiceRef.current?.popup(`🔫 FOUND HANDGUN (+${levelConfig.gunPickup.ammo})!`, 'Tap SHOOT to eliminate guards', '#00F5FF');
+        }
+      }
+
+      // E. Bomb Pickup
+      if (levelConfig.bombPickup && !bombTaken && curPlayer.floor === levelConfig.bombPickup.floor && !curPlayer.isClimbing) {
+        if (Math.abs(curPlayer.x - levelConfig.bombPickup.x) < 26) {
+          setBombTaken(true);
+          setBombs((b) => b + levelConfig.bombPickup.count);
+          bombsRef.current += levelConfig.bombPickup.count;
+          triggerSelectionHaptic();
+          playTapSound();
+          juiceRef.current?.popup(`💣 FOUND BOMBS (+${levelConfig.bombPickup.count})!`, 'Tap BOMB for area explosion', '#FF0055');
+        }
+      }
+
+      // F. Distractor Stone Pickup
+      if (levelConfig.stonePickup && !stonePickupTaken && curPlayer.floor === levelConfig.stonePickup.floor && !curPlayer.isClimbing) {
         if (Math.abs(curPlayer.x - levelConfig.stonePickup.x) < 24) {
           setStonePickupTaken(true);
-          stonePickupTakenRef.current = true;
           setStones((s) => {
-            const next = s + 2;
+            const next = s + 3;
             stonesRef.current = next;
             return next;
           });
           triggerSelectionHaptic();
           playTapSound();
-          juiceRef.current?.popup('🪨 FOUND STONES (+2)!', 'Restocked distractor rocks', '#FFE600');
+          juiceRef.current?.popup('🪨 FOUND PEBBLES (+3)!', 'Restocked distractor stones', '#FFE600');
         }
       }
 
-      // 9. Check Stealing Diamond Back from Rival Thief (Catwalks and Ladders)
-      if (levelConfig.hasRival && curRival.hasDiamond) {
-        const playerY = curPlayer.isClimbing && curPlayer.y != null ? curPlayer.y : getFloorY(curPlayer.floor);
-        const rivalY = curRival.isClimbing && curRival.y != null ? curRival.y : getFloorY(curRival.floor);
-
-        const closeY = Math.abs(playerY - rivalY) < 24;
-        const closeX = Math.abs(curPlayer.x - curRival.x) < 26;
-
-        if (closeY && closeX) {
-          curRival.hasDiamond = false;
-          curPlayer.hasDiamond = true;
-          hasDiamondRef.current = true;
-          curRival.snatchCooldown = 75;
-          triggerPerfectHaptic();
-          playPerfectSound();
-          juiceRef.current?.burst(curRival.x, rivalY, '#00F5FF', 20);
-          juiceRef.current?.popup('🥷 TACKLED RIVAL!', 'Diamond reclaimed!', COLORS.matrixMint);
-        }
-      }
-
-      // 10. Check Escape to Car on Ground Floor
-      const isGroundFloor = curPlayer.floor === 0 || (curPlayer.y != null && curPlayer.y >= getFloorY(0) - 16);
+      // --- 11. Escape to Car on Ground Floor ---
+      const isGround = curPlayer.floor === 0 || (curPlayer.y != null && curPlayer.y >= getFloorY(0) - 16);
       const isAtCar = Math.abs(curPlayer.x - carStateRef.current.x) <= 55;
-      const playerHasDiamond = curPlayer.hasDiamond || diamondTakenRef.current || hasDiamondRef.current;
-      const playerHasPetrol = !levelConfig.requiresPetrol || curPlayer.hasPetrol || petrolTakenRef.current || hasPetrolRef.current;
+      const hasReqDiamond = curPlayer.hasDiamond || diamondTakenRef.current;
+      const hasReqExtraDiamond = !levelConfig.extraDiamond || extraDiamondTakenRef.current;
+      const hasReqPetrol = !levelConfig.requiresPetrol || curPlayer.hasPetrol || petrolTakenRef.current;
 
-      if (isGroundFloor && isAtCar && !carStateRef.current.isEscaping) {
-        if (playerHasDiamond && playerHasPetrol) {
+      if (isGround && isAtCar && !carStateRef.current.isEscaping) {
+        if (hasReqDiamond && hasReqExtraDiamond && hasReqPetrol) {
           inputDirRef.current = 0;
           climbDirRef.current = 0;
           curPlayer.floor = 0;
@@ -1157,49 +2124,45 @@ export default function ThiefEscapeGame({
             isEscaping: true,
             thiefInside: false,
             jumpPhase: 0.05,
-            vx: 3.5,
-            escapeDir: carStateRef.current.x < 150 ? -1 : 1,
+            vx: 4.0,
+            escapeDir: carStateRef.current.x < arenaW / 2 ? -1 : 1,
           };
           setCarState({ ...carStateRef.current });
           triggerPerfectHaptic();
           playPerfectSound();
-          juiceRef.current?.popup('🚗 JUMPING INTO CAR!', 'Hop into getaway vehicle!', COLORS.matrixMint);
-        } else if (playerHasDiamond && !playerHasPetrol) {
+          juiceRef.current?.popup('🚗 GETAWAY VEHICLE!', 'Speeding away with the loot!', COLORS.matrixMint);
+        } else if (hasReqDiamond && !hasReqPetrol) {
           if (!fuelWarningCooldownRef.current) {
             fuelWarningCooldownRef.current = true;
             setTimeout(() => {
               fuelWarningCooldownRef.current = false;
             }, 1800);
             triggerMediumHaptic();
-            juiceRef.current?.popup('⛽ NEED FUEL TO START!', `Canister is on Floor ${levelConfig.petrol?.floor || 1}!`, '#FF0055');
+            juiceRef.current?.popup('⛽ CANNOT START CAR!', 'Must collect fuel canister first!', '#FF0055');
           }
         }
       }
 
-      // 11. Update Getaway Car Escape & Jump Sequence
+      // --- 12. Car Escape Animation ---
       if (carStateRef.current.isEscaping) {
         const cState = { ...carStateRef.current };
         if (!cState.thiefInside) {
-          // Thief hops in an arc directly into the car cabin
           cState.jumpPhase = Math.min(1, cState.jumpPhase + 0.08);
           if (cState.jumpPhase >= 1) {
             cState.jumpPhase = 1;
             cState.thiefInside = true;
             playTapSound();
             triggerMediumHaptic();
-            juiceRef.current?.popup('💨 TIRE SCREECH!', 'Escaping the building!', '#FFE600');
           }
         } else {
-          // Car accelerates and speeds off the screen
-          cState.vx = Math.min(18, cState.vx + 0.8);
+          cState.vx = Math.min(20, cState.vx + 0.9);
           cState.x += cState.escapeDir * cState.vx;
 
-          // Once car has completely driven off screen, show victory popup for next level!
-          if (cState.x < -90 || cState.x > ARENA_W + 90) {
+          if (cState.x < -100 || cState.x > arenaW + 100) {
             cState.isEscaping = false;
             setVictoryModal(true);
 
-            const earned = 500 + level * 250;
+            const earned = 600 + level * 300;
             setScore((s) => {
               const nextScore = s + earned;
               if (nextScore > highScore) {
@@ -1217,19 +2180,36 @@ export default function ThiefEscapeGame({
         setCarState(cState);
       }
 
-      // Commit State updates synchronously to both refs and React state!
+      // Commit State Updates
       playerRef.current = curPlayer;
       guardsRef.current = curGuards;
-      rivalRef.current = curRival;
+      rivalsRef.current = curRivals;
+      cctvsRef.current = curCctvs;
       setPlayer(curPlayer);
       setGuards(curGuards);
-      setRival(curRival);
+      setRivals(curRivals);
+      setCctvs(curCctvs);
     }, 20);
 
     return () => clearInterval(interval);
-  }, [isPaused, isGameOver, victoryModal, levelConfig, getFloorY, handlePlayerBusted, level, highScore, onScoreUpdate]);
+  }, [
+    isPaused,
+    isGameOver,
+    victoryModal,
+    levelConfig,
+    arenaW,
+    getFloorY,
+    handlePlayerBusted,
+    level,
+    highScore,
+    onScoreUpdate,
+    triggerPoliceEmergency,
+    gunTaken,
+    bombTaken,
+    stonePickupTaken,
+  ]);
 
-  // Sneak / Hide Toggle: ONLY allows hiding if standing close to a window!
+  // Window Hide Toggle
   const handleSneakPressIn = () => {
     if (playerRef.current.isClimbing) {
       triggerLightHaptic();
@@ -1237,21 +2217,19 @@ export default function ThiefEscapeGame({
       return;
     }
 
-    const nearWinX = getNearestWindowX(playerRef.current.x);
+    const nearWinX = getNearestWindowX(playerRef.current.x, windowList);
     if (nearWinX != null) {
-      // Successfully duck inside the window!
       isSneakRef.current = true;
       setPlayer((p) => ({
         ...p,
-        x: nearWinX, // Snaps precisely inside the window frame
+        x: nearWinX,
         isHiding: true,
         hiddenWindowX: nearWinX,
       }));
       triggerSelectionHaptic();
       playSnapTickSound();
-      juiceRef.current?.popup('🪟 HIDDEN IN WINDOW', 'Shadow gray silhouette active', '#94A3B8');
+      juiceRef.current?.popup('🪟 HIDDEN IN WINDOW', 'Safe from flashlight & CCTV detection', '#94A3B8');
     } else {
-      // Not close to any window
       triggerLightHaptic();
       juiceRef.current?.popup('NO WINDOW NEARBY!', 'Move close to a window to hide', '#FF0055');
     }
@@ -1266,7 +2244,7 @@ export default function ThiefEscapeGame({
     }));
   };
 
-  // Next Level Handler (advances through all 100 handcrafted levels)
+  // Next Level Handler
   const handleNextLevel = useCallback(() => {
     const nextLvl = level + 1;
     if (nextLvl > CURATED_LEVELS.length) {
@@ -1281,14 +2259,14 @@ export default function ThiefEscapeGame({
     }
   }, [level, initLevel, saveCurrentLevel]);
 
-  // Retry Current Level Handler (continues same level on game over)
+  // Retry Current Level Handler
   const handleRetryCurrentLevel = useCallback(() => {
     setLives(3);
     setIsGameOver(false);
     initLevel(level);
   }, [level, initLevel]);
 
-  // New Game / Reset Handler (resets to Level 1 ONLY when user explicitly presses new button)
+  // New Game Handler
   const handleNewGame = useCallback(() => {
     setLives(3);
     setScore(0);
@@ -1299,18 +2277,15 @@ export default function ThiefEscapeGame({
     juiceRef.current?.popup('NEW HEIST STARTED', 'Reset to Level 1', '#00F5FF');
   }, [initLevel, saveCurrentLevel]);
 
-  // Active player vertical position
   const activePlayerY = player.isClimbing && player.y != null ? player.y : getFloorY(player.floor);
-
-  // Check if player is currently close enough to a window to hide
-  const isNearWindow = !player.isClimbing && getNearestWindowX(player.x) != null;
+  const isNearWindow = !player.isClimbing && getNearestWindowX(player.x, windowList) != null;
 
   return (
     <View style={styles.container}>
       <MiniGameHeader
         title="THIEF ESCAPE"
-        floorLabel="FLOOR 34"
-        category="STRATEGY"
+        floorLabel={`LVL ${level}`}
+        category="STEALTH"
         score={score}
         bestScore={highScore}
         accentColor="#00F5FF"
@@ -1320,6 +2295,15 @@ export default function ThiefEscapeGame({
       />
 
       <JuiceEngine ref={juiceRef}>
+        {/* Police 5-Second Warning Banner */}
+        {policeActive && (
+          <View style={styles.policeBanner}>
+            <Text style={styles.policeText}>
+              {`🚨 POLICE CAR DISPATCHED IN ${(policeTimer / 50).toFixed(1)}s! ESCAPE NOW!`}
+            </Text>
+          </View>
+        )}
+
         {/* Subheader Status Strip */}
         <View style={styles.statusStrip}>
           <View style={styles.statusBox}>
@@ -1331,8 +2315,36 @@ export default function ThiefEscapeGame({
 
           <View style={styles.statusBox}>
             <Text style={styles.statusDim}>STAGE</Text>
-            <Text style={[styles.statusVal, { color: '#FFE600' }]}>{`LVL ${level} // ${levelConfig.name}`}</Text>
+            {/* --- [TEST_BUTTON_START] --- */}
+            <Pressable
+              style={styles.testStageBtn}
+              onPress={() => setShowLevelPicker(true)}
+            >
+              <Text style={styles.testStageText}>{`L${level}: ${levelConfig.name}`}</Text>
+              <View style={styles.testPill}>
+                <Text style={styles.testPillText}>⚡ WARP</Text>
+              </View>
+            </Pressable>
+            {/* --- [TEST_BUTTON_END] --- */}
           </View>
+
+          {levelConfig.hasWeapons && (
+            <View style={styles.statusBox}>
+              <Text style={styles.statusDim}>ARSENAL</Text>
+              <Text style={[styles.statusVal, { color: '#00F5FF' }]}>
+                {`🔫${ammo} 💣${bombs}`}
+              </Text>
+            </View>
+          )}
+
+          {levelConfig.diamondLockedInCase && (
+            <View style={styles.statusBox}>
+              <Text style={styles.statusDim}>KEY</Text>
+              <Text style={[styles.statusVal, { color: hasKey ? COLORS.matrixMint : keyStealProgress > 0 ? '#FFE600' : '#FF0055' }]}>
+                {hasKey ? 'STOLEN 🗝️' : keyStealProgress > 0 ? `${Math.round(keyStealProgress)}%` : 'GUARD 🗝️'}
+              </Text>
+            </View>
+          )}
 
           <View style={styles.statusBox}>
             <Text style={styles.statusDim}>STONES</Text>
@@ -1356,19 +2368,23 @@ export default function ThiefEscapeGame({
           </View>
         </View>
 
-        {/* Building Heist Arena */}
+        {/* Building Heist Arena with dynamic viewBox so wide buildings fit cleanly (zooming out) */}
         <View style={styles.arenaWrapper}>
           <View style={styles.arenaCard}>
-            <Svg width={ARENA_W} height={ARENA_H} style={StyleSheet.absoluteFill}>
+            <Svg
+              width="100%"
+              height="100%"
+              viewBox={`0 0 ${arenaW} ${ARENA_H}`}
+              preserveAspectRatio="xMidYMid meet"
+              style={StyleSheet.absoluteFill}
+            >
               <Defs>
-                {/* Midnight Noir Brick Gradient */}
                 <SvgLinearGradient id="buildingGrad" x1="0" y1="0" x2="1" y2="1">
                   <Stop offset="0%" stopColor="#1B1E38" />
                   <Stop offset="60%" stopColor="#0D1022" />
                   <Stop offset="100%" stopColor="#050610" />
                 </SvgLinearGradient>
 
-                {/* Guard Flashlight Beam Gradients */}
                 <SvgLinearGradient id="beamGradRight" x1="0" y1="0" x2="1" y2="0">
                   <Stop offset="0%" stopColor="#FFE600" stopOpacity="0.45" />
                   <Stop offset="100%" stopColor="#FFE600" stopOpacity="0.0" />
@@ -1379,18 +2395,16 @@ export default function ThiefEscapeGame({
                   <Stop offset="100%" stopColor="#FFE600" stopOpacity="0.0" />
                 </SvgLinearGradient>
 
-                {/* Alert Distraction Beam Gradients */}
-                <SvgLinearGradient id="beamAlertRight" x1="0" y1="0" x2="1" y2="0">
-                  <Stop offset="0%" stopColor="#FF9900" stopOpacity="0.6" />
-                  <Stop offset="100%" stopColor="#FF9900" stopOpacity="0.0" />
+                <SvgLinearGradient id="sniperBeamRight" x1="0" y1="0" x2="1" y2="0">
+                  <Stop offset="0%" stopColor="#FF0055" stopOpacity="0.6" />
+                  <Stop offset="100%" stopColor="#FF0055" stopOpacity="0.0" />
                 </SvgLinearGradient>
 
-                <SvgLinearGradient id="beamAlertLeft" x1="1" y1="0" x2="0" y2="0">
-                  <Stop offset="0%" stopColor="#FF9900" stopOpacity="0.6" />
-                  <Stop offset="100%" stopColor="#FF9900" stopOpacity="0.0" />
+                <SvgLinearGradient id="sniperBeamLeft" x1="1" y1="0" x2="0" y2="0">
+                  <Stop offset="0%" stopColor="#FF0055" stopOpacity="0.6" />
+                  <Stop offset="100%" stopColor="#FF0055" stopOpacity="0.0" />
                 </SvgLinearGradient>
 
-                {/* Vault Glow Gradient */}
                 <SvgRadialGradient id="vaultGlow" cx="50%" cy="50%" r="50%">
                   <Stop offset="0%" stopColor="#00F5FF" stopOpacity="0.8" />
                   <Stop offset="100%" stopColor="#00F5FF" stopOpacity="0.0" />
@@ -1398,38 +2412,44 @@ export default function ThiefEscapeGame({
               </Defs>
 
               {/* Building Facade Background */}
-              <Rect x={10} y={15} width={ARENA_W - 20} height={ARENA_H - 45} rx={12} fill="url(#buildingGrad)" stroke="rgba(0, 245, 255, 0.25)" strokeWidth={2} />
+              <Rect
+                x={10}
+                y={15}
+                width={arenaW - 20}
+                height={ARENA_H - 45}
+                rx={12}
+                fill="url(#buildingGrad)"
+                stroke="rgba(0, 245, 255, 0.25)"
+                strokeWidth={2}
+              />
 
-              {/* Architectural Windows in Noir Comic Style & Window Hiding Spots */}
+              {/* Architectural Windows across the building */}
               {Array.from({ length: levelConfig.floorsCount }).map((_, f) => {
                 const fy = getFloorY(f);
                 const winY = fy - 48;
 
                 return (
                   <G key={`windows_${f}`}>
-                    {WINDOW_X_LIST.map((wx) => {
-                      // Skip window if blocked by ground floor car
-                      if (f === 0 && Math.abs(wx - levelConfig.car.x) < 32) return null;
+                    {windowList.map((wx) => {
+                      if (f === 0 && Math.abs(wx - levelConfig.car.x) < 36) return null;
 
                       const isPlayerHiddenHere = player.isHiding && player.floor === f && player.hiddenWindowX === wx;
-                      const isRivalHiddenHere = rival.isHiding && rival.floor === f && rival.hiddenWindowX === wx;
-                      const isPlayerNearHere = !player.isHiding && !player.isClimbing && player.floor === f && Math.abs(player.x - wx) <= WINDOW_PROXIMITY;
+                      const isRivalHiddenHere = rivals.some((riv) => riv.isHiding && riv.floor === f && riv.hiddenWindowX === wx);
+                      const isPlayerNearHere = !player.isHiding && !player.isClimbing && player.floor === f && Math.abs(player.x - wx) <= 22;
 
                       return (
                         <G key={`win_${f}_${wx}`}>
-                          {/* Outer Window Frame */}
                           <Rect
-                            x={wx - 14}
+                            x={wx - 13}
                             y={winY}
-                            width={28}
-                            height={40}
+                            width={26}
+                            height={38}
                             rx={4}
-                            fill={isPlayerHiddenHere ? '#0F1322' : isRivalHiddenHere ? '#1A0A26' : (f % 2 === 0 && wx === 170 ? '#FFE60020' : '#070914')}
+                            fill={isPlayerHiddenHere ? '#0F1322' : isRivalHiddenHere ? '#1A0A26' : '#070914'}
                             stroke={isPlayerHiddenHere ? '#94A3B8' : isRivalHiddenHere ? '#9D4EDD' : isPlayerNearHere ? '#00F5FF' : 'rgba(0, 245, 255, 0.25)'}
                             strokeWidth={isPlayerHiddenHere ? 2 : isRivalHiddenHere ? 2 : isPlayerNearHere ? 1.6 : 1.2}
                           />
 
-                          {/* Subtle arrow prompt when standing close to this window */}
                           {isPlayerNearHere && (
                             <Polygon
                               points={`${wx},${winY - 2} ${wx - 5},${winY - 8} ${wx + 5},${winY - 8}`}
@@ -1437,115 +2457,35 @@ export default function ThiefEscapeGame({
                             />
                           )}
 
-                          {/* Interior Window Pane */}
                           <Rect
-                            x={wx - 11}
+                            x={wx - 10}
                             y={winY + 3}
-                            width={22}
-                            height={34}
+                            width={20}
+                            height={32}
                             rx={2}
                             fill={isPlayerHiddenHere ? '#1E2333' : '#0B0E1B'}
                           />
 
-                          {/* Thief Hiding INSIDE the Window (Turned completely to Shadow Slate Gray) */}
                           {isPlayerHiddenHere && (
                             <G>
-                              {/* Gray Shadow Body */}
-                              <Rect
-                                x={wx - 6}
-                                y={fy - 25}
-                                width={12}
-                                height={22}
-                                rx={3}
-                                fill="#334155"
-                                stroke="#94A3B8"
-                                strokeWidth={1.5}
-                              />
-                              {/* Gray Shadow Head */}
+                              <Rect x={wx - 6} y={fy - 25} width={12} height={22} rx={3} fill="#334155" stroke="#94A3B8" strokeWidth={1.5} />
                               <Circle cx={wx} cy={fy - 27} r={5} fill="#475569" stroke="#94A3B8" strokeWidth={1} />
-                              {/* Soft Silver Visor Slit */}
-                              <Line
-                                x1={wx - 3}
-                                y1={fy - 27}
-                                x2={wx + player.facing * 4}
-                                y2={fy - 27}
-                                stroke="#CBD5E1"
-                                strokeWidth={1.5}
-                              />
-                              {/* Gray Shadow Diamond if carried */}
+                              <Line x1={wx - 3} y1={fy - 27} x2={wx + player.facing * 4} y2={fy - 27} stroke="#CBD5E1" strokeWidth={1.5} />
                               {player.hasDiamond && (
-                                <Polygon
-                                  points={`${wx},${fy - 34} ${wx + 4},${fy - 30} ${wx},${fy - 26} ${wx - 4},${fy - 30}`}
-                                  fill="#475569"
-                                  stroke="#94A3B8"
-                                  strokeWidth={1}
-                                />
+                                <Polygon points={`${wx},${fy - 34} ${wx + 4},${fy - 30} ${wx},${fy - 26} ${wx - 4},${fy - 30}`} fill="#475569" stroke="#94A3B8" strokeWidth={1} />
                               )}
                             </G>
                           )}
 
-                          {/* Rival Hiding INSIDE the Window (Purple Shadow Silhouette) */}
                           {isRivalHiddenHere && (
                             <G>
-                              <Rect
-                                x={wx - 6}
-                                y={fy - 25}
-                                width={12}
-                                height={22}
-                                rx={3}
-                                fill="#2A0845"
-                                stroke="#9D4EDD"
-                                strokeWidth={1.5}
-                              />
+                              <Rect x={wx - 6} y={fy - 25} width={12} height={22} rx={3} fill="#2A0845" stroke="#9D4EDD" strokeWidth={1.5} />
                               <Circle cx={wx} cy={fy - 27} r={5} fill="#4A1270" stroke="#9D4EDD" strokeWidth={1} />
-                              <Line
-                                x1={wx - 3}
-                                y1={fy - 27}
-                                x2={wx + rival.facing * 4}
-                                y2={fy - 27}
-                                stroke="#FF007F"
-                                strokeWidth={1.5}
-                              />
-                              {rival.hasDiamond && (
-                                <Polygon
-                                  points={`${wx},${fy - 34} ${wx + 4},${fy - 30} ${wx},${fy - 26} ${wx - 4},${fy - 30}`}
-                                  fill="#00F5FF"
-                                  stroke="#FFFFFF"
-                                  strokeWidth={1}
-                                />
-                              )}
                             </G>
                           )}
 
-                          {/* Window Mullions / Crossbars (always rendered in front of window interior) */}
-                          <Line
-                            x1={wx}
-                            y1={winY + 3}
-                            x2={wx}
-                            y2={winY + 37}
-                            stroke={isPlayerHiddenHere ? 'rgba(148, 163, 184, 0.5)' : 'rgba(0, 245, 255, 0.2)'}
-                            strokeWidth={1}
-                          />
-                          <Line
-                            x1={wx - 11}
-                            y1={winY + 20}
-                            x2={wx + 11}
-                            y2={winY + 20}
-                            stroke={isPlayerHiddenHere ? 'rgba(148, 163, 184, 0.5)' : 'rgba(0, 245, 255, 0.2)'}
-                            strokeWidth={1}
-                          />
-
-                          {/* Architectural Window Sill */}
-                          <Rect
-                            x={wx - 15}
-                            y={winY + 38}
-                            width={30}
-                            height={3.5}
-                            rx={1}
-                            fill="#181D2E"
-                            stroke={isPlayerHiddenHere ? '#94A3B8' : 'rgba(0, 245, 255, 0.2)'}
-                            strokeWidth={1}
-                          />
+                          <Line x1={wx} y1={winY + 3} x2={wx} y2={winY + 35} stroke="rgba(0, 245, 255, 0.15)" strokeWidth={1} />
+                          <Line x1={wx - 10} y1={winY + 19} x2={wx + 10} y2={winY + 19} stroke="rgba(0, 245, 255, 0.15)" strokeWidth={1} />
                         </G>
                       );
                     })}
@@ -1553,18 +2493,18 @@ export default function ThiefEscapeGame({
                 );
               })}
 
-              {/* Fire Escape Metal Catwalks (Floors) */}
+              {/* Fire Escape Metal Catwalks */}
               {Array.from({ length: levelConfig.floorsCount }).map((_, f) => {
                 const fy = getFloorY(f);
                 return (
                   <G key={`floor_${f}`}>
-                    <Line x1={20} y1={fy} x2={ARENA_W - 20} y2={fy} stroke="#00F5FF" strokeWidth={3} />
-                    <Line x1={20} y1={fy - 12} x2={ARENA_W - 20} y2={fy - 12} stroke="rgba(0, 245, 255, 0.4)" strokeWidth={1.2} strokeDasharray="6 4" />
+                    <Line x1={20} y1={fy} x2={arenaW - 20} y2={fy} stroke="#00F5FF" strokeWidth={3} />
+                    <Line x1={20} y1={fy - 12} x2={arenaW - 20} y2={fy - 12} stroke="rgba(0, 245, 255, 0.4)" strokeWidth={1.2} strokeDasharray="6 4" />
                   </G>
                 );
               })}
 
-              {/* Fire Escape Stairs / Ladders connecting floors with continuous rungs */}
+              {/* Vertical Ladders */}
               {levelConfig.stairs.map((stair, idx) => {
                 const y1 = getFloorY(stair.fromFloor);
                 const y2 = getFloorY(stair.toFloor);
@@ -1592,9 +2532,31 @@ export default function ThiefEscapeGame({
                 );
               })}
 
-              {/* Ground Floor Getaway Car with Animated Escape Beacon & Getaway Drive */}
+              {/* CCTV Cameras & Cones */}
+              {cctvs.map((cam, idx) => {
+                const fy = getFloorY(cam.floor);
+                const camY = fy - 46;
+                const rad = (cam.angle * Math.PI) / 180;
+                const endX1 = cam.x + Math.sin(rad - 0.35) * 55;
+                const endY1 = camY + Math.cos(rad - 0.35) * 55;
+                const endX2 = cam.x + Math.sin(rad + 0.35) * 55;
+                const endY2 = camY + Math.cos(rad + 0.35) * 55;
+                const isAlert = cam.alertCooldown > 0;
+
+                return (
+                  <G key={`cctv_${idx}`}>
+                    <Polygon
+                      points={`${cam.x},${camY} ${endX1},${endY1} ${endX2},${endY2}`}
+                      fill={isAlert ? 'rgba(255, 0, 85, 0.45)' : 'rgba(255, 230, 0, 0.25)'}
+                    />
+                    <Rect x={cam.x - 6} y={camY - 4} width={12} height={8} rx={2} fill="#0F172A" stroke={isAlert ? '#FF0055' : '#FFE600'} strokeWidth={1.5} />
+                    <Circle cx={cam.x} cy={camY + 2} r={3} fill={isAlert ? '#FF0055' : '#00F5FF'} />
+                  </G>
+                );
+              })}
+
+              {/* Ground Floor Getaway Car */}
               <G>
-                {/* Active Escape Zone indicator when diamond & fuel are ready and not yet escaping */}
                 {player.hasDiamond && (!levelConfig.requiresPetrol || player.hasPetrol) && !carState.isEscaping && (
                   <G>
                     <Rect
@@ -1617,64 +2579,13 @@ export default function ThiefEscapeGame({
                     >
                       ESCAPE HERE
                     </SvgText>
-                    <Polygon
-                      points={`${carState.x},${getFloorY(0) - 22} ${carState.x - 7},${getFloorY(0) - 30} ${carState.x + 7},${getFloorY(0) - 30}`}
-                      fill={COLORS.matrixMint}
-                    />
-                  </G>
-                )}
-
-                {/* Warning beacon if diamond is ready but petrol still needed */}
-                {player.hasDiamond && levelConfig.requiresPetrol && !player.hasPetrol && !carState.isEscaping && (
-                  <G>
-                    <Rect
-                      x={carState.x - 46}
-                      y={getFloorY(0) - 44}
-                      width={92}
-                      height={18}
-                      rx={6}
-                      fill="rgba(255, 0, 85, 0.25)"
-                      stroke="#FF0055"
-                      strokeWidth={1.5}
-                    />
-                    <SvgText
-                      x={carState.x}
-                      y={getFloorY(0) - 31}
-                      fontSize={7.5}
-                      fontWeight="bold"
-                      fill="#FF0055"
-                      textAnchor="middle"
-                    >
-                      NEED FUEL
-                    </SvgText>
-                    <Polygon
-                      points={`${carState.x},${getFloorY(0) - 22} ${carState.x - 6},${getFloorY(0) - 29} ${carState.x + 6},${getFloorY(0) - 29}`}
-                      fill="#FF0055"
-                    />
-                  </G>
-                )}
-
-                {/* Headlight beam shining when car is escaping off screen */}
-                {carState.isEscaping && (
-                  <Polygon
-                    points={`${carState.x + carState.escapeDir * 28},${getFloorY(0) - 14} ${carState.x + carState.escapeDir * 95},${getFloorY(0) - 26} ${carState.x + carState.escapeDir * 95},${getFloorY(0) - 2}`}
-                    fill="rgba(255, 230, 0, 0.35)"
-                  />
-                )}
-
-                {/* Exhaust flames / smoke when driving away */}
-                {carState.isEscaping && carState.thiefInside && (
-                  <G>
-                    <Circle cx={carState.x - carState.escapeDir * 32} cy={getFloorY(0) - 10} r={5} fill="#FF0055" opacity={0.8} />
-                    <Circle cx={carState.x - carState.escapeDir * 42} cy={getFloorY(0) - 11} r={7} fill="#FFE600" opacity={0.6} />
-                    <Circle cx={carState.x - carState.escapeDir * 54} cy={getFloorY(0) - 12} r={9} fill="rgba(255,255,255,0.3)" opacity={0.4} />
                   </G>
                 )}
 
                 {/* Car Chassis */}
                 <Rect x={carState.x - 28} y={getFloorY(0) - 18} width={56} height={16} rx={5} fill="#141829" stroke={player.hasDiamond && (!levelConfig.requiresPetrol || player.hasPetrol) ? COLORS.matrixMint : '#FF0055'} strokeWidth={1.8} />
-                <Circle cx={carState.x - 18} cy={getFloorY(0) - 2} r={5} fill="#05060C" stroke={player.hasDiamond && (!levelConfig.requiresPetrol || player.hasPetrol) ? COLORS.matrixMint : '#FF0055'} strokeWidth={1} />
-                <Circle cx={carState.x + 18} cy={getFloorY(0) - 2} r={5} fill="#05060C" stroke={player.hasDiamond && (!levelConfig.requiresPetrol || player.hasPetrol) ? COLORS.matrixMint : '#FF0055'} strokeWidth={1} />
+                <Circle cx={carState.x - 18} cy={getFloorY(0) - 2} r={5} fill="#05060C" stroke={COLORS.matrixMint} strokeWidth={1} />
+                <Circle cx={carState.x + 18} cy={getFloorY(0) - 2} r={5} fill="#05060C" stroke={COLORS.matrixMint} strokeWidth={1} />
                 <Polygon
                   points={
                     carState.escapeDir === -1
@@ -1683,19 +2594,9 @@ export default function ThiefEscapeGame({
                   }
                   fill={carState.thiefInside ? '#00F5FF88' : '#00F5FF44'}
                 />
-
-                {/* Thief Head visible through windshield once inside */}
-                {carState.thiefInside && (
-                  <Circle
-                    cx={carState.x + (carState.escapeDir === -1 ? -4 : 4)}
-                    cy={getFloorY(0) - 13}
-                    r={3.5}
-                    fill="#00F5FF"
-                  />
-                )}
               </G>
 
-              {/* Fuel Canister (Petrol) on required levels */}
+              {/* Fuel Canister (Levels 11-20) */}
               {levelConfig.requiresPetrol && !petrolTaken && levelConfig.petrol && (
                 <G>
                   <Rect
@@ -1712,21 +2613,68 @@ export default function ThiefEscapeGame({
                 </G>
               )}
 
-              {/* Stone Refill Cache on certain floors */}
+              {/* Gun Pickup Item */}
+              {levelConfig.gunPickup && !gunTaken && (
+                <G>
+                  <Rect x={levelConfig.gunPickup.x - 9} y={getFloorY(levelConfig.gunPickup.floor) - 16} width={18} height={12} rx={3} fill="#0F172A" stroke="#00F5FF" strokeWidth={1.4} />
+                  <SvgText x={levelConfig.gunPickup.x} y={getFloorY(levelConfig.gunPickup.floor) - 6} fontSize={8} fill="#00F5FF" fontWeight="bold" textAnchor="middle">
+                    GUN
+                  </SvgText>
+                </G>
+              )}
+
+              {/* Bomb Pickup Item */}
+              {levelConfig.bombPickup && !bombTaken && (
+                <G>
+                  <Circle cx={levelConfig.bombPickup.x} cy={getFloorY(levelConfig.bombPickup.floor) - 10} r={7} fill="#1E1220" stroke="#FF0055" strokeWidth={1.4} />
+                  <Circle cx={levelConfig.bombPickup.x + 3} cy={getFloorY(levelConfig.bombPickup.floor) - 13} r={2} fill="#FFE600" />
+                </G>
+              )}
+
+              {/* Distractor Stone Refill */}
               {levelConfig.stonePickup && !stonePickupTaken && (
                 <G>
                   <Circle cx={levelConfig.stonePickup.x - 3} cy={getFloorY(levelConfig.stonePickup.floor) - 5} r={3} fill="#8892B0" stroke="#FFFFFF" strokeWidth={0.8} />
                   <Circle cx={levelConfig.stonePickup.x + 3} cy={getFloorY(levelConfig.stonePickup.floor) - 5} r={3.2} fill="#8892B0" stroke="#FFFFFF" strokeWidth={0.8} />
-                  <Circle cx={levelConfig.stonePickup.x} cy={getFloorY(levelConfig.stonePickup.floor) - 9} r={3} fill="#CCD6F6" stroke="#FFFFFF" strokeWidth={0.8} />
                 </G>
               )}
 
-              {/* Quantum Diamond in Vault */}
+              {/* Diamond (Locked in glass case on 81-98, Master Crown on 99-100, Vault Diamond otherwise) */}
               {!diamondTaken && (
                 <G>
+                  {levelConfig.diamondLockedInCase && (
+                    <Rect
+                      x={levelConfig.diamond.x - 14}
+                      y={getFloorY(levelConfig.diamond.floor) - 28}
+                      width={28}
+                      height={26}
+                      rx={3}
+                      fill="rgba(0, 245, 255, 0.15)"
+                      stroke={hasKey ? COLORS.matrixMint : '#FF0055'}
+                      strokeWidth={1.5}
+                    />
+                  )}
                   <Circle cx={levelConfig.diamond.x} cy={getFloorY(levelConfig.diamond.floor) - 14} r={18} fill="url(#vaultGlow)" />
                   <Polygon
                     points={`${levelConfig.diamond.x},${getFloorY(levelConfig.diamond.floor) - 24} ${levelConfig.diamond.x + 10},${getFloorY(levelConfig.diamond.floor) - 14} ${levelConfig.diamond.x},${getFloorY(levelConfig.diamond.floor) - 4} ${levelConfig.diamond.x - 10},${getFloorY(levelConfig.diamond.floor) - 14}`}
+                    fill={levelConfig.isMasterCrown ? '#FFE600' : '#00F5FF'}
+                    stroke="#FFFFFF"
+                    strokeWidth={1.5}
+                  />
+                  {levelConfig.isMasterCrown && (
+                    <SvgText x={levelConfig.diamond.x} y={getFloorY(levelConfig.diamond.floor) - 30} fontSize={9} fill="#FFE600" fontWeight="bold" textAnchor="middle">
+                      👑 CROWN
+                    </SvgText>
+                  )}
+                </G>
+              )}
+
+              {/* Extra Diamond (Levels 71-80) */}
+              {levelConfig.extraDiamond && !extraDiamondTaken && (
+                <G>
+                  <Circle cx={levelConfig.extraDiamond.x} cy={getFloorY(levelConfig.extraDiamond.floor) - 14} r={18} fill="url(#vaultGlow)" />
+                  <Polygon
+                    points={`${levelConfig.extraDiamond.x},${getFloorY(levelConfig.extraDiamond.floor) - 24} ${levelConfig.extraDiamond.x + 10},${getFloorY(levelConfig.extraDiamond.floor) - 14} ${levelConfig.extraDiamond.x},${getFloorY(levelConfig.extraDiamond.floor) - 4} ${levelConfig.extraDiamond.x - 10},${getFloorY(levelConfig.extraDiamond.floor) - 14}`}
                     fill="#00F5FF"
                     stroke="#FFFFFF"
                     strokeWidth={1.5}
@@ -1734,30 +2682,32 @@ export default function ThiefEscapeGame({
                 </G>
               )}
 
-              {/* Patrolling Security Guards & Vision Beams */}
+              {/* Patrolling Security Guards, Armed Snipers & Bosses */}
               {guards.map((g) => {
+                if (g.isDefeated) return null;
                 const gy = getFloorY(g.floor);
                 const isAlerted = g.alertTimer > 0;
-                const beamRightId = isAlerted ? 'url(#beamAlertRight)' : 'url(#beamGradRight)';
-                const beamLeftId = isAlerted ? 'url(#beamAlertLeft)' : 'url(#beamGradLeft)';
+                const visLen = g.hasGun ? SNIPER_VISION_LEN : FLASHLIGHT_LEN;
+                const beamRight = g.hasGun ? 'url(#sniperBeamRight)' : 'url(#beamGradRight)';
+                const beamLeft = g.hasGun ? 'url(#sniperBeamLeft)' : 'url(#beamGradLeft)';
 
                 return (
                   <G key={g.id}>
-                    {/* Flashlight Beam */}
+                    {/* Flashlight / Laser Beam */}
                     {g.dir === 1 ? (
                       <Polygon
-                        points={`${g.x + 8},${gy - 18} ${g.x + FLASHLIGHT_LEN},${gy - 32} ${g.x + FLASHLIGHT_LEN},${gy - 2}`}
-                        fill={beamRightId}
+                        points={`${g.x + 8},${gy - 18} ${g.x + visLen},${gy - 32} ${g.x + visLen},${gy - 2}`}
+                        fill={beamRight}
                       />
                     ) : (
                       <Polygon
-                        points={`${g.x - 8},${gy - 18} ${g.x - FLASHLIGHT_LEN},${gy - 32} ${g.x - FLASHLIGHT_LEN},${gy - 2}`}
-                        fill={beamLeftId}
+                        points={`${g.x - 8},${gy - 18} ${g.x - visLen},${gy - 32} ${g.x - visLen},${gy - 2}`}
+                        fill={beamLeft}
                       />
                     )}
 
-                    {/* Alert Question Mark Bubble when distracted by stone */}
-                    {isAlerted && (
+                    {/* Question Mark Bubble when investigating stone */}
+                    {g.isInvestigating && (
                       <G>
                         <Circle cx={g.x} cy={gy - 38} r={8} fill="#FF9900" stroke="#FFFFFF" strokeWidth={1.5} />
                         <Line x1={g.x} y1={gy - 42} x2={g.x} y2={gy - 38} stroke="#05060E" strokeWidth={2.2} />
@@ -1765,112 +2715,118 @@ export default function ThiefEscapeGame({
                       </G>
                     )}
 
-                    <Rect x={g.x - 6} y={gy - 26} width={12} height={24} rx={3} fill="#0A0E24" stroke={isAlerted ? '#FF9900' : '#FFE600'} strokeWidth={1.4} />
-                    <Circle cx={g.x} cy={gy - 28} r={5} fill="#0A0E24" />
-                    <Line x1={g.x - 4} y1={gy - 28} x2={g.x + g.dir * 6} y2={gy - 28} stroke={isAlerted ? '#FF9900' : '#FFE600'} strokeWidth={2} />
+                    {/* Key Icon above Key-holding Guard */}
+                    {g.hasKey && (
+                      <G>
+                        <Circle cx={g.x} cy={gy - 36} r={7} fill="#FFE600" />
+                        <SvgText x={g.x} y={gy - 33} fontSize={7} fill="#05060E" fontWeight="bold" textAnchor="middle">
+                          🗝️
+                        </SvgText>
+                      </G>
+                    )}
+
+                    {/* Key Stealing Progress Bar over Key Guard */}
+                    {g.hasKey && keyStealProgress > 0 && (
+                      <G>
+                        <Rect x={g.x - 16} y={gy - 48} width={32} height={5} rx={2} fill="#1E293B" stroke="#FFE600" strokeWidth={1} />
+                        <Rect x={g.x - 15} y={gy - 47} width={(keyStealProgress / 100) * 30} height={3} rx={1} fill="#FFE600" />
+                      </G>
+                    )}
+
+                    {/* Boss Health Bar */}
+                    {g.isBoss && (
+                      <G>
+                        <Rect x={g.x - 18} y={gy - 46} width={36} height={6} rx={2} fill="#0A0E24" stroke="#FF0055" strokeWidth={1} />
+                        <Rect x={g.x - 17} y={gy - 45} width={(g.hp / g.maxHp) * 34} height={4} rx={1} fill="#FF0055" />
+                      </G>
+                    )}
+
+                    {/* Guard Body: Big for Bosses, Armed Rifle for Snipers */}
+                    {g.isBoss ? (
+                      <G>
+                        <Rect x={g.x - 10} y={gy - 34} width={20} height={32} rx={4} fill="#1A0D2E" stroke="#FF0055" strokeWidth={2} />
+                        <Circle cx={g.x} cy={gy - 36} r={7} fill="#FF0055" />
+                        <Line x1={g.x - 6} y1={gy - 20} x2={g.x + g.dir * 16} y2={gy - 20} stroke="#FFE600" strokeWidth={3} />
+                      </G>
+                    ) : (
+                      <G>
+                        <Rect x={g.x - 6} y={gy - 26} width={12} height={24} rx={3} fill="#0A0E24" stroke={g.hasGun ? '#FF0055' : isAlerted ? '#FF9900' : '#FFE600'} strokeWidth={1.4} />
+                        <Circle cx={g.x} cy={gy - 28} r={5} fill="#0A0E24" />
+                        <Line x1={g.x - 4} y1={gy - 28} x2={g.x + g.dir * 6} y2={gy - 28} stroke={g.hasGun ? '#FF0055' : isAlerted ? '#FF9900' : '#FFE600'} strokeWidth={2} />
+                        {g.hasGun && (
+                          <Line x1={g.x} y1={gy - 18} x2={g.x + g.dir * 12} y2={gy - 18} stroke="#FF0055" strokeWidth={2.2} />
+                        )}
+                      </G>
+                    )}
                   </G>
                 );
               })}
 
-              {/* Thrown Distractor Stones in Flight */}
-              {thrownStones.map((st) => (
-                <G key={st.id}>
-                  <Circle cx={st.x} cy={st.y} r={3.5} fill="#FFE600" stroke="#FFFFFF" strokeWidth={1} />
-                  <Circle cx={st.x - st.vx * 1.5} cy={st.y - st.vy * 1.5} r={2} fill="rgba(255, 230, 0, 0.4)" />
-                </G>
+              {/* Bullets in Flight */}
+              {bullets.map((b) => (
+                <Line
+                  key={b.id}
+                  x1={b.x - b.vx * 1.5}
+                  y1={b.y}
+                  x2={b.x}
+                  y2={b.y}
+                  stroke={b.isPlayerBullet ? '#00F5FF' : '#FF0055'}
+                  strokeWidth={2.5}
+                />
               ))}
 
-              {/* Rival Thief (Floor Walking or Physically Climbing Ladders) */}
-              {levelConfig.hasRival && rival.isAlive && !rival.isHiding && (() => {
-                const rY = rival.isClimbing && rival.y != null ? rival.y : getFloorY(rival.floor);
+              {/* Thrown Bombs */}
+              {thrownBombs.map((bm) => (
+                <Circle key={bm.id} cx={bm.x} cy={bm.y} r={4.5} fill="#FF0055" stroke="#FFFFFF" strokeWidth={1} />
+              ))}
+
+              {/* Thrown Stones */}
+              {thrownStones.map((st) => (
+                <Circle key={st.id} cx={st.x} cy={st.y} r={3.5} fill="#FFE600" stroke="#FFFFFF" strokeWidth={1} />
+              ))}
+
+              {/* Multiple Rival Thieves */}
+              {rivals.map((riv) => {
+                if (!riv.isAlive || riv.isHiding) return null;
+                const rY = riv.isClimbing && riv.y != null ? riv.y : getFloorY(riv.floor);
                 return (
-                  <G>
-                    {rival.isClimbing && (
+                  <G key={riv.id}>
+                    {riv.isSearching && (
                       <G>
-                        {/* Gripping Hands on Ladder Rails */}
-                        <Line x1={rival.x - 10} y1={rY - 18} x2={rival.x - 5} y2={rY - 14} stroke="#9D4EDD" strokeWidth={2.2} />
-                        <Line x1={rival.x + 5} y1={rY - 14} x2={rival.x + 10} y2={rY - 18} stroke="#9D4EDD" strokeWidth={2.2} />
+                        <Circle cx={riv.x} cy={rY - 36} r={7} fill="#9D4EDD" stroke="#FFFFFF" strokeWidth={1} />
+                        <SvgText x={riv.x} y={rY - 33} fontSize={8.5} fill="#FFFFFF" fontWeight="bold" textAnchor="middle">
+                          ?
+                        </SvgText>
                       </G>
                     )}
-                    <Rect x={rival.x - 6} y={rY - 24} width={12} height={22} rx={3} fill="#2A0845" stroke="#9D4EDD" strokeWidth={1.4} />
-                    <Circle cx={rival.x} cy={rY - 26} r={5} fill="#9D4EDD" />
-                    <Line x1={rival.x - 3} y1={rY - 26} x2={rival.x - 1} y2={rY - 26} stroke="#FFFFFF" strokeWidth={1.2} />
-                    <Line x1={rival.x + 1} y1={rY - 26} x2={rival.x + 3} y2={rY - 26} stroke="#FFFFFF" strokeWidth={1.2} />
-                    {rival.hasDiamond && (
-                      <Circle cx={rival.x} cy={rY - 34} r={4} fill="#00F5FF" stroke="#FFFFFF" strokeWidth={1} />
-                    )}
+                    <Rect x={riv.x - 6} y={rY - 24} width={12} height={22} rx={3} fill="#2A0845" stroke="#9D4EDD" strokeWidth={1.4} />
+                    <Circle cx={riv.x} cy={rY - 26} r={5} fill="#9D4EDD" />
+                    {riv.hasDiamond && <Circle cx={riv.x} cy={rY - 34} r={4} fill="#00F5FF" stroke="#FFFFFF" strokeWidth={1} />}
                   </G>
                 );
-              })()}
+              })}
 
-              {/* Player Stealth Thief Operative: Hidden when inside window or inside getaway car */}
+              {/* Player Stealth Operative */}
               {!player.isHiding && !carState.thiefInside && (() => {
-                const curThiefX = carState.isEscaping
-                  ? player.x + (carState.x - player.x) * carState.jumpPhase
-                  : player.x;
-                const curThiefY = carState.isEscaping
-                  ? activePlayerY - Math.sin(carState.jumpPhase * Math.PI) * 22
-                  : activePlayerY;
+                const curThiefX = carState.isEscaping ? player.x + (carState.x - player.x) * carState.jumpPhase : player.x;
+                const curThiefY = carState.isEscaping ? activePlayerY - Math.sin(carState.jumpPhase * Math.PI) * 22 : activePlayerY;
 
                 return player.isClimbing ? (
                   <G>
-                    {/* Gripping Hands on Ladder Rails */}
                     <Line x1={curThiefX - 11} y1={curThiefY - 18} x2={curThiefX - 5} y2={curThiefY - 14} stroke="#00F5FF" strokeWidth={2.2} />
                     <Line x1={curThiefX + 5} y1={curThiefY - 14} x2={curThiefX + 11} y2={curThiefY - 18} stroke="#00F5FF" strokeWidth={2.2} />
-
-                    {/* Body climbing back silhouette */}
-                    <Rect
-                      x={curThiefX - 6}
-                      y={curThiefY - 24}
-                      width={12}
-                      height={20}
-                      rx={3}
-                      fill="#080C1E"
-                      stroke="#00F5FF"
-                      strokeWidth={1.8}
-                    />
-
-                    {/* Head */}
+                    <Rect x={curThiefX - 6} y={curThiefY - 24} width={12} height={20} rx={3} fill="#080C1E" stroke="#00F5FF" strokeWidth={1.8} />
                     <Circle cx={curThiefX} cy={curThiefY - 26} r={5} fill="#00F5FF" />
-
-                    {/* Gripping Feet on Ladder Rungs */}
-                    <Line x1={curThiefX - 10} y1={curThiefY - 4} x2={curThiefX - 4} y2={curThiefY - 2} stroke="#00F5FF" strokeWidth={2.2} />
-                    <Line x1={curThiefX + 4} y1={curThiefY - 2} x2={curThiefX + 10} y2={curThiefY - 4} stroke="#00F5FF" strokeWidth={2.2} />
-
-                    {/* Diamond on operative's back */}
                     {player.hasDiamond && (
-                      <Polygon
-                        points={`${curThiefX},${curThiefY - 33} ${curThiefX + 5},${curThiefY - 28} ${curThiefX},${curThiefY - 23} ${curThiefX - 5},${curThiefY - 28}`}
-                        fill="#00F5FF"
-                        stroke="#FFFFFF"
-                        strokeWidth={1.2}
-                      />
+                      <Polygon points={`${curThiefX},${curThiefY - 33} ${curThiefX + 5},${curThiefY - 28} ${curThiefX},${curThiefY - 23} ${curThiefX - 5},${curThiefY - 28}`} fill="#00F5FF" stroke="#FFFFFF" strokeWidth={1.2} />
                     )}
                   </G>
                 ) : (
                   <G>
-                    <Rect
-                      x={curThiefX - 7}
-                      y={curThiefY - 26}
-                      width={14}
-                      height={24}
-                      rx={3}
-                      fill="#080C1E"
-                      stroke="#00F5FF"
-                      strokeWidth={1.8}
-                    />
+                    <Rect x={curThiefX - 7} y={curThiefY - 26} width={14} height={24} rx={3} fill="#080C1E" stroke="#00F5FF" strokeWidth={1.8} />
                     <Circle cx={curThiefX} cy={curThiefY - 28} r={5} fill="#00F5FF" />
-                    <Line
-                      x1={curThiefX - 4}
-                      y1={curThiefY - 28}
-                      x2={curThiefX + player.facing * 5}
-                      y2={curThiefY - 28}
-                      stroke="#FFFFFF"
-                      strokeWidth={2}
-                    />
-                    {player.hasDiamond && (
-                      <Circle cx={curThiefX} cy={curThiefY - 36} r={5} fill="#00F5FF" stroke="#FFFFFF" strokeWidth={1.5} />
-                    )}
+                    <Line x1={curThiefX - 4} y1={curThiefY - 28} x2={curThiefX + player.facing * 5} y2={curThiefY - 28} stroke="#FFFFFF" strokeWidth={2} />
+                    {player.hasDiamond && <Circle cx={curThiefX} cy={curThiefY - 36} r={5} fill="#00F5FF" stroke="#FFFFFF" strokeWidth={1.5} />}
                   </G>
                 );
               })()}
@@ -1878,63 +2834,56 @@ export default function ThiefEscapeGame({
           </View>
         </View>
 
-        {/* Tactical Control Bar: Horizontal Walk, Smooth Ladder Climb, Stone Distractor & Window Hide */}
+        {/* Tactical Control Console: Big, Ergonomic Dual-Thumb Layout */}
         <View style={styles.controlsRow}>
-          {/* Movement D-Pad (Left & Right) */}
-          <View style={styles.dirGroup}>
-            <Pressable
-              style={({ pressed }) => [styles.ctrlBtn, pressed && styles.ctrlBtnPressed]}
-              onPressIn={() => (inputDirRef.current = -1)}
-              onPressOut={() => (inputDirRef.current = 0)}
-            >
-              <Text style={styles.ctrlText}>◀</Text>
-            </Pressable>
+          {/* Movement Cluster (Left Thumb) */}
+          <View style={styles.dirCluster}>
+            {/* Top Row: Ladder Climbing (UP / DOWN) */}
+            <View style={styles.dirRow}>
+              <Pressable
+                style={({ pressed }) => [styles.climbBtn, pressed && styles.climbBtnPressed]}
+                onPressIn={() => (climbDirRef.current = -1)}
+                onPressOut={() => (climbDirRef.current = 0)}
+              >
+                <Text style={styles.climbIcon}>▲</Text>
+                <Text style={styles.climbSub}>UP</Text>
+              </Pressable>
 
-            <Pressable
-              style={({ pressed }) => [styles.ctrlBtn, pressed && styles.ctrlBtnPressed]}
-              onPressIn={() => (inputDirRef.current = 1)}
-              onPressOut={() => (inputDirRef.current = 0)}
-            >
-              <Text style={styles.ctrlText}>▶</Text>
-            </Pressable>
+              <Pressable
+                style={({ pressed }) => [styles.climbBtn, pressed && styles.climbBtnPressed]}
+                onPressIn={() => (climbDirRef.current = 1)}
+                onPressOut={() => (climbDirRef.current = 0)}
+              >
+                <Text style={styles.climbIcon}>▼</Text>
+                <Text style={styles.climbSub}>DN</Text>
+              </Pressable>
+            </View>
+
+            {/* Bottom Row: Catwalk Walking (LEFT / RIGHT) */}
+            <View style={styles.dirRow}>
+              <Pressable
+                style={({ pressed }) => [styles.ctrlBtn, pressed && styles.ctrlBtnPressed]}
+                onPressIn={() => (inputDirRef.current = -1)}
+                onPressOut={() => (inputDirRef.current = 0)}
+              >
+                <Text style={styles.ctrlIcon}>◀</Text>
+                <Text style={styles.ctrlSub}>LEFT</Text>
+              </Pressable>
+
+              <Pressable
+                style={({ pressed }) => [styles.ctrlBtn, pressed && styles.ctrlBtnPressed]}
+                onPressIn={() => (inputDirRef.current = 1)}
+                onPressOut={() => (inputDirRef.current = 0)}
+              >
+                <Text style={styles.ctrlSub}>RIGHT</Text>
+                <Text style={styles.ctrlIcon}>▶</Text>
+              </Pressable>
+            </View>
           </View>
 
-          {/* Smooth Ladder Climbing: Hold to climb, release to stand in the middle */}
-          <View style={styles.dirGroup}>
-            <Pressable
-              style={({ pressed }) => [styles.climbBtn, pressed && styles.climbBtnPressed]}
-              onPressIn={() => (climbDirRef.current = -1)}
-              onPressOut={() => (climbDirRef.current = 0)}
-            >
-              <Text style={styles.climbText}>▲</Text>
-              <Text style={styles.climbSub}>CLIMB</Text>
-            </Pressable>
-
-            <Pressable
-              style={({ pressed }) => [styles.climbBtn, pressed && styles.climbBtnPressed]}
-              onPressIn={() => (climbDirRef.current = 1)}
-              onPressOut={() => (climbDirRef.current = 0)}
-            >
-              <Text style={styles.climbText}>▼</Text>
-              <Text style={styles.climbSub}>CLIMB</Text>
-            </Pressable>
-          </View>
-
-          {/* Actions: Distractor Stone Throw & Window Hide */}
-          <View style={styles.actionGroup}>
-            <Pressable
-              style={({ pressed }) => [
-                styles.stoneBtn,
-                pressed && styles.stoneBtnPressed,
-                stones <= 0 && styles.btnDisabled,
-              ]}
-              onPress={handleThrowStone}
-            >
-              <Text style={styles.stoneIcon}>🪨</Text>
-              <Text style={styles.stoneCount}>{stones}</Text>
-            </Pressable>
-
-            {/* Window Hide Button: Highlights when standing close to a window */}
+          {/* Action Cluster (Right Thumb) */}
+          <View style={styles.actionCluster}>
+            {/* Top Row: Window Hide Button (Large, prominent & high contrast) */}
             <Pressable
               style={({ pressed }) => [
                 styles.sneakBtn,
@@ -1948,19 +2897,82 @@ export default function ThiefEscapeGame({
             >
               <Text style={styles.sneakIcon}>🪟</Text>
               <Text style={[styles.sneakText, player.isHiding && { color: '#94A3B8' }]}>
-                {player.isHiding ? 'INSIDE' : isNearWindow ? 'HIDE' : 'NO WIN'}
+                {player.isHiding ? 'INSIDE WINDOW' : isNearWindow ? 'HIDE IN WINDOW' : 'FIND WINDOW'}
               </Text>
             </Pressable>
+
+            {/* Bottom Row: Tactical Weapons & Distractor Stones */}
+            <View style={styles.actionSubRow}>
+              {levelConfig.hasWeapons ? (
+                <>
+                  {/* Shoot Gun */}
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.smallActionBtn,
+                      styles.gunBtn,
+                      pressed && styles.gunBtnPressed,
+                      ammo <= 0 && styles.btnDisabled,
+                    ]}
+                    onPress={handleShootGun}
+                  >
+                    <Text style={styles.actionIcon}>🔫</Text>
+                    <Text style={styles.actionBadge}>{ammo}</Text>
+                  </Pressable>
+
+                  {/* Throw Bomb */}
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.smallActionBtn,
+                      styles.bombBtn,
+                      pressed && styles.bombBtnPressed,
+                      bombs <= 0 && styles.btnDisabled,
+                    ]}
+                    onPress={handleThrowBomb}
+                  >
+                    <Text style={styles.actionIcon}>💣</Text>
+                    <Text style={styles.actionBadge}>{bombs}</Text>
+                  </Pressable>
+
+                  {/* Distractor Stone */}
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.smallActionBtn,
+                      styles.stoneBtn,
+                      pressed && styles.stoneBtnPressed,
+                      stones <= 0 && styles.btnDisabled,
+                    ]}
+                    onPress={handleThrowStone}
+                  >
+                    <Text style={styles.actionIcon}>🪨</Text>
+                    <Text style={styles.stoneCount}>{stones}</Text>
+                  </Pressable>
+                </>
+              ) : (
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.wideStoneBtn,
+                    pressed && styles.stoneBtnPressed,
+                    stones <= 0 && styles.btnDisabled,
+                  ]}
+                  onPress={handleThrowStone}
+                >
+                  <Text style={styles.wideStoneIcon}>🪨</Text>
+                  <Text style={styles.wideStoneText}>
+                    {stones > 0 ? `DISTRACT STONE (x${stones})` : 'NO STONES'}
+                  </Text>
+                </Pressable>
+              )}
+            </View>
           </View>
         </View>
       </JuiceEngine>
 
-      {/* Victory / Next Level Modal */}
+      {/* Victory Modal */}
       <GameResultModal
         visible={victoryModal}
         type="VICTORY"
         title="HEIST COMPLETE!"
-        subtitle={`Escaped successfully in the getaway car! Sector ${level} cleared.`}
+        subtitle={`Escaped successfully in the getaway vehicle! Level ${level} cleared.`}
         score={score}
         bestScore={highScore}
         accentColor="#00F5FF"
@@ -1976,7 +2988,7 @@ export default function ThiefEscapeGame({
         visible={isGameOver}
         type="GAME_OVER"
         title="HEIST COMPROMISED"
-        subtitle={`Security lockdown on Level ${level}. Operative detected.`}
+        subtitle={`Operative apprehended on Level ${level}.`}
         score={score}
         bestScore={highScore}
         accentColor="#FF0055"
@@ -1987,6 +2999,116 @@ export default function ThiefEscapeGame({
         onNext={handleRetryCurrentLevel}
         onBackToHub={onBackToHub}
       />
+
+      {/* --- [TEST_BUTTON_START] --- */}
+      {/* Test Level Selector Modal: Scrollable list of 100 levels to test any level immediately */}
+      <Modal
+        visible={showLevelPicker}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowLevelPicker(false)}
+      >
+        <View style={styles.testModalOverlay}>
+          <View style={styles.testModalCard}>
+            <View style={styles.testModalHeader}>
+              <View>
+                <Text style={styles.testModalTitle}>⚡ WARP TO ANY LEVEL (1 - 100)</Text>
+                <Text style={styles.testModalSub}>Tap any heist to test immediately</Text>
+              </View>
+              <Pressable
+                style={styles.testCloseBtn}
+                onPress={() => setShowLevelPicker(false)}
+              >
+                <Text style={styles.testCloseText}>✕ CLOSE</Text>
+              </Pressable>
+            </View>
+
+            <ScrollView
+              style={styles.testScroll}
+              contentContainerStyle={styles.testScrollContent}
+              showsVerticalScrollIndicator
+            >
+              {CURATED_LEVELS.map((cfg, idx) => {
+                const lvlNum = idx + 1;
+                const isCurrent = lvlNum === level;
+                const tierColor =
+                  lvlNum <= 10
+                    ? '#00F5FF'
+                    : lvlNum <= 20
+                    ? '#FFE600'
+                    : lvlNum <= 35
+                    ? '#9D4EDD'
+                    : lvlNum <= 50
+                    ? '#FF0055'
+                    : lvlNum <= 70
+                    ? '#FF9900'
+                    : lvlNum <= 80
+                    ? '#00F5D4'
+                    : lvlNum <= 98
+                    ? '#E0AAFF'
+                    : '#FFE600';
+
+                const tierTag =
+                  cfg.isBossLevel
+                    ? '👑 FINAL BOSS'
+                    : cfg.diamondLockedInCase
+                    ? '🗝️ PICKPOCKET KEY'
+                    : cfg.diamondsCount === 2
+                    ? '💎 2 DIAMONDS'
+                    : cfg.hasWeapons
+                    ? '🔫 WEAPONS & CCTV'
+                    : cfg.rivalCount > 0
+                    ? `🥷 ${cfg.rivalCount} RIVAL`
+                    : cfg.requiresPetrol
+                    ? '⛽ PETROL RUN'
+                    : `👮 ${cfg.guards.length} GUARDS`;
+
+                return (
+                  <Pressable
+                    key={`test_lvl_${lvlNum}`}
+                    style={({ pressed }) => [
+                      styles.testLvlRow,
+                      isCurrent && styles.testLvlRowCurrent,
+                      pressed && styles.testLvlRowPressed,
+                    ]}
+                    onPress={() => {
+                      setLevel(lvlNum);
+                      saveCurrentLevel(lvlNum);
+                      initLevel(lvlNum);
+                      setShowLevelPicker(false);
+                      juiceRef.current?.popup(`WARPED TO LVL ${lvlNum}`, cfg.name, '#00F5FF');
+                    }}
+                  >
+                    <View style={[styles.testBadge, { borderColor: tierColor }]}>
+                      <Text style={[styles.testBadgeText, { color: tierColor }]}>
+                        {`L${lvlNum}`}
+                      </Text>
+                    </View>
+
+                    <View style={styles.testInfo}>
+                      <Text style={[styles.testName, isCurrent && { color: '#00F5FF' }]}>
+                        {cfg.name}
+                      </Text>
+                      <Text style={styles.testTierTag}>
+                        {`${cfg.floorsCount} FLOORS • ${tierTag}`}
+                      </Text>
+                    </View>
+
+                    {isCurrent ? (
+                      <View style={styles.testActiveBadge}>
+                        <Text style={styles.testActiveText}>ACTIVE</Text>
+                      </View>
+                    ) : (
+                      <Text style={styles.testArrow}>▶</Text>
+                    )}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+      {/* --- [TEST_BUTTON_END] --- */}
     </View>
   );
 }
@@ -1996,12 +3118,25 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#05060E',
   },
+  policeBanner: {
+    backgroundColor: '#FF0055',
+    paddingVertical: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  policeText: {
+    fontFamily: monoFont,
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+  },
   statusStrip: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
     backgroundColor: 'rgba(8, 10, 24, 0.85)',
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(0, 245, 255, 0.15)',
@@ -2011,13 +3146,13 @@ const styles = StyleSheet.create({
   },
   statusDim: {
     fontFamily: monoFont,
-    fontSize: 9,
+    fontSize: 8,
     color: 'rgba(255, 255, 255, 0.45)',
     letterSpacing: 0.8,
   },
   statusVal: {
     fontFamily: monoFont,
-    fontSize: 11,
+    fontSize: 9.5,
     fontWeight: '800',
     color: '#FFFFFF',
   },
@@ -2025,10 +3160,11 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 4,
+    paddingVertical: 2,
+    paddingHorizontal: 6,
   },
   arenaCard: {
-    width: ARENA_W,
+    width: '100%',
     height: ARENA_H,
     position: 'relative',
     borderRadius: 14,
@@ -2044,111 +3180,103 @@ const styles = StyleSheet.create({
   },
   controlsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
     paddingVertical: 10,
-    backgroundColor: 'rgba(8, 10, 24, 0.95)',
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(0, 245, 255, 0.15)',
+    backgroundColor: 'rgba(8, 10, 24, 0.96)',
+    borderTopWidth: 1.5,
+    borderTopColor: 'rgba(0, 245, 255, 0.25)',
   },
-  dirGroup: {
+  dirCluster: {
+    gap: 8,
+  },
+  dirRow: {
     flexDirection: 'row',
-    gap: 6,
+    gap: 8,
   },
   ctrlBtn: {
-    width: 44,
+    width: 72,
     height: 48,
     borderRadius: 12,
-    backgroundColor: '#12162A',
-    borderWidth: 1.5,
-    borderColor: 'rgba(0, 245, 255, 0.4)',
+    backgroundColor: '#0D1426',
+    borderWidth: 2,
+    borderColor: '#00F5FF',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 4,
+    elevation: 3,
   },
   ctrlBtnPressed: {
     backgroundColor: 'rgba(0, 245, 255, 0.35)',
     transform: [{ scale: 0.94 }],
   },
-  ctrlText: {
-    fontFamily: monoFont,
-    fontSize: 16,
-    fontWeight: '900',
+  ctrlIcon: {
+    fontSize: 18,
     color: '#00F5FF',
+    fontWeight: '900',
+  },
+  ctrlSub: {
+    fontFamily: monoFont,
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#00F5FF',
+    letterSpacing: 0.5,
   },
   climbBtn: {
-    width: 46,
+    width: 72,
     height: 48,
     borderRadius: 12,
-    backgroundColor: '#1B1810',
-    borderWidth: 1.5,
+    backgroundColor: '#1C180E',
+    borderWidth: 2,
     borderColor: '#FFE600',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 2,
+    gap: 4,
+    elevation: 3,
   },
   climbBtnPressed: {
     backgroundColor: 'rgba(255, 230, 0, 0.35)',
     transform: [{ scale: 0.94 }],
   },
-  climbText: {
-    fontFamily: monoFont,
-    fontSize: 13,
-    fontWeight: '900',
+  climbIcon: {
+    fontSize: 16,
     color: '#FFE600',
+    fontWeight: '900',
   },
   climbSub: {
     fontFamily: monoFont,
-    fontSize: 7.5,
-    fontWeight: '900',
+    fontSize: 10,
+    fontWeight: '800',
     color: '#FFE600',
     letterSpacing: 0.5,
   },
-  actionGroup: {
-    flexDirection: 'row',
-    gap: 6,
-    alignItems: 'center',
-  },
-  stoneBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: '#1E1912',
-    borderWidth: 1.5,
-    borderColor: '#FFE600',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stoneBtnPressed: {
-    backgroundColor: 'rgba(255, 230, 0, 0.3)',
-    transform: [{ scale: 0.94 }],
-  },
-  stoneIcon: {
-    fontSize: 15,
-  },
-  stoneCount: {
-    fontFamily: monoFont,
-    fontSize: 9.5,
-    fontWeight: '900',
-    color: '#FFE600',
-  },
-  btnDisabled: {
-    opacity: 0.4,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+  actionCluster: {
+    gap: 8,
+    alignItems: 'flex-end',
   },
   sneakBtn: {
-    width: 48,
+    width: 154,
     height: 48,
     borderRadius: 12,
     backgroundColor: '#151926',
-    borderWidth: 1.5,
+    borderWidth: 2,
     borderColor: 'rgba(255, 255, 255, 0.25)',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 6,
+    elevation: 3,
   },
   sneakBtnAvailable: {
     borderColor: '#00F5FF',
-    backgroundColor: '#142338',
+    backgroundColor: '#142840',
+    shadowColor: '#00F5FF',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 6,
   },
   sneakBtnActive: {
     backgroundColor: '#334155',
@@ -2156,19 +3284,261 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.94 }],
   },
   sneakBtnDimmed: {
-    opacity: 0.5,
+    opacity: 0.45,
   },
   sneakBtnPressed: {
     transform: [{ scale: 0.94 }],
   },
   sneakIcon: {
-    fontSize: 15,
+    fontSize: 18,
   },
   sneakText: {
     fontFamily: monoFont,
-    fontSize: 7.5,
+    fontSize: 10.5,
     fontWeight: '900',
     color: '#FFFFFF',
     letterSpacing: 0.5,
   },
+  actionSubRow: {
+    flexDirection: 'row',
+    gap: 6,
+    width: 154,
+  },
+  smallActionBtn: {
+    flex: 1,
+    height: 48,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 3,
+  },
+  gunBtn: {
+    backgroundColor: '#0F1E2E',
+    borderWidth: 2,
+    borderColor: '#00F5FF',
+  },
+  gunBtnPressed: {
+    backgroundColor: 'rgba(0, 245, 255, 0.4)',
+    transform: [{ scale: 0.94 }],
+  },
+  bombBtn: {
+    backgroundColor: '#260D1E',
+    borderWidth: 2,
+    borderColor: '#FF0055',
+  },
+  bombBtnPressed: {
+    backgroundColor: 'rgba(255, 0, 85, 0.4)',
+    transform: [{ scale: 0.94 }],
+  },
+  stoneBtn: {
+    backgroundColor: '#1E1912',
+    borderWidth: 2,
+    borderColor: '#FFE600',
+  },
+  stoneBtnPressed: {
+    backgroundColor: 'rgba(255, 230, 0, 0.3)',
+    transform: [{ scale: 0.94 }],
+  },
+  wideStoneBtn: {
+    width: 154,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: '#1E1912',
+    borderWidth: 2,
+    borderColor: '#FFE600',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    elevation: 3,
+  },
+  wideStoneIcon: {
+    fontSize: 18,
+  },
+  wideStoneText: {
+    fontFamily: monoFont,
+    fontSize: 9.5,
+    fontWeight: '900',
+    color: '#FFE600',
+    letterSpacing: 0.5,
+  },
+  actionIcon: {
+    fontSize: 17,
+  },
+  actionBadge: {
+    fontFamily: monoFont,
+    fontSize: 9,
+    fontWeight: '900',
+    color: '#00F5FF',
+  },
+  stoneCount: {
+    fontFamily: monoFont,
+    fontSize: 9,
+    fontWeight: '900',
+    color: '#FFE600',
+  },
+  btnDisabled: {
+    opacity: 0.3,
+  },
+  /* --- [TEST_BUTTON_START] --- */
+  testStageBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(255, 230, 0, 0.12)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1.2,
+    borderColor: '#FFE600',
+  },
+  testStageText: {
+    fontFamily: monoFont,
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: '#FFE600',
+  },
+  testPill: {
+    backgroundColor: '#FFE600',
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  testPillText: {
+    fontFamily: monoFont,
+    fontSize: 7.5,
+    fontWeight: '900',
+    color: '#060914',
+  },
+  testModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(5, 6, 14, 0.90)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 32,
+  },
+  testModalCard: {
+    width: '100%',
+    maxHeight: '90%',
+    backgroundColor: '#0A0D1E',
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: '#00F5FF',
+    padding: 14,
+    shadowColor: '#00F5FF',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
+    elevation: 12,
+  },
+  testModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0, 245, 255, 0.2)',
+    paddingBottom: 10,
+    marginBottom: 8,
+  },
+  testModalTitle: {
+    fontFamily: monoFont,
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#00F5FF',
+    letterSpacing: 0.8,
+  },
+  testModalSub: {
+    fontFamily: monoFont,
+    fontSize: 8.5,
+    color: 'rgba(255, 255, 255, 0.5)',
+    marginTop: 2,
+  },
+  testCloseBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 0, 85, 0.2)',
+    borderWidth: 1,
+    borderColor: '#FF0055',
+  },
+  testCloseText: {
+    fontFamily: monoFont,
+    fontSize: 9,
+    fontWeight: '900',
+    color: '#FF0055',
+  },
+  testScroll: {
+    maxHeight: 480,
+  },
+  testScrollContent: {
+    paddingBottom: 16,
+    gap: 6,
+  },
+  testLvlRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: '#0F142A',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  testLvlRowCurrent: {
+    borderColor: '#00F5FF',
+    backgroundColor: 'rgba(0, 245, 255, 0.12)',
+  },
+  testLvlRowPressed: {
+    backgroundColor: 'rgba(0, 245, 255, 0.25)',
+    transform: [{ scale: 0.98 }],
+  },
+  testBadge: {
+    width: 38,
+    height: 28,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+  },
+  testBadgeText: {
+    fontFamily: monoFont,
+    fontSize: 10,
+    fontWeight: '900',
+  },
+  testInfo: {
+    flex: 1,
+  },
+  testName: {
+    fontFamily: monoFont,
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  testTierTag: {
+    fontFamily: monoFont,
+    fontSize: 8,
+    color: 'rgba(255, 255, 255, 0.55)',
+    marginTop: 2,
+  },
+  testActiveBadge: {
+    backgroundColor: '#00F5FF',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  testActiveText: {
+    fontFamily: monoFont,
+    fontSize: 8,
+    fontWeight: '900',
+    color: '#05060E',
+  },
+  testArrow: {
+    fontFamily: monoFont,
+    fontSize: 10,
+    color: 'rgba(255, 255, 255, 0.3)',
+  },
+  /* --- [TEST_BUTTON_END] --- */
 });
