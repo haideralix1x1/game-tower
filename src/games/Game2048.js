@@ -7,6 +7,7 @@ import {
   Platform,
   useWindowDimensions,
   PanResponder,
+  Animated as RNAnimated,
 } from 'react-native';
 import Animated, { ZoomIn, FadeIn } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -91,6 +92,8 @@ export default function Game2048({ onBackToHub, onScoreUpdate, isPaused = false 
   const [bestScore, setBestScore] = useState(0);
   const [maxTile, setMaxTile] = useState(2);
   const [isGameOver, setIsGameOver] = useState(false);
+  const [slideInfo, setSlideInfo] = useState(null);
+  const slideAnim = useRef(new RNAnimated.Value(0)).current;
 
   const gridRef = useRef(grid);
   gridRef.current = grid;
@@ -171,6 +174,7 @@ export default function Game2048({ onBackToHub, onScoreUpdate, isPaused = false 
     nextValRef.current = initialNext;
     setIsGameOver(false);
     isLockingRef.current = false;
+    setSlideInfo(null);
     if (juiceRef.current) juiceRef.current.flash(COLORS.cyan);
   }, []);
 
@@ -182,92 +186,190 @@ export default function Game2048({ onBackToHub, onScoreUpdate, isPaused = false 
     return -1;
   };
 
-  // Process merges and gravity cascade across all 4 directions (left, right, up, down)
-  const processCascade = (startGrid) => {
-    let current = startGrid.map((row) => [...row]);
-    let totalGained = 0;
-    let highestMerged = 0;
-    let comboChain = 0;
-    let keepMerging = true;
-
-    while (keepMerging) {
-      keepMerging = false;
-
-      // 1. Gravity: drop blocks down in each column to fill holes
-      for (let c = 0; c < COLS; c += 1) {
-        let writeRow = ROWS - 1;
-        for (let r = ROWS - 1; r >= 0; r -= 1) {
-          if (current[r][c] !== 0) {
-            if (writeRow !== r) {
-              current[writeRow][c] = current[r][c];
-              current[r][c] = 0;
-            }
-            writeRow -= 1;
-          }
-        }
-      }
-
-      // 2. Scan for adjacent matching blocks in all 4 directions (Left, Right, Bottom, Top)
-      let foundMerge = false;
+  // Gravity: drop blocks down in each column to fill holes
+  const applyGravity = (g) => {
+    let moved = false;
+    const nextGrid = g.map((row) => [...row]);
+    for (let c = 0; c < COLS; c += 1) {
+      let writeRow = ROWS - 1;
       for (let r = ROWS - 1; r >= 0; r -= 1) {
-        for (let c = 0; c < COLS; c += 1) {
-          const val = current[r][c];
-          if (val === 0) continue;
-
-          // Check orthogonal neighbors
-          const neighbors = [
-            [r + 1, c], // Bottom
-            [r, c - 1], // Left
-            [r, c + 1], // Right
-            [r - 1, c], // Top
-          ];
-
-          const matchingNeighbors = [];
-          for (const [nr, nc] of neighbors) {
-            if (
-              nr >= 0 &&
-              nr < ROWS &&
-              nc >= 0 &&
-              nc < COLS &&
-              current[nr][nc] === val
-            ) {
-              matchingNeighbors.push([nr, nc]);
-            }
+        if (nextGrid[r][c] !== 0) {
+          if (writeRow !== r) {
+            nextGrid[writeRow][c] = nextGrid[r][c];
+            nextGrid[r][c] = 0;
+            moved = true;
           }
-
-          if (matchingNeighbors.length > 0) {
-            // Merge matching neighbors into (r, c)
-            comboChain += 1;
-            const multiplier = Math.pow(2, matchingNeighbors.length);
-            const newVal = val * multiplier;
-            current[r][c] = newVal;
-
-            for (const [mr, mc] of matchingNeighbors) {
-              current[mr][mc] = 0;
-            }
-
-            const stepPoints = newVal * (comboChain > 1 ? comboChain : 1);
-            totalGained += stepPoints;
-            if (newVal > highestMerged) highestMerged = newVal;
-
-            foundMerge = true;
-            keepMerging = true;
-            break; // Break inner loop to apply gravity and chain reaction
-          }
+          writeRow -= 1;
         }
-        if (foundMerge) break;
       }
     }
-
-    return {
-      finalGrid: current,
-      scoreGained: totalGained,
-      maxTile: highestMerged,
-      combos: comboChain,
-    };
+    return { nextGrid, moved };
   };
 
-  // Lock falling tile in target position and trigger merge cascade
+  // Complete the drop turn and advance to next upcoming number
+  const finishDropTurn = useCallback(
+    (finalGrid) => {
+      // Advance to next upcoming tile
+      const nextValToUse = nextValRef.current;
+      const newUpcoming = pickSpawnValue(maxTileRef.current);
+      currentValRef.current = nextValToUse;
+      setCurrentVal(nextValToUse);
+      nextValRef.current = newUpcoming;
+      setNextVal(newUpcoming);
+
+      // Check if all columns are completely full
+      const anyEmptyCol = [0, 1, 2, 3, 4].some((c) => getLowestEmptyRow(finalGrid, c) !== -1);
+      if (!anyEmptyCol) {
+        setIsGameOver(true);
+        triggerGameOverHaptic();
+        playGameOverSound();
+        juiceRef.current?.shake(16, 12);
+        juiceRef.current?.flash(COLORS.danger);
+        isLockingRef.current = false;
+        return;
+      }
+
+      // Reset falling position to top
+      fallingRowRef.current = 0;
+      setFallingRow(0);
+      isLockingRef.current = false;
+    },
+    []
+  );
+
+  // Directional sliding auto-merge cascade:
+  // When a number matches, it slides auto towards that direction into the existing number!
+  const runMergeCascade = useCallback(
+    (startGrid, checkRow, checkCol, comboCount = 0) => {
+      const val = startGrid[checkRow]?.[checkCol];
+      let fromR = checkRow;
+      let fromC = checkCol;
+      let toR = null;
+      let toC = null;
+
+      if (val && val > 0) {
+        // Priority 1: Match Bottom -> slide DOWN into the existing number below
+        if (checkRow + 1 < ROWS && startGrid[checkRow + 1][checkCol] === val) {
+          toR = checkRow + 1;
+          toC = checkCol;
+        }
+        // Priority 2: Match Right -> slide RIGHT into existing number on right side!
+        else if (checkCol + 1 < COLS && startGrid[checkRow][checkCol + 1] === val) {
+          toR = checkRow;
+          toC = checkCol + 1;
+        }
+        // Priority 3: Match Left -> slide LEFT into existing number on left side!
+        else if (checkCol - 1 >= 0 && startGrid[checkRow][checkCol - 1] === val) {
+          toR = checkRow;
+          toC = checkCol - 1;
+        }
+      }
+
+      // If no match found at designated cell, scan whole grid for any adjacent matches
+      if (toR === null) {
+        for (let r = ROWS - 1; r >= 0; r -= 1) {
+          for (let c = 0; c < COLS; c += 1) {
+            const v = startGrid[r][c];
+            if (v === 0) continue;
+            // Check bottom
+            if (r + 1 < ROWS && startGrid[r + 1][c] === v) {
+              fromR = r;
+              fromC = c;
+              toR = r + 1;
+              toC = c;
+              break;
+            }
+            // Check right
+            if (c + 1 < COLS && startGrid[r][c + 1] === v) {
+              fromR = r;
+              fromC = c;
+              toR = r;
+              toC = c + 1;
+              break;
+            }
+          }
+          if (toR !== null) break;
+        }
+      }
+
+      // If a match is found, slide the upcoming/matching block towards that direction!
+      if (toR !== null && toC !== null) {
+        const mergeVal = startGrid[fromR][fromC];
+        setSlideInfo({ fromR, fromC, toR, toC, val: mergeVal });
+        slideAnim.setValue(0);
+
+        RNAnimated.timing(slideAnim, {
+          toValue: 1,
+          duration: 160,
+          useNativeDriver: true,
+        }).start(() => {
+          setSlideInfo(null);
+
+          // Apply merge: target cell becomes doubled (e.g. 4 merges into 4 on right to become 8)
+          const nextGrid = startGrid.map((row) => [...row]);
+          const newVal = mergeVal * 2;
+          nextGrid[toR][toC] = newVal;
+          nextGrid[fromR][fromC] = 0;
+
+          // Apply gravity in all columns
+          const { nextGrid: gravityGrid } = applyGravity(nextGrid);
+          gridRef.current = gravityGrid;
+          setGrid(gravityGrid);
+
+          // Locate where the merged number settled in column toC after gravity
+          let finalTargetRow = toR;
+          for (let r = ROWS - 1; r >= 0; r -= 1) {
+            if (gravityGrid[r][toC] === newVal) {
+              finalTargetRow = r;
+              break;
+            }
+          }
+
+          // Update Score & Max Tile
+          const nextScore = scoreRef.current + newVal;
+          scoreRef.current = nextScore;
+          setScore(nextScore);
+          saveBest(nextScore);
+
+          if (newVal > maxTileRef.current) {
+            maxTileRef.current = newVal;
+            setMaxTile(newVal);
+          }
+
+          // Sound & Haptic Feedback
+          const currentCombos = comboCount + 1;
+          if (newVal >= 2048) {
+            triggerPerfectHaptic(4);
+            playPerfectSound(8);
+            juiceRef.current?.celebrate('2048 TRANSCENDENCE!', `+${newVal} PTS`, COLORS.solarGold);
+          } else if (newVal >= 64 || currentCombos >= 2) {
+            triggerPerfectHaptic(currentCombos);
+            playPerfectSound(Math.min(8, currentCombos + 3));
+            juiceRef.current?.celebrate(
+              currentCombos >= 2 ? `${currentCombos}X CHAIN SLIDE!` : `${newVal} MERGED!`,
+              `+${newVal} PTS`,
+              COLORS.cyan
+            );
+          } else {
+            triggerSliceHaptic();
+            playTapSound();
+            juiceRef.current?.burst(undefined, undefined, getTileTheme(newVal).border, 12);
+          }
+
+          // Chain reaction: check if newly formed tile can slide & merge further!
+          setTimeout(() => {
+            runMergeCascade(gravityGrid, finalTargetRow, toC, currentCombos);
+          }, 45);
+        });
+      } else {
+        // Cascade completely finished! No more matches!
+        finishDropTurn(startGrid);
+      }
+    },
+    [saveBest, finishDropTurn]
+  );
+
+  // Lock falling tile in target position and start auto-merge cascade
   const lockFallingTile = useCallback(
     (targetRow, targetCol) => {
       if (isLockingRef.current || isGameOver) return;
@@ -284,121 +386,14 @@ export default function Game2048({ onBackToHub, onScoreUpdate, isPaused = false 
       setGrid(initialPlaced);
 
       setTimeout(() => {
-        // Run full merge & gravity cascade
-        const { finalGrid, scoreGained, maxTile: highestMerged, combos } =
-          processCascade(initialPlaced);
-
-        gridRef.current = finalGrid;
-        setGrid(finalGrid);
-
-        const nextScore = scoreRef.current + scoreGained;
-        scoreRef.current = nextScore;
-        setScore(nextScore);
-        saveBest(nextScore);
-
-        let newMax = Math.max(maxTileRef.current, highestMerged, val);
-        maxTileRef.current = newMax;
-        setMaxTile(newMax);
-
-        // Feedback & Celebrations
-        if (highestMerged >= 2048) {
-          triggerPerfectHaptic(4);
-          playPerfectSound(8);
-          if (juiceRef.current) {
-            juiceRef.current.celebrate(
-              '2048 TRANSCENDENCE!',
-              `+${scoreGained} PTS // QUANTUM CORE`,
-              COLORS.solarGold
-            );
-          }
-        } else if (highestMerged >= 64 || combos >= 2) {
-          triggerPerfectHaptic(combos);
-          playPerfectSound(Math.min(8, combos + 3));
-          if (juiceRef.current) {
-            juiceRef.current.celebrate(
-              combos >= 2 ? `${combos}X CHAIN MERGE!` : `${highestMerged} MERGED!`,
-              `+${scoreGained} PTS`,
-              COLORS.cyan
-            );
-          }
-        } else if (scoreGained > 0) {
-          triggerSliceHaptic();
-          playSliceSound();
-          if (juiceRef.current) {
-            juiceRef.current.shake(4, 3);
-            juiceRef.current.burst(undefined, undefined, COLORS.cyan, 12);
-          }
-        }
-
-        // Advance to next tile
-        const nextValToUse = nextValRef.current;
-        const newUpcoming = pickSpawnValue(newMax);
-        currentValRef.current = nextValToUse;
-        setCurrentVal(nextValToUse);
-        nextValRef.current = newUpcoming;
-        setNextVal(newUpcoming);
-
-        // Position new tile at top
-        let nextSpawnCol = fallingColRef.current;
-        if (finalGrid[0][nextSpawnCol] !== 0) {
-          const availableCols = [2, 1, 3, 0, 4].filter((c) => finalGrid[0][c] === 0);
-          if (availableCols.length === 0) {
-            // Check if any move is possible in the full grid
-            let anyPossible = false;
-            for (let r = 0; r < ROWS; r += 1) {
-              for (let c = 0; c < COLS; c += 1) {
-                const v = finalGrid[r][c];
-                if (
-                  (r + 1 < ROWS && finalGrid[r + 1][c] === v) ||
-                  (c + 1 < COLS && finalGrid[r][c + 1] === v)
-                ) {
-                  anyPossible = true;
-                  break;
-                }
-              }
-              if (anyPossible) break;
-            }
-
-            if (!anyPossible) {
-              setIsGameOver(true);
-              triggerGameOverHaptic();
-              playGameOverSound();
-              if (juiceRef.current) {
-                juiceRef.current.shake(14, 10);
-                juiceRef.current.flash(COLORS.danger);
-              }
-              isLockingRef.current = false;
-              return;
-            }
-            nextSpawnCol = 2;
-          } else {
-            nextSpawnCol = availableCols[0];
-          }
-        }
-
-        fallingColRef.current = nextSpawnCol;
-        setFallingCol(nextSpawnCol);
-        fallingRowRef.current = 0;
-        setFallingRow(0);
-        isLockingRef.current = false;
-      }, 90);
+        // Run directional slide-into merge cascade starting from the landing tile
+        runMergeCascade(initialPlaced, targetRow, targetCol, 0);
+      }, 70);
     },
-    [isGameOver, saveBest]
+    [isGameOver, runMergeCascade]
   );
 
-  // Instantly slam current tile down to the lowest empty spot in current column
-  const hardDrop = useCallback(() => {
-    if (isPausedRef.current || isGameOver || isLockingRef.current) return;
-    const curCol = fallingColRef.current;
-    const lowestRow = getLowestEmptyRow(gridRef.current, curCol);
-    if (lowestRow === -1) {
-      triggerSliceHaptic();
-      return;
-    }
-    lockFallingTile(lowestRow, curCol);
-  }, [isGameOver, lockFallingTile]);
-
-  // Horizontally shift the falling tile to target column if path is clear
+  // Horizontally steer the falling tile to target column without snapping
   const moveHorizontal = useCallback(
     (targetCol) => {
       if (isPausedRef.current || isGameOver || isLockingRef.current) return;
@@ -424,28 +419,42 @@ export default function Game2048({ onBackToHub, onScoreUpdate, isPaused = false 
     [isGameOver]
   );
 
-  // Step falling tile down by one row (Tetris auto-drop)
+  // Step falling tile down by one row (slow auto-drop)
   const stepDown = useCallback(() => {
     if (isPausedRef.current || isGameOver || isLockingRef.current) return;
 
     const curCol = fallingColRef.current;
     const curRow = fallingRowRef.current;
+    const lowestEmpty = getLowestEmptyRow(gridRef.current, curCol);
 
-    if (curRow + 1 < ROWS && gridRef.current[curRow + 1][curCol] === 0) {
+    // If the whole column is full and the upcoming number falls on it -> GAME OVER
+    if (lowestEmpty === -1) {
+      setIsGameOver(true);
+      triggerGameOverHaptic();
+      playGameOverSound();
+      if (juiceRef.current) {
+        juiceRef.current.shake(16, 12);
+        juiceRef.current.flash(COLORS.danger);
+        juiceRef.current.celebrate('COLUMN OVERFLOW!', 'Column full // Game Over', COLORS.danger);
+      }
+      return;
+    }
+
+    if (curRow < lowestEmpty) {
       const nextRow = curRow + 1;
       fallingRowRef.current = nextRow;
       setFallingRow(nextRow);
     } else {
-      // Reached floor or another block -> lock in place
+      // Reached lowest empty spot in column -> lock and auto-merge
       lockFallingTile(curRow, curCol);
     }
   }, [isGameOver, lockFallingTile]);
 
-  // Auto-drop interval (slowly descends like Tetris)
+  // Auto-drop interval: slow, steady pace giving player ample time to steer
   useEffect(() => {
     if (isGameOver) return;
 
-    const dropInterval = Math.max(420, 750 - Math.floor(score / 600) * 30);
+    const dropInterval = Math.max(800, 1250 - Math.floor(score / 3000) * 30);
     const timer = setInterval(() => {
       stepDown();
     }, dropInterval);
@@ -453,7 +462,7 @@ export default function Game2048({ onBackToHub, onScoreUpdate, isPaused = false 
     return () => clearInterval(timer);
   }, [isGameOver, score, stepDown]);
 
-    // PanResponder to swipe across screen to shift columns or swipe down to hard drop
+  // PanResponder: touch and swipe horizontally to steer columns (NEVER SNAPS ON CLICK)
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
@@ -461,59 +470,31 @@ export default function Game2048({ onBackToHub, onScoreUpdate, isPaused = false 
         Math.hypot(gesture.dx, gesture.dy) > 5,
       onPanResponderGrant: (evt) => {
         if (isPausedRef.current || isGameOver || isLockingRef.current) return;
-        const { pageX, pageY } = evt.nativeEvent;
-        panStartRef.current = {
-          startX: pageX,
-          startY: pageY,
-          startCol: fallingColRef.current,
-          hasDropped: false,
-        };
-
-        const relX = pageX - (boardPosRef.current.pageX || 0);
-        const targetCol = Math.max(0, Math.min(COLS - 1, Math.floor((relX - 8) / cellWidth)));
-        if (targetCol !== fallingColRef.current) {
-          moveHorizontal(targetCol);
-        }
-      },
-      onPanResponderMove: (evt, gestureState) => {
-        if (isPausedRef.current || isGameOver || isLockingRef.current) return;
-        const { dy, vy } = gestureState;
-
-        // Fast downward swipe triggers Hard Drop
-        if (!panStartRef.current.hasDropped && (dy > 40 || vy > 0.8)) {
-          panStartRef.current.hasDropped = true;
-          hardDrop();
-          return;
-        }
-
-        // Horizontal finger tracking across columns
         const { pageX } = evt.nativeEvent;
         const relX = pageX - (boardPosRef.current.pageX || 0);
         const targetCol = Math.max(0, Math.min(COLS - 1, Math.floor((relX - 8) / cellWidth)));
-        if (targetCol !== fallingColRef.current) {
-          moveHorizontal(targetCol);
-        }
+        moveHorizontal(targetCol);
+      },
+      onPanResponderMove: (evt) => {
+        if (isPausedRef.current || isGameOver || isLockingRef.current) return;
+        // Horizontal finger tracking across columns (NO FAST SNAP)
+        const { pageX } = evt.nativeEvent;
+        const relX = pageX - (boardPosRef.current.pageX || 0);
+        const targetCol = Math.max(0, Math.min(COLS - 1, Math.floor((relX - 8) / cellWidth)));
+        moveHorizontal(targetCol);
       },
       onPanResponderRelease: (evt, gestureState) => {
         if (isPausedRef.current || isGameOver || isLockingRef.current) return;
-        const { dx, dy, vy } = gestureState;
-
-        if (!panStartRef.current.hasDropped) {
-          if (dy > 30 || vy > 0.6) {
-            hardDrop();
-          } else if (Math.abs(dx) > 24) {
-            const dir = dx > 0 ? 1 : -1;
-            moveHorizontal(fallingColRef.current + dir);
-          } else if (Math.abs(dx) < 12 && Math.abs(dy) < 12) {
-            const { pageX } = evt.nativeEvent;
-            const relX = pageX - (boardPosRef.current.pageX || 0);
-            const tappedCol = Math.max(0, Math.min(COLS - 1, Math.floor((relX - 8) / cellWidth)));
-            if (tappedCol === fallingColRef.current) {
-              hardDrop();
-            } else {
-              moveHorizontal(tappedCol);
-            }
-          }
+        const { dx } = gestureState;
+        if (Math.abs(dx) > 24) {
+          const dir = dx > 0 ? 1 : -1;
+          moveHorizontal(fallingColRef.current + dir);
+        } else {
+          // On click/tap: steer column gently without snapping down fast
+          const { pageX } = evt.nativeEvent;
+          const relX = pageX - (boardPosRef.current.pageX || 0);
+          const tappedCol = Math.max(0, Math.min(COLS - 1, Math.floor((relX - 8) / cellWidth)));
+          moveHorizontal(tappedCol);
         }
       },
     })
@@ -634,7 +615,11 @@ export default function Game2048({ onBackToHub, onScoreUpdate, isPaused = false 
                     rIdx === landingRow &&
                     cIdx === fallingCol;
 
-                  const displayVal = isFalling ? currentVal : val;
+                  const isOriginOfSlide =
+                    slideInfo &&
+                    slideInfo.fromR === rIdx &&
+                    slideInfo.fromC === cIdx;
+                  const displayVal = isOriginOfSlide ? 0 : isFalling ? currentVal : val;
                   const theme = getTileTheme(displayVal);
 
                   return (
@@ -689,14 +674,70 @@ export default function Game2048({ onBackToHub, onScoreUpdate, isPaused = false 
                 </View>
               ))}
             </View>
+
+            {/* Sliding Merge Overlay: smooth animated translation towards matching neighbor */}
+            {slideInfo && (
+              <RNAnimated.View
+                pointerEvents="none"
+                style={[
+                  localStyles.cell,
+                  {
+                    position: 'absolute',
+                    top: 8 + slideInfo.fromR * cellHeight,
+                    left: 8 + slideInfo.fromC * cellWidth,
+                    width: cellWidth,
+                    height: cellHeight,
+                    zIndex: 25,
+                    backgroundColor: getTileTheme(slideInfo.val).bg[0],
+                    borderColor: '#FFFFFF',
+                    borderWidth: 2.2,
+                    borderRadius: 8,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    transform: [
+                      {
+                        translateX: slideAnim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [0, (slideInfo.toC - slideInfo.fromC) * cellWidth],
+                        }),
+                      },
+                      {
+                        translateY: slideAnim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [0, (slideInfo.toR - slideInfo.fromR) * cellHeight],
+                        }),
+                      },
+                      {
+                        scale: slideAnim.interpolate({
+                          inputRange: [0, 0.5, 1],
+                          outputRange: [1, 1.15, 1],
+                        }),
+                      },
+                    ],
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    localStyles.tileNumber,
+                    {
+                      color: getTileTheme(slideInfo.val).text,
+                      fontSize: slideInfo.val >= 1024 ? 13 : slideInfo.val >= 128 ? 15 : 18,
+                    },
+                  ]}
+                >
+                  {slideInfo.val}
+                </Text>
+              </RNAnimated.View>
+            )}
           </View>
 
           {/* Game Over Modal */}
           <GameResultModal
             visible={isGameOver}
             type="GAME_OVER"
-            title="BOARD FULL // GAME OVER"
-            subtitle={`MAX TILE MERGED: ${maxTile} // COLUMNS OVERFLOWED`}
+            title="COLUMN OVERFLOW // GAME OVER"
+            subtitle={`MAX TILE MERGED: ${maxTile} // COLUMN BECAME FULL`}
             score={score}
             bestScore={bestScore}
             accentColor={COLORS.magenta}
@@ -705,51 +746,45 @@ export default function Game2048({ onBackToHub, onScoreUpdate, isPaused = false 
             onBackToHub={onBackToHub}
           />
 
-          {/* Quick Column Selection & Fast Drop Buttons */}
+          {/* Tactical Column Steering Bar (Numbers fall auto slowly - no snapping) */}
           <View style={[localStyles.bottomControls, { width: boardWidth }]}>
             <View style={localStyles.columnSelectorRow}>
               {[0, 1, 2, 3, 4].map((c) => {
                 const isSelected = fallingCol === c;
+                const isFull = getLowestEmptyRow(grid, c) === -1;
                 return (
                   <Pressable
                     key={`col_btn_${c}`}
-                    onPress={() => {
-                      if (fallingCol === c) {
-                        hardDrop();
-                      } else {
-                        moveHorizontal(c);
-                      }
-                    }}
+                    onPress={() => moveHorizontal(c)}
                     style={[
                       localStyles.colBtn,
                       { width: cellWidth - 4 },
                       isSelected && localStyles.colBtnActive,
+                      isFull && {
+                        borderColor: '#FF0055',
+                        backgroundColor: 'rgba(255, 0, 85, 0.22)',
+                      },
                     ]}
                   >
                     <Text
                       style={[
                         localStyles.colBtnText,
                         isSelected && { color: COLORS.cyan, fontWeight: '900' },
+                        isFull && { color: '#FF0055', fontWeight: '900' },
                       ]}
                     >
-                      {`COL ${c + 1}`}
+                      {isFull ? 'FULL' : `COL ${c + 1}`}
                     </Text>
                   </Pressable>
                 );
               })}
             </View>
 
-            <Pressable
-              onPress={hardDrop}
-              style={({ pressed }) => [
-                localStyles.dropActionBtn,
-                pressed && { transform: [{ scale: 0.96 }], opacity: 0.85 },
-              ]}
-            >
-              <Text style={localStyles.dropActionText}>
-                HARD DROP IN COL {fallingCol + 1} ▾ (OR SWIPE DOWN)
+            <View style={localStyles.tacticalStatusBar}>
+              <Text style={localStyles.tacticalStatusText}>
+                STEER COLUMNS ◄ ► (AUTO-DROPS SLOWLY)
               </Text>
-            </Pressable>
+            </View>
           </View>
         </View>
       </View>
@@ -895,19 +930,21 @@ const localStyles = StyleSheet.create({
     color: COLORS.textSecondary,
     fontWeight: '700',
   },
-  dropActionBtn: {
+  tacticalStatusBar: {
     width: '100%',
-    backgroundColor: COLORS.cyan,
-    borderRadius: 12,
-    paddingVertical: 10,
+    backgroundColor: 'rgba(8, 12, 28, 0.88)',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 245, 255, 0.28)',
+    paddingVertical: 9,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  dropActionText: {
-    fontSize: 12,
+  tacticalStatusText: {
+    fontSize: 10,
     fontFamily: monoFont,
-    fontWeight: '900',
-    color: '#030208',
-    letterSpacing: 1.1,
+    fontWeight: '800',
+    color: COLORS.cyan,
+    letterSpacing: 1,
   },
 });
