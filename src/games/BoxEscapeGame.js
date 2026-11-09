@@ -16,6 +16,7 @@ import Svg, {
   LinearGradient as SvgLinearGradient,
   Stop,
   G,
+  Polygon,
 } from 'react-native-svg';
 import { COLORS } from '../../styles';
 import MiniGameHeader from '../components/MiniGameHeader';
@@ -370,6 +371,7 @@ export default function BoxEscapeGame({
   const [isVictorious, setIsVictorious] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [isPullMode, setIsPullMode] = useState(false);
+  const [facing, setFacing] = useState({ dx: 0, dy: 1 });
 
   // Load high score
   useEffect(() => {
@@ -398,6 +400,7 @@ export default function BoxEscapeGame({
     setMoveHistory([]);
     setIsVictorious(false);
     setIsPullMode(false);
+    setFacing({ dx: 0, dy: 1 });
   }, []);
 
   // Check if switches are activated (box or player on switch)
@@ -448,6 +451,9 @@ export default function BoxEscapeGame({
   const handleMove = useCallback(
     (dx, dy) => {
       if (isPaused || isVictorious) return;
+      if (dx !== 0 || dy !== 0) {
+        setFacing({ dx, dy });
+      }
 
       const newPx = playerPos.x + dx;
       const newPy = playerPos.y + dy;
@@ -784,10 +790,26 @@ export default function BoxEscapeGame({
           >
             <Svg width={gridPixelWidth} height={gridPixelHeight}>
               <Defs>
-                <SvgLinearGradient id="crateGrad" x1="0" y1="0" x2="1" y2="1">
-                  <Stop offset="0%" stopColor="#FF9E00" stopOpacity="1" />
-                  <Stop offset="50%" stopColor="#FF5400" stopOpacity="0.95" />
-                  <Stop offset="100%" stopColor="#7928CA" stopOpacity="0.9" />
+                <SvgLinearGradient id="crateWoodGrad" x1="0" y1="0" x2="0" y2="1">
+                  <Stop offset="0%" stopColor="#C88532" stopOpacity="1" />
+                  <Stop offset="50%" stopColor="#A46219" stopOpacity="1" />
+                  <Stop offset="100%" stopColor="#78420B" stopOpacity="1" />
+                </SvgLinearGradient>
+
+                <SvgLinearGradient id="cratePanelGrad" x1="0" y1="0" x2="1" y2="1">
+                  <Stop offset="0%" stopColor="#DE9843" stopOpacity="1" />
+                  <Stop offset="100%" stopColor="#8C4D0E" stopOpacity="1" />
+                </SvgLinearGradient>
+
+                <SvgLinearGradient id="charJacketGrad" x1="0" y1="0" x2="0" y2="1">
+                  <Stop offset="0%" stopColor="#38BDF8" stopOpacity="1" />
+                  <Stop offset="50%" stopColor="#0284C7" stopOpacity="1" />
+                  <Stop offset="100%" stopColor="#0369A1" stopOpacity="1" />
+                </SvgLinearGradient>
+
+                <SvgLinearGradient id="charCapGrad" x1="0" y1="0" x2="1" y2="1">
+                  <Stop offset="0%" stopColor="#F97316" stopOpacity="1" />
+                  <Stop offset="100%" stopColor="#C2410C" stopOpacity="1" />
                 </SvgLinearGradient>
 
                 <SvgLinearGradient id="portalGrad" x1="0" y1="0" x2="1" y2="1">
@@ -942,91 +964,472 @@ export default function BoxEscapeGame({
                 </G>
               ))}
 
-              {/* Movable Quantum Boxes / Crates */}
-              {boxes.map((b) => (
-                <G key={b.id}>
-                  <Rect
-                    x={b.x * cellSize + 3}
-                    y={b.y * cellSize + 5}
-                    width={cellSize - 6}
-                    height={cellSize - 6}
-                    rx={6}
-                    fill="rgba(0, 0, 0, 0.6)"
-                  />
-                  <Rect
-                    x={b.x * cellSize + 2.5}
-                    y={b.y * cellSize + 2.5}
-                    width={cellSize - 5}
-                    height={cellSize - 5}
-                    rx={6}
-                    fill="url(#crateGrad)"
-                    stroke="#FFE600"
-                    strokeWidth={1.5}
-                  />
-                  <Line
-                    x1={b.x * cellSize + 6}
-                    y1={b.y * cellSize + 6}
-                    x2={b.x * cellSize + cellSize - 6}
-                    y2={b.y * cellSize + cellSize - 6}
-                    stroke="rgba(255, 255, 255, 0.45)"
-                    strokeWidth={1.2}
-                  />
-                  <Line
-                    x1={b.x * cellSize + cellSize - 6}
-                    y1={b.y * cellSize + 6}
-                    x2={b.x * cellSize + 6}
-                    y2={b.y * cellSize + cellSize - 6}
-                    stroke="rgba(255, 255, 255, 0.45)"
-                    strokeWidth={1.2}
-                  />
-                  <Circle
-                    cx={b.x * cellSize + cellSize / 2}
-                    cy={b.y * cellSize + cellSize / 2}
-                    r={cellSize / 6}
-                    fill="#FFFFFF"
-                  />
-                </G>
-              ))}
+              {/* Authentic Heavy Wooden Cargo Boxes / Shipping Crates */}
+              {boxes.map((b) => {
+                const bx = b.x * cellSize;
+                const by = b.y * cellSize;
+                const pad = 2;
+                const bw = cellSize - pad * 2;
+                const bh = cellSize - pad * 2;
+                const onSwitch = levelConfig.switches.some((s) => s.x === b.x && s.y === b.y);
 
-              {/* Player Cyber Operative */}
-              <G>
-                {/* Magnetic Pull Tractor Field Ring */}
-                {isPullMode && (
-                  <Circle
-                    cx={playerPos.x * cellSize + cellSize / 2}
-                    cy={playerPos.y * cellSize + cellSize / 2}
-                    r={cellSize / 2 + 5}
-                    fill="none"
-                    stroke="#FFE600"
-                    strokeWidth={1.8}
-                    strokeDasharray="4 3"
-                    opacity={0.85}
-                  />
-                )}
-                <Circle
-                  cx={playerPos.x * cellSize + cellSize / 2}
-                  cy={playerPos.y * cellSize + cellSize / 2}
-                  r={cellSize / 2 - 3}
-                  fill="url(#playerGrad)"
-                  stroke={isPullMode ? '#FFE600' : '#00F5FF'}
-                  strokeWidth={2}
-                />
-                {/* Operative Visor */}
-                <Rect
-                  x={playerPos.x * cellSize + cellSize / 2 - cellSize / 4}
-                  y={playerPos.y * cellSize + cellSize / 2 - cellSize / 6}
-                  width={cellSize / 2}
-                  height={cellSize / 4}
-                  rx={3}
-                  fill="#FFE600"
-                />
-                <Circle
-                  cx={playerPos.x * cellSize + cellSize / 2}
-                  cy={playerPos.y * cellSize + cellSize / 2 + cellSize / 6}
-                  r={2.5}
-                  fill="#39FF14"
-                />
-              </G>
+                return (
+                  <G key={b.id}>
+                    {/* Deep Ground Shadow */}
+                    <Rect
+                      x={bx + pad + 2}
+                      y={by + pad + 3.5}
+                      width={bw}
+                      height={bh}
+                      rx={5}
+                      fill="rgba(0, 0, 0, 0.65)"
+                    />
+
+                    {/* Outer Wooden Crate Frame Body */}
+                    <Rect
+                      x={bx + pad}
+                      y={by + pad}
+                      width={bw}
+                      height={bh}
+                      rx={4}
+                      fill="url(#crateWoodGrad)"
+                      stroke={onSwitch ? '#39FF14' : '#5A2E05'}
+                      strokeWidth={onSwitch ? 1.8 : 1.4}
+                    />
+
+                    {/* Recessed Center Wood Panel */}
+                    <Rect
+                      x={bx + pad + 4}
+                      y={by + pad + 4}
+                      width={bw - 8}
+                      height={bh - 8}
+                      rx={2}
+                      fill="url(#cratePanelGrad)"
+                      stroke="#542602"
+                      strokeWidth={0.8}
+                    />
+
+                    {/* Horizontal Wood Plank Grooves */}
+                    <Line
+                      x1={bx + pad + 4}
+                      y1={by + pad + 4 + (bh - 8) * 0.33}
+                      x2={bx + pad + bw - 4}
+                      y2={by + pad + 4 + (bh - 8) * 0.33}
+                      stroke="#451E02"
+                      strokeWidth={1}
+                    />
+                    <Line
+                      x1={bx + pad + 4}
+                      y1={by + pad + 4 + (bh - 8) * 0.66}
+                      x2={bx + pad + bw - 4}
+                      y2={by + pad + 4 + (bh - 8) * 0.66}
+                      stroke="#451E02"
+                      strokeWidth={1}
+                    />
+
+                    {/* Diagonal Cross-Bracing Plank (Signature Shipping Crate X) */}
+                    <Line
+                      x1={bx + pad + 4.5}
+                      y1={by + pad + 4.5}
+                      x2={bx + pad + bw - 4.5}
+                      y2={by + pad + bh - 4.5}
+                      stroke="#4A2000"
+                      strokeWidth={3}
+                      strokeLinecap="round"
+                    />
+                    <Line
+                      x1={bx + pad + 4.5}
+                      y1={by + pad + 4.5}
+                      x2={bx + pad + bw - 4.5}
+                      y2={by + pad + bh - 4.5}
+                      stroke="#DE9B43"
+                      strokeWidth={1.8}
+                      strokeLinecap="round"
+                    />
+                    <Line
+                      x1={bx + pad + bw - 4.5}
+                      y1={by + pad + 4.5}
+                      x2={bx + pad + 4.5}
+                      y2={by + pad + bh - 4.5}
+                      stroke="#4A2000"
+                      strokeWidth={3}
+                      strokeLinecap="round"
+                    />
+                    <Line
+                      x1={bx + pad + bw - 4.5}
+                      y1={by + pad + 4.5}
+                      x2={bx + pad + 4.5}
+                      y2={by + pad + bh - 4.5}
+                      stroke="#DE9B43"
+                      strokeWidth={1.8}
+                      strokeLinecap="round"
+                    />
+
+                    {/* Bevel Highlight on Top/Left Edge */}
+                    <Line
+                      x1={bx + pad + 1}
+                      y1={by + pad + 1.2}
+                      x2={bx + pad + bw - 1}
+                      y2={by + pad + 1.2}
+                      stroke="rgba(254, 240, 138, 0.45)"
+                      strokeWidth={1}
+                    />
+                    <Line
+                      x1={bx + pad + 1.2}
+                      y1={by + pad + 1}
+                      x2={bx + pad + 1.2}
+                      y2={by + pad + bh - 1}
+                      stroke="rgba(254, 240, 138, 0.45)"
+                      strokeWidth={1}
+                    />
+
+                    {/* Heavy Steel Corner Hardware Brackets */}
+                    {/* Top-Left */}
+                    <Polygon
+                      points={`${bx + pad},${by + pad} ${bx + pad + 7},${by + pad} ${bx + pad},${by + pad + 7}`}
+                      fill={onSwitch ? '#39FF14' : '#2D3748'}
+                      stroke={onSwitch ? '#FFFFFF' : '#1A202C'}
+                      strokeWidth={0.6}
+                    />
+                    {/* Top-Right */}
+                    <Polygon
+                      points={`${bx + pad + bw},${by + pad} ${bx + pad + bw - 7},${by + pad} ${bx + pad + bw},${by + pad + 7}`}
+                      fill={onSwitch ? '#39FF14' : '#2D3748'}
+                      stroke={onSwitch ? '#FFFFFF' : '#1A202C'}
+                      strokeWidth={0.6}
+                    />
+                    {/* Bottom-Left */}
+                    <Polygon
+                      points={`${bx + pad},${by + pad + bh} ${bx + pad + 7},${by + pad + bh} ${bx + pad},${by + pad + bh - 7}`}
+                      fill={onSwitch ? '#39FF14' : '#2D3748'}
+                      stroke={onSwitch ? '#FFFFFF' : '#1A202C'}
+                      strokeWidth={0.6}
+                    />
+                    {/* Bottom-Right */}
+                    <Polygon
+                      points={`${bx + pad + bw},${by + pad + bh} ${bx + pad + bw - 7},${by + pad + bh} ${bx + pad + bw},${by + pad + bh - 7}`}
+                      fill={onSwitch ? '#39FF14' : '#2D3748'}
+                      stroke={onSwitch ? '#FFFFFF' : '#1A202C'}
+                      strokeWidth={0.6}
+                    />
+
+                    {/* Silver Hardware Rivets */}
+                    <Circle cx={bx + pad + 2.5} cy={by + pad + 2.5} r={0.9} fill="#E2E8F0" />
+                    <Circle cx={bx + pad + bw - 2.5} cy={by + pad + 2.5} r={0.9} fill="#E2E8F0" />
+                    <Circle cx={bx + pad + 2.5} cy={by + pad + bh - 2.5} r={0.9} fill="#E2E8F0" />
+                    <Circle cx={bx + pad + bw - 2.5} cy={by + pad + bh - 2.5} r={0.9} fill="#E2E8F0" />
+
+                    {/* Center Stencil Cargo Emblem */}
+                    {onSwitch ? (
+                      <G>
+                        <Circle
+                          cx={bx + pad + bw / 2}
+                          cy={by + pad + bh / 2}
+                          r={bw * 0.18}
+                          fill="#39FF14"
+                          stroke="#FFFFFF"
+                          strokeWidth={1}
+                        />
+                        <Polygon
+                          points={`${bx + pad + bw / 2},${by + pad + bh / 2 - bw * 0.09} ${bx + pad + bw / 2 - bw * 0.08},${by + pad + bh / 2 + bw * 0.07} ${bx + pad + bw / 2 + bw * 0.08},${by + pad + bh / 2 + bw * 0.07}`}
+                          fill="#050B14"
+                        />
+                      </G>
+                    ) : (
+                      <G>
+                        <Circle
+                          cx={bx + pad + bw / 2}
+                          cy={by + pad + bh / 2}
+                          r={bw * 0.17}
+                          fill="rgba(60, 25, 0, 0.4)"
+                          stroke="#783806"
+                          strokeWidth={0.8}
+                        />
+                        <Rect
+                          x={bx + pad + bw / 2 - bw * 0.08}
+                          y={by + pad + bh / 2 - bw * 0.08}
+                          width={bw * 0.16}
+                          height={bw * 0.16}
+                          rx={1.5}
+                          fill="none"
+                          stroke="#DE9B43"
+                          strokeWidth={0.9}
+                        />
+                      </G>
+                    )}
+                  </G>
+                );
+              })}
+
+              {/* Player Hero Character */}
+              {(() => {
+                const cx = playerPos.x * cellSize + cellSize / 2;
+                const cy = playerPos.y * cellSize + cellSize / 2;
+                const s = cellSize;
+                const fx = facing?.dx ?? 0;
+                const fy = facing?.dy ?? 1;
+                const eyeOffsetX = fx * s * 0.035;
+                const eyeOffsetY = fy * s * 0.025;
+
+                return (
+                  <G>
+                    {/* Magnetic Pull Tractor Field Ring */}
+                    {isPullMode && (
+                      <G>
+                        <Circle
+                          cx={cx}
+                          cy={cy}
+                          r={s * 0.54}
+                          fill="none"
+                          stroke="#FFE600"
+                          strokeWidth={2}
+                          strokeDasharray="4 3"
+                          opacity={0.9}
+                        />
+                        <Circle
+                          cx={cx}
+                          cy={cy}
+                          r={s * 0.62}
+                          fill="none"
+                          stroke="rgba(255, 230, 0, 0.35)"
+                          strokeWidth={1}
+                        />
+                      </G>
+                    )}
+
+                    {/* Floor Drop Shadow */}
+                    <Rect
+                      x={cx - s * 0.28}
+                      y={cy + s * 0.22}
+                      width={s * 0.56}
+                      height={s * 0.22}
+                      rx={s * 0.11}
+                      fill="rgba(0, 0, 0, 0.55)"
+                    />
+
+                    {/* Cargo Pants & Heavy Work Boots */}
+                    {/* Left Leg & Boot */}
+                    <Rect
+                      x={cx - s * 0.22}
+                      y={cy + s * 0.14}
+                      width={s * 0.16}
+                      height={s * 0.26}
+                      rx={s * 0.07}
+                      fill="#1E293B"
+                      stroke="#0F172A"
+                      strokeWidth={0.8}
+                    />
+                    <Rect
+                      x={cx - s * 0.24}
+                      y={cy + s * 0.3}
+                      width={s * 0.18}
+                      height={s * 0.12}
+                      rx={s * 0.05}
+                      fill="#D97706"
+                      stroke="#92400E"
+                      strokeWidth={0.8}
+                    />
+                    {/* Right Leg & Boot */}
+                    <Rect
+                      x={cx + s * 0.06}
+                      y={cy + s * 0.14}
+                      width={s * 0.16}
+                      height={s * 0.26}
+                      rx={s * 0.07}
+                      fill="#1E293B"
+                      stroke="#0F172A"
+                      strokeWidth={0.8}
+                    />
+                    <Rect
+                      x={cx + s * 0.06}
+                      y={cy + s * 0.3}
+                      width={s * 0.18}
+                      height={s * 0.12}
+                      rx={s * 0.05}
+                      fill="#D97706"
+                      stroke="#92400E"
+                      strokeWidth={0.8}
+                    />
+
+                    {/* Character Body / Work Jacket */}
+                    <Rect
+                      x={cx - s * 0.24}
+                      y={cy - s * 0.1}
+                      width={s * 0.48}
+                      height={s * 0.32}
+                      rx={s * 0.09}
+                      fill="url(#charJacketGrad)"
+                      stroke="#0284C7"
+                      strokeWidth={1.2}
+                    />
+                    {/* Jacket Seam & Zipper */}
+                    <Line
+                      x1={cx}
+                      y1={cy - s * 0.08}
+                      x2={cx}
+                      y2={cy + s * 0.14}
+                      stroke="#E2E8F0"
+                      strokeWidth={1}
+                    />
+                    {/* Utility Belt */}
+                    <Rect
+                      x={cx - s * 0.22}
+                      y={cy + s * 0.12}
+                      width={s * 0.44}
+                      height={s * 0.07}
+                      rx={s * 0.02}
+                      fill="#0F172A"
+                    />
+                    {/* Gold Buckle */}
+                    <Rect
+                      x={cx - s * 0.04}
+                      y={cy + s * 0.11}
+                      width={s * 0.08}
+                      height={s * 0.09}
+                      rx={s * 0.02}
+                      fill="#FACC15"
+                    />
+
+                    {/* Arms & Heavy Worker Pushing Gloves */}
+                    {/* Left Arm & Padded Glove */}
+                    <Rect
+                      x={cx - s * 0.35}
+                      y={cy - s * 0.08}
+                      width={s * 0.13}
+                      height={s * 0.27}
+                      rx={s * 0.06}
+                      fill="url(#charJacketGrad)"
+                      stroke="#0284C7"
+                      strokeWidth={0.8}
+                    />
+                    <Circle
+                      cx={cx - s * 0.29}
+                      cy={cy + s * 0.19}
+                      r={s * 0.075}
+                      fill="#F8FAFC"
+                      stroke="#64748B"
+                      strokeWidth={0.9}
+                    />
+                    {/* Right Arm & Padded Glove */}
+                    <Rect
+                      x={cx + s * 0.22}
+                      y={cy - s * 0.08}
+                      width={s * 0.13}
+                      height={s * 0.27}
+                      rx={s * 0.06}
+                      fill="url(#charJacketGrad)"
+                      stroke="#0284C7"
+                      strokeWidth={0.8}
+                    />
+                    <Circle
+                      cx={cx + s * 0.29}
+                      cy={cy + s * 0.19}
+                      r={s * 0.075}
+                      fill="#F8FAFC"
+                      stroke="#64748B"
+                      strokeWidth={0.9}
+                    />
+
+                    {/* Neck */}
+                    <Rect
+                      x={cx - s * 0.08}
+                      y={cy - s * 0.14}
+                      width={s * 0.16}
+                      height={s * 0.08}
+                      fill="#FED7AA"
+                    />
+
+                    {/* Head / Face */}
+                    <Circle
+                      cx={cx}
+                      cy={cy - s * 0.21}
+                      r={s * 0.21}
+                      fill="#FED7AA"
+                      stroke="#F97316"
+                      strokeWidth={0.8}
+                    />
+
+                    {/* Character Cap */}
+                    <Rect
+                      x={cx - s * 0.21}
+                      y={cy - s * 0.39}
+                      width={s * 0.42}
+                      height={s * 0.2}
+                      rx={s * 0.1}
+                      fill="url(#charCapGrad)"
+                      stroke="#9A3412"
+                      strokeWidth={1}
+                    />
+                    {/* Cap Brim */}
+                    <Rect
+                      x={cx - s * 0.24 + fx * s * 0.05}
+                      y={cy - s * 0.25 + fy * s * 0.03}
+                      width={s * 0.48}
+                      height={s * 0.08}
+                      rx={s * 0.04}
+                      fill="#C2410C"
+                    />
+                    {/* Cap Top Button */}
+                    <Circle cx={cx} cy={cy - s * 0.39} r={s * 0.03} fill="#FED7AA" />
+
+                    {/* Face Details: Expressive Eyes with Direction Tracking */}
+                    {/* Left Eye */}
+                    <Circle
+                      cx={cx - s * 0.08 + eyeOffsetX}
+                      cy={cy - s * 0.2 + eyeOffsetY}
+                      r={s * 0.05}
+                      fill="#FFFFFF"
+                      stroke="#0F172A"
+                      strokeWidth={0.6}
+                    />
+                    <Circle
+                      cx={cx - s * 0.08 + eyeOffsetX * 1.5}
+                      cy={cy - s * 0.2 + eyeOffsetY * 1.5}
+                      r={s * 0.028}
+                      fill="#0F172A"
+                    />
+                    <Circle
+                      cx={cx - s * 0.09 + eyeOffsetX * 1.5}
+                      cy={cy - s * 0.21 + eyeOffsetY * 1.5}
+                      r={s * 0.012}
+                      fill="#FFFFFF"
+                    />
+
+                    {/* Right Eye */}
+                    <Circle
+                      cx={cx + s * 0.08 + eyeOffsetX}
+                      cy={cy - s * 0.2 + eyeOffsetY}
+                      r={s * 0.05}
+                      fill="#FFFFFF"
+                      stroke="#0F172A"
+                      strokeWidth={0.6}
+                    />
+                    <Circle
+                      cx={cx + s * 0.08 + eyeOffsetX * 1.5}
+                      cy={cy - s * 0.2 + eyeOffsetY * 1.5}
+                      r={s * 0.028}
+                      fill="#0F172A"
+                    />
+                    <Circle
+                      cx={cx + s * 0.07 + eyeOffsetX * 1.5}
+                      cy={cy - s * 0.21 + eyeOffsetY * 1.5}
+                      r={s * 0.012}
+                      fill="#FFFFFF"
+                    />
+
+                    {/* Smile / Confident Smirk */}
+                    <Line
+                      x1={cx - s * 0.05 + eyeOffsetX * 0.5}
+                      y1={cy - s * 0.11}
+                      x2={cx + s * 0.05 + eyeOffsetX * 0.5}
+                      y2={cy - s * 0.11}
+                      stroke="#C2410C"
+                      strokeWidth={1.2}
+                      strokeLinecap="round"
+                    />
+                  </G>
+                );
+              })()}
             </Svg>
           </View>
         </View>
