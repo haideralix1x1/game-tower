@@ -41,7 +41,6 @@ The main menu is designed and shaped like a **20-Floor Futuristic Skyscraper / M
 | **FL 11** | **Cyber Snake** | Arcade | 15x15 classic snake with golden power cores and neon light trails |
 | **FL 10** | **Brick Breaker Neo** | Arcade | 60 FPS paddle deflection with multi-HP bricks, power-ups (`WIDE`/`LIFE`/`BONUS`), comet trail |
 | **FL 09** | **Simon Pulse** | Brain | 9-pad musical synth sequence memory with escalating tempo |
-| **FL 08** | **Chroma Flood** | Strategy | 8x8 neon infection grid; flood the matrix within 18 moves |
 | **FL 07** | **Cyber Slide 15** | Puzzle | Classic 15-puzzle sliding blocks with move counter and win celebration |
 | **FL 05** | **Memory Matrix** | Brain | 4x4 data card match with streak multipliers and peek reveal |
 | **FL 04** | **Neon Mines** | Strategy | 7x7 tactical Minesweeper with cell reveals, long-press flag toggle, safe first tap |

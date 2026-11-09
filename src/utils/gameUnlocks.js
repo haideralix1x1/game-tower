@@ -170,16 +170,10 @@ export const UNLOCK_REQUIREMENTS = {
     desc: 'Score 100+ in BOX ESCAPE',
     category: 'STRATEGY',
   },
-  chroma_flood: {
+  rope_cut: {
     reqGame: 'neon_mines',
     targetScore: 1,
     desc: 'Clear 1 minefield in NEON MINES',
-    category: 'STRATEGY',
-  },
-  rope_cut: {
-    reqGame: 'chroma_flood',
-    targetScore: 1,
-    desc: 'Win 1 round in CHROMA FLOOD',
     category: 'STRATEGY',
   },
   save_the_dog: {
@@ -239,7 +233,6 @@ export const GAME_CATEGORY_MAP = {
   // Strategy
   tic_tac_toe: 'STRATEGY',
   neon_mines: 'STRATEGY',
-  chroma_flood: 'STRATEGY',
   rope_cut: 'STRATEGY',
   save_the_dog: 'STRATEGY',
   thief_escape: 'STRATEGY',
