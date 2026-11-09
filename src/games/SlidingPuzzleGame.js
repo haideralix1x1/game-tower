@@ -36,65 +36,104 @@ export const SLIDE_MODES = {
     title: 'SLIDE 15',
     badge: '15-PUZZLE // EASY',
     storageKey: '@game_tower:best_slide15_v1',
-    shuffleSteps: 15,
-    parMoves: 25,
+    rows: 4,
+    cols: 4, // 15 tiles (1..15) + 1 blank
+    totalTiles: 15,
+    parMoves: 45,
     baseBonus: 300,
     accent: COLORS.matrixMint,
     tag: 'EASY (15)',
-    expandedRows: 4,
-    expandedCols: 4, // 15 tiles
+    gridLabel: '4×4 (15 TILES)',
   },
   MEDIUM: {
     id: 'MEDIUM',
     title: 'SLIDE 30',
     badge: '30-PUZZLE // MEDIUM',
     storageKey: '@game_tower:best_slide30_v1',
-    shuffleSteps: 30,
-    parMoves: 45,
+    rows: 6,
+    cols: 5, // 29 tiles (1..29) + 1 blank = 30 cells
+    totalTiles: 29,
+    parMoves: 85,
     baseBonus: 600,
     accent: COLORS.solarGold,
     tag: 'MED (30)',
-    expandedRows: 6,
-    expandedCols: 5, // 30 cells (29 tiles + empty)
+    gridLabel: '6×5 (30 CELLS)',
   },
   HARD: {
     id: 'HARD',
     title: 'SLIDE 45',
     badge: '45-PUZZLE // HARD',
     storageKey: '@game_tower:best_slide45_v1',
-    shuffleSteps: 45,
-    parMoves: 75,
+    rows: 9,
+    cols: 5, // 44 tiles (1..44) + 1 blank = 45 cells
+    totalTiles: 44,
+    parMoves: 140,
     baseBonus: 1000,
     accent: '#FF007F',
     tag: 'HARD (45)',
-    expandedRows: 9,
-    expandedCols: 5, // 45 cells (44 tiles + empty)
+    gridLabel: '9×5 (45 CELLS)',
   },
 };
 
 /**
- * Generates an inherently solvable sliding puzzle board by walking backwards
- * from the solved state for the exact target number of shuffle steps.
+ * Counts how many tiles are already in their solved home position (index i has value i + 1).
  */
-const generateSolvableBoard = (rows = 4, cols = 4, shuffleSteps = 15) => {
-  const total = rows * cols;
-  const tiles = Array.from({ length: total }, (_, i) => (i === total - 1 ? 0 : i + 1));
-  let emptyIdx = total - 1;
-
-  for (let i = 0; i < shuffleSteps; i += 1) {
-    const r = Math.floor(emptyIdx / cols);
-    const c = emptyIdx % cols;
-    const neighbors = [];
-    if (r > 0) neighbors.push((r - 1) * cols + c);
-    if (r < rows - 1) neighbors.push((r + 1) * cols + c);
-    if (c > 0) neighbors.push(r * cols + (c - 1));
-    if (c < cols - 1) neighbors.push(r * cols + (c + 1));
-
-    const pick = neighbors[Math.floor(Math.random() * neighbors.length)];
-    [tiles[emptyIdx], tiles[pick]] = [tiles[pick], tiles[emptyIdx]];
-    emptyIdx = pick;
+const countAligned = (tiles) => {
+  let count = 0;
+  for (let i = 0; i < tiles.length - 1; i += 1) {
+    if (tiles[i] === i + 1) count += 1;
   }
-  return tiles;
+  return count;
+};
+
+/**
+ * Generates an inherently solvable sliding puzzle board with ZERO tiles in their
+ * home position at game start (no already aligned numbers in any mode).
+ */
+const generateSolvableBoard = (rows = 4, cols = 4) => {
+  const total = rows * cols;
+  let bestTiles = null;
+  let minAligned = Infinity;
+
+  // Search for a permutation where ZERO numbers are in their starting/home position
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    const tiles = Array.from({ length: total }, (_, i) => (i === total - 1 ? 0 : i + 1));
+    let emptyIdx = total - 1;
+    let prevPick = -1;
+
+    // Substantial number of non-backtracking shuffle moves
+    const steps = Math.max(180, total * 12);
+    for (let i = 0; i < steps; i += 1) {
+      const r = Math.floor(emptyIdx / cols);
+      const c = emptyIdx % cols;
+      const neighbors = [];
+      if (r > 0) neighbors.push((r - 1) * cols + c);
+      if (r < rows - 1) neighbors.push((r + 1) * cols + c);
+      if (c > 0) neighbors.push(r * cols + (c - 1));
+      if (c < cols - 1) neighbors.push(r * cols + (c + 1));
+
+      // Avoid immediately undoing the previous slide
+      const nonBacktracking = neighbors.filter((n) => n !== prevPick);
+      const candidates = nonBacktracking.length > 0 ? nonBacktracking : neighbors;
+      const pick = candidates[Math.floor(Math.random() * candidates.length)];
+      prevPick = emptyIdx;
+
+      [tiles[emptyIdx], tiles[pick]] = [tiles[pick], tiles[emptyIdx]];
+      emptyIdx = pick;
+    }
+
+    const aligned = countAligned(tiles);
+    if (aligned === 0) {
+      return tiles; // Guaranteed: ZERO numbers already aligned!
+    }
+
+    if (aligned < minAligned) {
+      minAligned = aligned;
+      bestTiles = [...tiles];
+    }
+  }
+
+  return bestTiles;
 };
 
 /**
@@ -114,17 +153,15 @@ export default function SlidingPuzzleGame({ onBackToHub, onScoreUpdate }) {
   const juiceRef = useRef(null);
 
   const [currentMode, setCurrentMode] = useState('EASY');
-  const [useExpandedGrid, setUseExpandedGrid] = useState(false);
-
   const modeConfig = SLIDE_MODES[currentMode] || SLIDE_MODES.EASY;
 
-  // Grid dimensions depending on mode and grid expansion setting
-  const rows = useExpandedGrid ? modeConfig.expandedRows : 4;
-  const cols = useExpandedGrid ? modeConfig.expandedCols : 4;
-  const totalTilesCount = rows * cols - 1;
+  // Grid dimensions automatically determined by the selected mode
+  const rows = modeConfig.rows;
+  const cols = modeConfig.cols;
+  const totalTilesCount = modeConfig.totalTiles;
 
   const [tiles, setTiles] = useState(() =>
-    generateSolvableBoard(4, 4, SLIDE_MODES.EASY.shuffleSteps)
+    generateSolvableBoard(SLIDE_MODES.EASY.rows, SLIDE_MODES.EASY.cols)
   );
   const [moves, setMoves] = useState(0);
   const [score, setScore] = useState(0);
@@ -170,12 +207,12 @@ export default function SlidingPuzzleGame({ onBackToHub, onScoreUpdate }) {
 
   // Initialize or reset puzzle
   const handleReset = useCallback(() => {
-    const nextTiles = generateSolvableBoard(rows, cols, modeConfig.shuffleSteps);
+    const nextTiles = generateSolvableBoard(rows, cols);
     setTiles(nextTiles);
     setMoves(0);
     setWon(false);
     if (juiceRef.current) juiceRef.current.flash(modeConfig.accent);
-  }, [rows, cols, modeConfig.shuffleSteps, modeConfig.accent]);
+  }, [rows, cols, modeConfig.accent]);
 
   // Switch difficulty mode (SLIDE 15, SLIDE 30, SLIDE 45)
   const switchMode = useCallback(
@@ -183,30 +220,15 @@ export default function SlidingPuzzleGame({ onBackToHub, onScoreUpdate }) {
       if (newMode === currentMode) return;
       setCurrentMode(newMode);
       const newConfig = SLIDE_MODES[newMode];
-      const targetRows = useExpandedGrid ? newConfig.expandedRows : 4;
-      const targetCols = useExpandedGrid ? newConfig.expandedCols : 4;
-      setTiles(generateSolvableBoard(targetRows, targetCols, newConfig.shuffleSteps));
+      setTiles(generateSolvableBoard(newConfig.rows, newConfig.cols));
       setMoves(0);
       setWon(false);
       triggerMediumHaptic();
       playTapSound();
       if (juiceRef.current) juiceRef.current.flash(newConfig.accent);
     },
-    [currentMode, useExpandedGrid]
+    [currentMode]
   );
-
-  // Toggle between 4x4 Classic matrix vs Expanded Grid (15, 30, 45 cells)
-  const toggleGridType = useCallback(() => {
-    const nextExpanded = !useExpandedGrid;
-    setUseExpandedGrid(nextExpanded);
-    const targetRows = nextExpanded ? modeConfig.expandedRows : 4;
-    const targetCols = nextExpanded ? modeConfig.expandedCols : 4;
-    setTiles(generateSolvableBoard(targetRows, targetCols, modeConfig.shuffleSteps));
-    setMoves(0);
-    setWon(false);
-    triggerLightHaptic();
-    playTapSound();
-  }, [useExpandedGrid, modeConfig]);
 
   // Move tile on press
   const handleTilePress = useCallback(
@@ -337,7 +359,7 @@ export default function SlidingPuzzleGame({ onBackToHub, onScoreUpdate }) {
             })}
           </View>
 
-          {/* Sub-Telemetry Bar & Grid Expansion Selector */}
+          {/* Sub-Telemetry Bar */}
           <View style={[localStyles.statusRow, { width: actualBoardW }]}>
             <View style={localStyles.statBadge}>
               <Text style={localStyles.statLabel}>ALIGNED</Text>
@@ -346,19 +368,11 @@ export default function SlidingPuzzleGame({ onBackToHub, onScoreUpdate }) {
               </Text>
             </View>
 
-            <Pressable
-              onPress={toggleGridType}
-              style={({ pressed }) => [
-                localStyles.gridToggleBtn,
-                pressed && { opacity: 0.7 },
-              ]}
-            >
-              <Text style={localStyles.gridToggleText}>
-                {useExpandedGrid
-                  ? `🔳 ${rows}×${cols} TILES`
-                  : `🔲 4×4 CLASSIC`}
+            <View style={localStyles.gridInfoBadge}>
+              <Text style={localStyles.gridInfoText}>
+                {modeConfig.gridLabel}
               </Text>
-            </Pressable>
+            </View>
 
             <View style={localStyles.statBadge}>
               <Text style={localStyles.statLabel}>MOVES</Text>
@@ -505,19 +519,19 @@ const localStyles = StyleSheet.create({
     fontFamily: monoFont,
     fontWeight: '900',
   },
-  gridToggleBtn: {
+  gridInfoBadge: {
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 8,
-    backgroundColor: 'rgba(0, 245, 255, 0.12)',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
     borderWidth: 1,
-    borderColor: 'rgba(0, 245, 255, 0.4)',
+    borderColor: 'rgba(255, 255, 255, 0.18)',
   },
-  gridToggleText: {
+  gridInfoText: {
     fontSize: 8.5,
     fontFamily: monoFont,
     fontWeight: '900',
-    color: COLORS.cyan,
+    color: '#E0AAFF',
     letterSpacing: 0.6,
   },
   board: {
