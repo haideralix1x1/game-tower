@@ -69,7 +69,11 @@ const getRandomFruit = () => {
 };
 
 const createInitialBoard = (lvl) => {
-  const targetBricks = Math.min(12, 3 + lvl);
+  // Bricks only appear at higher levels (Level 10+)
+  // Levels 1-9: 0 bricks (Pure Match-3 gameplay with zero brick obstacles!)
+  // Level 10-14: 2 to 4 bricks
+  // Level 15+: max 6 bricks
+  const targetBricks = lvl < 10 ? 0 : Math.min(6, 2 + Math.floor((lvl - 10) / 2));
   const targetStars = Math.min(8, 2 + (lvl % 3));
 
   const newGrid = [];
@@ -203,7 +207,11 @@ export default function Match3SagaGame({ onBackToHub, onScoreUpdate, isPaused = 
 
   // Visible neon swipe trajectory beam & localized tile blasts
   const [swipeTrace, setSwipeTrace] = useState(null);
+  const [dragOffset, setDragOffset] = useState(null);
+  const [animatingSwap, setAnimatingSwap] = useState(null);
+  const [activeSwipeSwoosh, setActiveSwipeSwoosh] = useState(null);
   const [tileBlasts, setTileBlasts] = useState([]);
+  const swapRafRef = useRef(null);
 
   // Result modal state
   const [modalVisible, setModalVisible] = useState(false);
@@ -251,6 +259,7 @@ export default function Match3SagaGame({ onBackToHub, onScoreUpdate, isPaused = 
 
   // Initialize board with fruits & hurdles
   const initBoard = useCallback((lvl) => {
+    if (swapRafRef.current) cancelAnimationFrame(swapRafRef.current);
     isLockedRef.current = false;
     const { newGrid, targetBricks, targetStars } = createInitialBoard(lvl);
     setBricksLeft(targetBricks);
@@ -258,9 +267,18 @@ export default function Match3SagaGame({ onBackToHub, onScoreUpdate, isPaused = 
     setTimeLeft(60);
     setSelectedCell(null);
     setSwipeTrace(null);
+    setDragOffset(null);
+    setAnimatingSwap(null);
+    setActiveSwipeSwoosh(null);
     setTileBlasts([]);
     setModalVisible(false);
     setGrid(newGrid);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (swapRafRef.current) cancelAnimationFrame(swapRafRef.current);
+    };
   }, []);
 
   useEffect(() => {
@@ -561,10 +579,10 @@ export default function Match3SagaGame({ onBackToHub, onScoreUpdate, isPaused = 
   }, [checkAndClearMatches]);
 
   /**
-   * Swap two adjacent cells (strictly validated before committing!)
+   * Swap two adjacent cells with real 60fps sliding transition and glowing swipe swoosh
    */
   const executeSwap = useCallback(
-    (cellA, cellB) => {
+    (cellA, cellB, initialDx = 0, initialDy = 0) => {
       if (!cellA || !cellB || isLockedRef.current || isPausedRef.current) return;
       const { r: r1, c: c1 } = cellA;
       const { r: r2, c: c2 } = cellB;
@@ -588,35 +606,101 @@ export default function Match3SagaGame({ onBackToHub, onScoreUpdate, isPaused = 
       // PRE-VALIDATE IN MEMORY: Will this swap create a match?
       const isValid = canSwapMakeMatch(currentBoard, r1, c1, r2, c2);
 
-      if (!isValid) {
-        // INVALID SWAP: Lock briefly, shake, and DO NOT alter the board!
-        // This stops players from double-swiping or forcing illegal matches!
-        isLockedRef.current = true;
-        setSelectedCell(null);
-        playTapSound();
-        triggerLightHaptic();
-        if (juiceRef.current) juiceRef.current.shake(3, 2);
-
-        setTimeout(() => {
-          isLockedRef.current = false;
-        }, 180);
-        return;
-      }
-
-      // VALID SWAP: Lock board, perform swap, and clear matches!
+      // Lock input during animation
       isLockedRef.current = true;
       setSelectedCell(null);
-      playTapSound();
+
+      // Trigger dynamic swipe laser trail & haptics
+      const x1 = c1 * cellStep + cellStep / 2;
+      const y1 = r1 * cellStep + cellStep / 2;
+      const x2 = c2 * cellStep + cellStep / 2;
+      const y2 = r2 * cellStep + cellStep / 2;
+
+      setActiveSwipeSwoosh({
+        id: `swoosh_${Date.now()}`,
+        x1,
+        y1,
+        x2,
+        y2,
+        color: isValid ? (itemA.color || '#00F5FF') : '#FF3366',
+        isValid,
+      });
+
+      // Clear swoosh beam after 260ms
+      setTimeout(() => {
+        setActiveSwipeSwoosh(null);
+      }, 260);
+
+      playSliceSound();
       triggerLightHaptic();
 
-      const nextGrid = currentBoard.map((row) => [...row]);
-      nextGrid[r1][c1] = itemB;
-      nextGrid[r2][c2] = itemA;
-      setGrid(nextGrid);
+      // Run 60fps sliding animation
+      if (swapRafRef.current) cancelAnimationFrame(swapRafRef.current);
 
-      checkAndClearMatches(nextGrid, 1);
+      const targetDxA = (c2 - c1) * cellStep;
+      const targetDyA = (r2 - r1) * cellStep;
+      const startTime = Date.now();
+      const animDuration = isValid ? 120 : 150;
+
+      const animateStep = () => {
+        const elapsed = Date.now() - startTime;
+        const p = Math.min(1, elapsed / animDuration);
+        const ease = 1 - (1 - p) * (1 - p); // ease-out quad
+
+        if (isValid) {
+          // Slide smoothly into target positions
+          setAnimatingSwap({
+            r1,
+            c1,
+            r2,
+            c2,
+            dx1: initialDx + (targetDxA - initialDx) * ease,
+            dy1: initialDy + (targetDyA - initialDy) * ease,
+            dx2: -initialDx + (-targetDxA - (-initialDx)) * ease,
+            dy2: -initialDy + (-targetDyA - (-initialDy)) * ease,
+          });
+        } else {
+          // Elastic spring bounce back to origin
+          const bounce = Math.sin(p * Math.PI);
+          const curDx = initialDx * (1 - ease) + (initialDx >= 0 ? 6 : -6) * bounce;
+          const curDy = initialDy * (1 - ease) + (initialDy >= 0 ? 6 : -6) * bounce;
+          setAnimatingSwap({
+            r1,
+            c1,
+            r2,
+            c2,
+            dx1: curDx,
+            dy1: curDy,
+            dx2: -curDx,
+            dy2: -curDy,
+          });
+        }
+
+        if (p < 1) {
+          swapRafRef.current = requestAnimationFrame(animateStep);
+        } else {
+          swapRafRef.current = null;
+          setAnimatingSwap(null);
+
+          if (isValid) {
+            // Commit swap to grid state & clear matches!
+            const nextGrid = currentBoard.map((row) => [...row]);
+            nextGrid[r1][c1] = itemB;
+            nextGrid[r2][c2] = itemA;
+            setGrid(nextGrid);
+            checkAndClearMatches(nextGrid, 1);
+          } else {
+            // Invalid swap: shake slightly and unlock
+            if (juiceRef.current) juiceRef.current.shake(3, 2);
+            playTapSound();
+            isLockedRef.current = false;
+          }
+        }
+      };
+
+      swapRafRef.current = requestAnimationFrame(animateStep);
     },
-    [checkAndClearMatches]
+    [cellStep, checkAndClearMatches]
   );
 
   useEffect(() => {
@@ -624,7 +708,7 @@ export default function Match3SagaGame({ onBackToHub, onScoreUpdate, isPaused = 
   }, [executeSwap]);
 
   /**
-   * PanResponder with Visible Neon Trajectory Line & Strict Single-Swipe Locking
+   * PanResponder with Real-Time Tactile Tile Dragging & Electric Swipe Trail
    */
   const panStartRef = useRef({ r: -1, c: -1, startX: 0, startY: 0, hasSwapped: false });
 
@@ -632,11 +716,11 @@ export default function Match3SagaGame({ onBackToHub, onScoreUpdate, isPaused = 
     () =>
       // eslint-disable-next-line react-hooks/refs
       PanResponder.create({
-        onStartShouldSetPanResponder: () => !isLockedRef.current && !isPausedRef.current,
+        onStartShouldSetPanResponder: () => !isLockedRef.current && !isPausedRef.current && !animatingSwap,
         onMoveShouldSetPanResponder: (_, gesture) =>
-          !isLockedRef.current && !isPausedRef.current && Math.hypot(gesture.dx, gesture.dy) > 5,
+          !isLockedRef.current && !isPausedRef.current && !animatingSwap && Math.hypot(gesture.dx, gesture.dy) > 5,
         onPanResponderGrant: (evt) => {
-          if (isLockedRef.current || isPausedRef.current) return;
+          if (isLockedRef.current || isPausedRef.current || animatingSwap) return;
           const { pageX, pageY, locationX, locationY } = evt.nativeEvent;
 
           let relX = locationX;
@@ -649,6 +733,12 @@ export default function Match3SagaGame({ onBackToHub, onScoreUpdate, isPaused = 
           const c = Math.max(0, Math.min(GRID_SIZE - 1, Math.floor(relX / cellStep)));
           const r = Math.max(0, Math.min(GRID_SIZE - 1, Math.floor(relY / cellStep)));
 
+          const tile = gridRef.current?.[r]?.[c];
+          if (!tile || tile.type === 'brick' || tile.type === 'star') {
+            panStartRef.current = { r: -1, c: -1, startX: 0, startY: 0, hasSwapped: false };
+            return;
+          }
+
           const tileCenterX = c * cellStep + cellStep / 2;
           const tileCenterY = r * cellStep + cellStep / 2;
 
@@ -660,56 +750,92 @@ export default function Match3SagaGame({ onBackToHub, onScoreUpdate, isPaused = 
             hasSwapped: false,
           };
 
-          // Initialize neon swipe beam starting from tile center
           setSwipeTrace({
             startX: tileCenterX,
             startY: tileCenterY,
-            curX: relX,
-            curY: relY,
+            curX: tileCenterX,
+            curY: tileCenterY,
           });
         },
         onPanResponderMove: (evt, gesture) => {
           const { r, c, startX, startY, hasSwapped } = panStartRef.current;
           if (hasSwapped || r < 0 || c < 0 || isLockedRef.current || isPausedRef.current) {
             setSwipeTrace(null);
+            setDragOffset(null);
             return;
           }
 
           const { dx, dy } = gesture;
-          const curX = startX + dx;
-          const curY = startY + dy;
+          const isHoriz = Math.abs(dx) > Math.abs(dy);
+          let targetR = r;
+          let targetC = c;
 
-          // Render visible electric neon trajectory line following finger!
+          if (isHoriz) {
+            targetC = dx > 0 ? c + 1 : c - 1;
+          } else {
+            targetR = dy > 0 ? r + 1 : r - 1;
+          }
+
+          const isTargetValid =
+            targetR >= 0 && targetR < GRID_SIZE &&
+            targetC >= 0 && targetC < GRID_SIZE;
+
+          const neighborTile = isTargetValid ? gridRef.current?.[targetR]?.[targetC] : null;
+          const isNeighborBlocked = !neighborTile || neighborTile.type === 'brick' || neighborTile.type === 'star';
+
+          const maxDrag = cellStep * 0.9;
+          let clampDx = 0;
+          let clampDy = 0;
+
+          if (isHoriz) {
+            const rawVal = dx;
+            if (isNeighborBlocked) {
+              clampDx = Math.sign(rawVal) * Math.min(10, Math.abs(rawVal) * 0.25);
+            } else {
+              clampDx = Math.max(-maxDrag, Math.min(maxDrag, rawVal));
+            }
+          } else {
+            const rawVal = dy;
+            if (isNeighborBlocked) {
+              clampDy = Math.sign(rawVal) * Math.min(10, Math.abs(rawVal) * 0.25);
+            } else {
+              clampDy = Math.max(-maxDrag, Math.min(maxDrag, rawVal));
+            }
+          }
+
+          // Real-time visual drag offset on cells
+          if (isTargetValid && !isNeighborBlocked) {
+            setDragOffset({
+              r,
+              c,
+              targetR,
+              targetC,
+              dx: clampDx,
+              dy: clampDy,
+            });
+          }
+
+          // Electric neon swipe beam
           setSwipeTrace({
             startX,
             startY,
-            curX,
-            curY,
+            curX: startX + dx,
+            curY: startY + dy,
           });
 
-          const SWIPE_THRESHOLD = 18;
+          const SWIPE_THRESHOLD = 20;
 
-          if (Math.hypot(dx, dy) >= SWIPE_THRESHOLD) {
+          if (Math.hypot(dx, dy) >= SWIPE_THRESHOLD && isTargetValid && !isNeighborBlocked) {
             panStartRef.current.hasSwapped = true;
             setSwipeTrace(null);
-
-            let targetR = r;
-            let targetC = c;
-
-            if (Math.abs(dx) > Math.abs(dy)) {
-              targetC = dx > 0 ? c + 1 : c - 1;
-            } else {
-              targetR = dy > 0 ? r + 1 : r - 1;
-            }
-
-            if (targetR >= 0 && targetR < GRID_SIZE && targetC >= 0 && targetC < GRID_SIZE) {
-              executeSwapRef.current?.({ r, c }, { r: targetR, c: targetC });
-            }
+            setDragOffset(null);
+            executeSwapRef.current?.({ r, c }, { r: targetR, c: targetC }, clampDx, clampDy);
             setSelectedCell(null);
           }
         },
         onPanResponderRelease: () => {
           setSwipeTrace(null);
+          setDragOffset(null);
           const { r, c, hasSwapped } = panStartRef.current;
 
           if (!hasSwapped && r >= 0 && c >= 0 && !isLockedRef.current && !isPausedRef.current) {
@@ -721,7 +847,7 @@ export default function Match3SagaGame({ onBackToHub, onScoreUpdate, isPaused = 
                 setSelectedCell(null);
                 playTapSound();
               } else if (isAdjacent) {
-                executeSwapRef.current?.(prev, { r, c });
+                executeSwapRef.current?.(prev, { r, c }, 0, 0);
                 setSelectedCell(null);
               } else {
                 setSelectedCell({ r, c });
@@ -737,7 +863,7 @@ export default function Match3SagaGame({ onBackToHub, onScoreUpdate, isPaused = 
           panStartRef.current = { r: -1, c: -1, startX: 0, startY: 0, hasSwapped: false };
         },
       }),
-    [cellStep]
+    [animatingSwap, cellStep]
   );
 
   const handleNextLevel = () => {
@@ -770,9 +896,11 @@ export default function Match3SagaGame({ onBackToHub, onScoreUpdate, isPaused = 
         {/* Target Objectives HUD */}
         <View style={styles.topHud}>
           <View style={styles.hudGoal}>
-            <View style={styles.goalChip}>
-              <Text style={styles.goalText}>🧱 {bricksLeft}</Text>
-            </View>
+            {bricksLeft > 0 && (
+              <View style={styles.goalChip}>
+                <Text style={styles.goalText}>🧱 {bricksLeft}</Text>
+              </View>
+            )}
             <View style={styles.goalChip}>
               <Text style={styles.goalText}>⭐ {starsLeft}</Text>
             </View>
@@ -813,6 +941,40 @@ export default function Match3SagaGame({ onBackToHub, onScoreUpdate, isPaused = 
                     const isSelected = selectedCell && selectedCell.r === r && selectedCell.c === c;
                     const isSpecial = Boolean(cell?.special);
 
+                    let tileTranslateX = 0;
+                    let tileTranslateY = 0;
+                    let tileScale = 1;
+                    let tileZIndex = 1;
+
+                    if (animatingSwap) {
+                      if (animatingSwap.r1 === r && animatingSwap.c1 === c) {
+                        tileTranslateX = animatingSwap.dx1;
+                        tileTranslateY = animatingSwap.dy1;
+                        tileScale = 1.08;
+                        tileZIndex = 25;
+                      } else if (animatingSwap.r2 === r && animatingSwap.c2 === c) {
+                        tileTranslateX = animatingSwap.dx2;
+                        tileTranslateY = animatingSwap.dy2;
+                        tileScale = 1.04;
+                        tileZIndex = 20;
+                      }
+                    } else if (dragOffset) {
+                      if (dragOffset.r === r && dragOffset.c === c) {
+                        tileTranslateX = dragOffset.dx;
+                        tileTranslateY = dragOffset.dy;
+                        tileScale = 1.1;
+                        tileZIndex = 25;
+                      } else if (dragOffset.targetR === r && dragOffset.targetC === c) {
+                        tileTranslateX = -dragOffset.dx;
+                        tileTranslateY = -dragOffset.dy;
+                        tileScale = 1.03;
+                        tileZIndex = 15;
+                      }
+                    } else if (isSelected) {
+                      tileScale = 1.08;
+                      tileZIndex = 10;
+                    }
+
                     return (
                       <View
                         key={`cell_${r}_${c}`}
@@ -830,10 +992,15 @@ export default function Match3SagaGame({ onBackToHub, onScoreUpdate, isPaused = 
                                   ? cell.color + '66'
                                   : 'rgba(255, 255, 255, 0.1)',
                             borderWidth: isSelected ? 2.5 : isSpecial ? 2 : 1,
-                            transform: [{ scale: isSelected ? 1.08 : 1 }],
+                            transform: [
+                              { translateX: tileTranslateX },
+                              { translateY: tileTranslateY },
+                              { scale: tileScale },
+                            ],
+                            zIndex: tileZIndex,
                             shadowColor: isSelected ? '#00F5FF' : cell?.color || '#000',
-                            shadowOpacity: isSelected || isSpecial ? 0.75 : 0.2,
-                            shadowRadius: isSelected || isSpecial ? 8 : 2,
+                            shadowOpacity: isSelected || isSpecial || tileZIndex > 1 ? 0.75 : 0.2,
+                            shadowRadius: isSelected || isSpecial || tileZIndex > 1 ? 8 : 2,
                           },
                         ]}
                       >
@@ -866,13 +1033,69 @@ export default function Match3SagaGame({ onBackToHub, onScoreUpdate, isPaused = 
                 </View>
               ))}
 
-              {/* SVG OVERLAY: Visible Neon Trajectory Line & Tile Blasts */}
+              {/* SVG OVERLAY: Visible Neon Trajectory Line, Swipe Swoosh & Tile Blasts */}
               <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
                 <Svg
                   width={boardWidth}
                   height={boardWidth}
                   pointerEvents="none"
                 >
+                {/* PERSISTENT NEON SWIPE SWOOSH & FLASH */}
+                {activeSwipeSwoosh && (
+                  <G>
+                    {/* Diffuse Outer Glow */}
+                    <Line
+                      x1={activeSwipeSwoosh.x1}
+                      y1={activeSwipeSwoosh.y1}
+                      x2={activeSwipeSwoosh.x2}
+                      y2={activeSwipeSwoosh.y2}
+                      stroke={activeSwipeSwoosh.color}
+                      strokeWidth={14}
+                      strokeLinecap="round"
+                      opacity={0.4}
+                    />
+                    {/* Crisp Inner Laser Beam */}
+                    <Line
+                      x1={activeSwipeSwoosh.x1}
+                      y1={activeSwipeSwoosh.y1}
+                      x2={activeSwipeSwoosh.x2}
+                      y2={activeSwipeSwoosh.y2}
+                      stroke="#FFFFFF"
+                      strokeWidth={3}
+                      strokeLinecap="round"
+                    />
+                    {/* Origin Shockwave Ring */}
+                    <Circle
+                      cx={activeSwipeSwoosh.x1}
+                      cy={activeSwipeSwoosh.y1}
+                      r={cellSize * 0.45}
+                      fill="none"
+                      stroke={activeSwipeSwoosh.color}
+                      strokeWidth={2}
+                      opacity={0.8}
+                    />
+                    {/* Target Shockwave Ring */}
+                    <Circle
+                      cx={activeSwipeSwoosh.x2}
+                      cy={activeSwipeSwoosh.y2}
+                      r={cellSize * 0.45}
+                      fill="none"
+                      stroke={activeSwipeSwoosh.color}
+                      strokeWidth={2}
+                      opacity={0.8}
+                    />
+                    {/* Midpoint Neon Flare */}
+                    <Circle
+                      cx={(activeSwipeSwoosh.x1 + activeSwipeSwoosh.x2) / 2}
+                      cy={(activeSwipeSwoosh.y1 + activeSwipeSwoosh.y2) / 2}
+                      r={7}
+                      fill="#FFFFFF"
+                      stroke={activeSwipeSwoosh.color}
+                      strokeWidth={2}
+                    />
+                  </G>
+                )}
+
                 {/* VISIBLE NEON SWIPE LINE BEAM */}
                 {swipeTrace && (
                   <G>
