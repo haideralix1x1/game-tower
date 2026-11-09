@@ -138,16 +138,10 @@ export const UNLOCK_REQUIREMENTS = {
   },
 
   // BRAIN CATEGORY
-  simon_pulse: {
+  color_stroop: {
     reqGame: 'memory_matrix',
     targetScore: 4,
     desc: 'Score 4+ in MEMORY MATRIX',
-    category: 'BRAIN',
-  },
-  color_stroop: {
-    reqGame: 'simon_pulse',
-    targetScore: 6,
-    desc: 'Score 6+ in SIMON PULSE',
     category: 'BRAIN',
   },
   color_switch: {
@@ -225,7 +219,6 @@ export const GAME_CATEGORY_MAP = {
 
   // Brain
   memory_matrix: 'BRAIN',
-  simon_pulse: 'BRAIN',
   color_stroop: 'BRAIN',
   color_switch: 'BRAIN',
   hardcore_runner: 'BRAIN',

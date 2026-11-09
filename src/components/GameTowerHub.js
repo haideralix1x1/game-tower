@@ -34,7 +34,6 @@ import WordlyGame from '../games/WordlyGame';
 import NeonMinesGame from '../games/NeonMinesGame';
 import MemoryMatrixGame from '../games/MemoryMatrixGame';
 import SlidingPuzzleGame from '../games/SlidingPuzzleGame';
-import SimonPulseGame from '../games/SimonPulseGame';
 import BrickBreakerGame from '../games/BrickBreakerGame';
 import CyberSnakeGame from '../games/CyberSnakeGame';
 import NeonFlappyGame from '../games/NeonFlappyGame';
@@ -441,20 +440,6 @@ export const TOWER_GAMES = [
     storageKey: '@game_tower:best_breaker_v1',
   },
   {
-    id: 'simon_pulse',
-    floorNum: 6,
-    floor: 'FLOOR 06',
-    tier: 'CORE',
-    title: 'SIMON PULSE',
-    category: 'BRAIN',
-    badge: 'SYNTH MEMORY',
-    desc: 'Memorize and mimic accelerating 9-pad musical neon pulse sequences.',
-    accent: '#FF2A85',
-    secondary: '#9D4EDD',
-    icon: '🎵',
-    storageKey: '@game_tower:best_simon_v1',
-  },
-  {
     id: 'cyber_slide',
     floorNum: 5,
     floor: 'FLOOR 05',
@@ -642,13 +627,6 @@ export default function GameTowerHub({ initialGameId = null, isSplashActive = fa
 
   const [showExitConfirm, setShowExitConfirm] = useState(false);
 
-  // Request to exit (shows confirmation dialog)
-  const requestExitToHub = useCallback(() => {
-    setShowExitConfirm(true);
-    triggerLightHaptic();
-    playTapSound();
-  }, []);
-
   // Confirmed exit (actually exits to hub)
   const performExitToHub = useCallback(() => {
     setShowExitConfirm(false);
@@ -658,6 +636,11 @@ export default function GameTowerHub({ initialGameId = null, isSplashActive = fa
       loadAllHighScores();
     } catch {}
   }, [loadAllHighScores]);
+
+  // Request to exit (instantly returns to Hub)
+  const requestExitToHub = useCallback(() => {
+    performExitToHub();
+  }, [performExitToHub]);
 
   // Handle Android mobile hardware / gesture back button
   useEffect(() => {
@@ -939,14 +922,6 @@ export default function GameTowerHub({ initialGameId = null, isSplashActive = fa
             isPaused={isPaused}
             onBackToHub={requestExitToHub}
             onScoreUpdate={(s) => handleScoreUpdate('cyber_slide', s)}
-          />
-        );
-      case 'simon_pulse':
-        return (
-          <SimonPulseGame
-            isPaused={isPaused}
-            onBackToHub={requestExitToHub}
-            onScoreUpdate={(s) => handleScoreUpdate('simon_pulse', s)}
           />
         );
       case 'brick_breaker':

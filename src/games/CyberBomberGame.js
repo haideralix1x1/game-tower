@@ -79,6 +79,81 @@ const DIRS = [
 ];
 
 /**
+ * BFS Shortest Path to Player in Arena Grid
+ * Calculates the best cardinal move (dx, dy) for an enemy to pursue the player.
+ */
+function getNextStepTowardsPlayer(startCol, startRow, targetCol, targetRow, grid, bombs) {
+  if (startCol === targetCol && startRow === targetRow) {
+    return { dx: 0, dy: 0 };
+  }
+
+  const visited = new Uint8Array(ROWS * COLS);
+  const queue = [];
+
+  visited[startRow * COLS + startCol] = 1;
+
+  // Shuffle candidate directions slightly so enemies don't all overlap on exact same pixel
+  const candidateDirs = [...DIRS].sort(() => Math.random() - 0.5);
+
+  let closestStep = null;
+  let minManhattanDist = Math.abs(startCol - targetCol) + Math.abs(startRow - targetRow);
+
+  for (const d of candidateDirs) {
+    const nc = startCol + d.dx;
+    const nr = startRow + d.dy;
+    if (nc >= 0 && nc < COLS && nr >= 0 && nr < ROWS) {
+      const isWall = grid[nr][nc] !== TILE_EMPTY;
+      const isBomb = bombs.some((b) => b.x === nc && b.y === nr);
+      if (!isWall && !isBomb) {
+        if (nc === targetCol && nr === targetRow) {
+          return d;
+        }
+        visited[nr * COLS + nc] = 1;
+        queue.push({ col: nc, row: nr, firstDx: d.dx, firstDy: d.dy });
+
+        const dM = Math.abs(nc - targetCol) + Math.abs(nr - targetRow);
+        if (dM < minManhattanDist) {
+          minManhattanDist = dM;
+          closestStep = d;
+        }
+      }
+    }
+  }
+
+  let head = 0;
+  while (head < queue.length) {
+    const current = queue[head++];
+    const dM = Math.abs(current.col - targetCol) + Math.abs(current.row - targetRow);
+    if (dM < minManhattanDist) {
+      minManhattanDist = dM;
+      closestStep = { dx: current.firstDx, dy: current.firstDy };
+    }
+
+    if (current.col === targetCol && current.row === targetRow) {
+      return { dx: current.firstDx, dy: current.firstDy };
+    }
+
+    for (const d of candidateDirs) {
+      const nc = current.col + d.dx;
+      const nr = current.row + d.dy;
+      if (nc >= 0 && nc < COLS && nr >= 0 && nr < ROWS) {
+        const idx = nr * COLS + nc;
+        if (!visited[idx]) {
+          visited[idx] = 1;
+          const isWall = grid[nr][nc] !== TILE_EMPTY;
+          const isBomb = bombs.some((b) => b.x === nc && b.y === nr);
+          if (!isWall && !isBomb) {
+            queue.push({ col: nc, row: nr, firstDx: current.firstDx, firstDy: current.firstDy });
+          }
+        }
+      }
+    }
+  }
+
+  return closestStep;
+}
+
+/**
  * Builds arena layout for a given stage
  */
 function createStage(stageNum) {
@@ -481,12 +556,10 @@ export default function CyberBomberGame({
       // 2. Remove Expired Flames
       setFlames((prev) => prev.filter((f) => f.expiresAt > now));
 
-      // 3. Move Player with Corner-Assist
+      // 3. Move Player with Corner-Assist & Auto-Centering (Butter-Smooth Arcade Walk)
       const { dx, dy } = inputDirRef.current;
       if (dx !== 0 || dy !== 0) {
         const curP = playerPosRef.current;
-        let nx = curP.x + dx * playerSpeed;
-        let ny = curP.y + dy * playerSpeed;
 
         // Bounding collision box against walls & blocks (centers are integer tile coords)
         const checkSolid = (cx, cy) => {
@@ -499,48 +572,90 @@ export default function CyberBomberGame({
           const b = currentBombs.find((bomb) => bomb.x === col && bomb.y === row);
           if (b) {
             const distFromPlace = Math.hypot(b.placedPlayerPos.x - curP.x, b.placedPlayerPos.y - curP.y);
-            if (distFromPlace > 0.8) return true; // solidified
+            if (distFromPlace > 0.75) return true; // solidified
           }
           return false;
         };
 
-        const radius = 0.30;
-        // Test X-axis movement
-        if (
-          !checkSolid(nx - radius, curP.y - radius) &&
-          !checkSolid(nx + radius, curP.y - radius) &&
-          !checkSolid(nx - radius, curP.y + radius) &&
-          !checkSolid(nx + radius, curP.y + radius)
-        ) {
-          curP.x = nx;
-        } else {
-          // Corner-sliding assist along Y
-          const centerRow = Math.round(curP.y);
-          if (Math.abs(curP.y - centerRow) < 0.42) {
-            curP.y += (centerRow - curP.y) * 0.32;
+        const r = 0.22; // compact collision radius for smooth corner sliding
+        const curCol = Math.round(curP.x);
+        const curRow = Math.round(curP.y);
+
+        const absDx = Math.abs(dx);
+        const absDy = Math.abs(dy);
+
+        // X movement with Corridor Auto-Centering & Corner Turning
+        if (absDx > 0.05) {
+          const nx = curP.x + dx * playerSpeed;
+          const canMoveX =
+            !checkSolid(nx - r, curRow - 0.20) &&
+            !checkSolid(nx + r, curRow - 0.20) &&
+            !checkSolid(nx - r, curRow + 0.20) &&
+            !checkSolid(nx + r, curRow + 0.20);
+
+          if (canMoveX) {
+            curP.x = nx;
+            // Smoothly auto-center Y into current horizontal corridor
+            if (Math.abs(curP.y - curRow) < 0.45) {
+              curP.y += (curRow - curP.y) * 0.35;
+            }
+          } else {
+            // Corner-assist: if blocked ahead, slide smoothly into perpendicular turn
+            if (absDy > 0.15) {
+              const targetRow = curRow + Math.sign(dy);
+              if (!checkSolid(curCol, targetRow)) {
+                curP.y += Math.sign(dy) * playerSpeed * 0.8;
+                curP.x += (curCol - curP.x) * 0.35;
+              }
+            } else {
+              const diffY = curP.y - curRow;
+              if (Math.abs(diffY) > 0.08) {
+                curP.y -= Math.sign(diffY) * playerSpeed * 0.5;
+              }
+            }
           }
         }
 
-        // Test Y-axis movement
-        if (
-          !checkSolid(curP.x - radius, ny - radius) &&
-          !checkSolid(curP.x + radius, ny - radius) &&
-          !checkSolid(curP.x - radius, ny + radius) &&
-          !checkSolid(curP.x + radius, ny + radius)
-        ) {
-          curP.y = ny;
-        } else {
-          // Corner-sliding assist along X
-          const centerCol = Math.round(curP.x);
-          if (Math.abs(curP.x - centerCol) < 0.42) {
-            curP.x += (centerCol - curP.x) * 0.32;
+        // Y movement with Corridor Auto-Centering & Corner Turning
+        if (absDy > 0.05) {
+          const ny = curP.y + dy * playerSpeed;
+          const canMoveY =
+            !checkSolid(curCol - 0.20, ny - r) &&
+            !checkSolid(curCol + 0.20, ny - r) &&
+            !checkSolid(curCol - 0.20, ny + r) &&
+            !checkSolid(curCol + 0.20, ny + r);
+
+          if (canMoveY) {
+            curP.y = ny;
+            // Smoothly auto-center X into current vertical corridor
+            if (Math.abs(curP.x - curCol) < 0.45) {
+              curP.x += (curCol - curP.x) * 0.35;
+            }
+          } else {
+            // Corner-assist: if blocked ahead, slide smoothly into perpendicular turn
+            if (absDx > 0.15) {
+              const targetCol = curCol + Math.sign(dx);
+              if (!checkSolid(targetCol, curRow)) {
+                curP.x += Math.sign(dx) * playerSpeed * 0.8;
+                curP.y += (curRow - curP.y) * 0.35;
+              }
+            } else {
+              const diffX = curP.x - curCol;
+              if (Math.abs(diffX) > 0.08) {
+                curP.x -= Math.sign(diffX) * playerSpeed * 0.5;
+              }
+            }
           }
         }
+
+        // Clamp inside arena bounds
+        curP.x = Math.max(0.8, Math.min(COLS - 1.8, curP.x));
+        curP.y = Math.max(0.8, Math.min(ROWS - 1.8, curP.y));
 
         setPlayerPos({ x: curP.x, y: curP.y });
 
         // Update Facing Direction
-        if (Math.abs(dx) > Math.abs(dy)) {
+        if (absDx > absDy) {
           setPlayerFacing(dx > 0 ? 'RIGHT' : 'LEFT');
         } else {
           setPlayerFacing(dy > 0 ? 'DOWN' : 'UP');
@@ -629,10 +744,11 @@ export default function CyberBomberGame({
           return;
         }
 
-        // Enemy AI Movement
-        let { dx, dy } = bot.dir;
-        let nx = bot.x + dx * bot.speed;
-        let ny = bot.y + dy * bot.speed;
+        // Enemy AI Movement: Actively follow and hunt the player!
+        const botCol = Math.round(bot.x);
+        const botRow = Math.round(bot.y);
+        const playerCol = Math.round(playerPosRef.current.x);
+        const playerRow = Math.round(playerPosRef.current.y);
 
         const checkBotSolid = (cx, cy) => {
           const c = Math.round(cx);
@@ -643,45 +759,73 @@ export default function CyberBomberGame({
           return false;
         };
 
-        const radius = 0.30;
-        const isBlocked =
-          checkBotSolid(nx - radius, ny - radius) ||
-          checkBotSolid(nx + radius, ny - radius) ||
-          checkBotSolid(nx - radius, ny + radius) ||
-          checkBotSolid(nx + radius, ny + radius);
+        // When near a tile center, recalculate shortest path to track the player
+        const distFromCenter = Math.hypot(bot.x - botCol, bot.y - botRow);
+        if (distFromCenter < bot.speed * 1.5 || !bot.dir || (bot.dir.dx === 0 && bot.dir.dy === 0)) {
+          const chaseStep = getNextStepTowardsPlayer(
+            botCol,
+            botRow,
+            playerCol,
+            playerRow,
+            currentGrid,
+            currentBombs
+          );
+          if (chaseStep && (chaseStep.dx !== 0 || chaseStep.dy !== 0)) {
+            bot.dir = chaseStep;
+            if (chaseStep.dx !== 0) bot.y = botRow;
+            else if (chaseStep.dy !== 0) bot.x = botCol;
+          }
+        }
+
+        let { dx, dy } = bot.dir;
+        let nx = bot.x + dx * bot.speed;
+        let ny = bot.y + dy * bot.speed;
+
+        const isBlocked = checkBotSolid(
+          nx + dx * 0.28,
+          ny + dy * 0.28
+        );
 
         if (isBlocked) {
-          // Choose a new random open direction
-          const validDirs = DIRS.filter((d) => {
-            const testX = bot.x + d.dx * 0.5;
-            const testY = bot.y + d.dy * 0.5;
-            return !checkBotSolid(testX, testY);
-          });
-
-          if (validDirs.length > 0) {
-            bot.dir = validDirs[Math.floor(Math.random() * validDirs.length)];
+          // Blocked ahead: recalculate alternative path towards player
+          const chaseStep = getNextStepTowardsPlayer(
+            botCol,
+            botRow,
+            playerCol,
+            playerRow,
+            currentGrid,
+            currentBombs
+          );
+          if (chaseStep && !checkBotSolid(botCol + chaseStep.dx * 0.4, botRow + chaseStep.dy * 0.4)) {
+            bot.dir = chaseStep;
+            if (chaseStep.dx !== 0) bot.y = botRow;
+            else if (chaseStep.dy !== 0) bot.x = botCol;
           } else {
-            bot.dir = { dx: -dx, dy: -dy }; // Reverse
+            // Find any valid open direction to flank
+            const validDirs = DIRS.filter((d) => !checkBotSolid(botCol + d.dx * 0.4, botRow + d.dy * 0.4));
+            if (validDirs.length > 0) {
+              bot.dir = validDirs[Math.floor(Math.random() * validDirs.length)];
+              if (bot.dir.dx !== 0) bot.y = botRow;
+              else if (bot.dir.dy !== 0) bot.x = botCol;
+            } else {
+              bot.dir = { dx: -dx, dy: -dy }; // Reverse
+            }
           }
         } else {
           bot.x = nx;
           bot.y = ny;
 
-          // Hunter drone: line of sight check
-          if (bot.type === ENEMY_HUNTER && Math.random() < 0.05) {
-            const pX = playerPosRef.current.x;
-            const pY = playerPosRef.current.y;
-            if (Math.abs(bot.x - pX) < 0.5) {
-              bot.dir = { dx: 0, dy: pY > bot.y ? 1 : -1 };
-            } else if (Math.abs(bot.y - pY) < 0.5) {
-              bot.dir = { dx: pX > bot.x ? 1 : -1, dy: 0 };
-            }
+          // Gently center on corridor perpendicular axis
+          if (bot.dir.dx !== 0) {
+            bot.y += (botRow - bot.y) * 0.25;
+          } else if (bot.dir.dy !== 0) {
+            bot.x += (botCol - bot.x) * 0.25;
           }
         }
 
-        // Check collision between enemy and player
+        // Check collision between enemy and player: KILL / DAMAGE PLAYER!
         const distToPlayer = Math.hypot(bot.x - playerPosRef.current.x, bot.y - playerPosRef.current.y);
-        if (distToPlayer < 0.6) {
+        if (distToPlayer < 0.65) {
           handlePlayerDamage();
         }
 

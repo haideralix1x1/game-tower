@@ -436,7 +436,7 @@ export default function ThiefEscapeGame({
       .catch(() => {});
   }, [initLevel]);
 
-  // Player Caught / Damaged
+  // Player Caught / Damaged: Only reset player position to start; guards and rival continue seamlessly!
   const handlePlayerBusted = useCallback((reason = 'BUSTED!') => {
     triggerGameOverHaptic();
     playGameOverSound();
@@ -450,12 +450,40 @@ export default function ThiefEscapeGame({
         juiceRef.current?.popup(`🚨 ${reason}`, 'Caught or failed objective', COLORS.danger);
         return 0;
       } else {
-        initLevel(level);
-        juiceRef.current?.popup(`⚠️ ${reason}`, `${nextLives} Lives remaining`, COLORS.solarGold);
+        // Reset ONLY player position to ground floor start; guards & rival continue from where they are!
+        const curP = playerRef.current;
+        if (curP.hasDiamond) {
+          levelConfig.diamond.floor = curP.floor;
+          levelConfig.diamond.x = Math.max(30, Math.min(ARENA_W - 30, curP.x));
+          diamondTakenRef.current = false;
+          setDiamondTaken(false);
+          hasDiamondRef.current = false;
+        }
+
+        const resetPlayer = {
+          floor: 0,
+          x: levelConfig.car.x + (levelConfig.car.x < 150 ? 50 : -50),
+          y: null,
+          isClimbing: false,
+          stairIdx: null,
+          isHiding: false,
+          hiddenWindowX: null,
+          hasDiamond: false,
+          hasPetrol: !levelConfig.requiresPetrol || curP.hasPetrol,
+          facing: levelConfig.car.x < 150 ? 1 : -1,
+        };
+        setPlayer(resetPlayer);
+        playerRef.current = resetPlayer;
+
+        inputDirRef.current = 0;
+        climbDirRef.current = 0;
+        isSneakRef.current = false;
+
+        juiceRef.current?.popup(`⚠️ ${reason}`, `${nextLives} Lives remaining (Respawned at Ground)`, COLORS.solarGold);
         return nextLives;
       }
     });
-  }, [initLevel, level]);
+  }, [levelConfig]);
 
   // Throw Distractor Stone in player's facing direction
   const handleThrowStone = useCallback(() => {
