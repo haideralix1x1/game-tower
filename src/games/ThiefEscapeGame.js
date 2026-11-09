@@ -73,125 +73,160 @@ const getNearestWindowX = (playerX) => {
  * Curated Levels with Escalating Guards, Petrol Missions, Rival Thieves & Full-Floor Patrols
  * Guards patrol the full floor (minX: 45 to maxX: 295), bypassing ladders to give clear stealth timing windows.
  */
-const CURATED_LEVELS = [
-  // Level 1: Tutorial Infiltration (3 Floors, 1 Guard, Straight Heist)
-  {
-    name: 'ROOFTOP VAULT',
-    floorsCount: 3,
-    requiresPetrol: false,
-    hasRival: false,
-    stairs: [
-      { fromFloor: 0, toFloor: 1, x: 265 }, // Right stair to floor 1
-      { fromFloor: 1, toFloor: 2, x: 75 },  // Left stair to floor 2
-    ],
-    guards: [
-      { id: 'g0', floor: 1, minX: 45, maxX: 295, x: 60, dir: 1, speed: 1.1, pauseTimer: 0, alertTimer: 0 },
-    ],
-    diamond: { floor: 2, x: 250 },
-    petrol: null,
-    car: { floor: 0, x: 60 },
-    stonePickup: null,
-  },
+/**
+ * Generates 100 fully predefined, graduated heist levels with progressive difficulty:
+ * - Levels 1-4: 2 floors (Ground + Vault). Beginner infiltration, 0-1 guards.
+ * - Levels 5-18: 3 floors. Dual ladder shafts, introducing Rival Thief, fuel canisters & distractor stones.
+ * - Levels 19-45: 4 floors. 2-3 guards, triple ladder paths on select sectors, faster patrols.
+ * - Levels 46-75: 5 floors. High-security skyscraper complexes, multi-patrol convergence, cunning rival AI.
+ * - Levels 76-100: 5-6 floors apex towers. Up to 5 guards, triple vertical escape shafts, elite stealth gauntlets.
+ */
+function generate100CuratedLevels() {
+  const LEVEL_NAMES = [
+    // Tier 1: Ground Operations (Levels 1-5)
+    'GROUND ZERO', 'FIRST HAUL', 'CANOPY ROOF', 'SHADOW ALLEY', 'NEON DEPOT',
+    // Tier 2: Low-Rise Infiltrations (Levels 6-20)
+    'RIVAL EMERGENCE', 'MIDNIGHT VAULT', 'FUEL HEIST', 'DOUBLE LADDER', 'CROSSFIRE CATWALK',
+    'CYBER LOUNGE', 'STEALTH CORRIDOR', 'TWIN LADDERS', 'ROOFTOP AMBUSH', 'HIGH-RISE DEPOSIT',
+    'SHADOW RUNNER', 'GRID LOCK', 'FUEL INFILTRATION', 'SILENT NIGHT', 'RIVAL SHOWDOWN',
+    // Tier 3: Mid-Town Corporate Towers (Levels 21-40)
+    'WEST END PLAZA', 'EAST WING SKYWAY', 'TRIPLE PATHS', 'SECURITY SECTOR 4', 'NEON SPIRE',
+    'NIGHTFALL HEIST', 'DISTRACTION ALLEY', 'VAULT APEX', 'PATROL CONVERGENCE', 'CHRONO TOWER',
+    'GHOST PROTOCOL', 'TITANIUM SHAFT', 'HIGH-SPEED PURSUIT', 'MID-TOWN VAULT', 'RIVAL AMBUSH',
+    'FOURTH DIMENSION', 'LASER ROOF', 'STEALTH SHUFFLE', 'FUEL CRISIS', 'APEX LEDGE',
+    // Tier 4: Sky-Rise Complexes (Levels 41-65)
+    'SECTOR 7 TOWER', 'FIVE TIER HEIST', 'SHADOW LABYRINTH', 'RAPID RESPONSE', 'HEAVY PATROL',
+    'PENTHOUSE INFILTRATION', 'NIGHT RUNNER', 'RIVAL CHASE', 'QUANTUM RESERVE', 'LOCKDOWN PROTOCOL',
+    'MIDNIGHT CHOPPER', 'NEO MANHATTAN', 'CATWALK MAZE', 'DOUBLE BLUFF', 'VAULT GUARDIAN',
+    'SHADOW STALKER', 'HIGH TENSION', 'FUEL DROP', 'VERTICAL ASCENT', 'SKY HIGHWAY',
+    'CYBER PANORAMA', 'TITAN COMPLEX', 'HEAVY SECURITY', 'SMOKE AND MIRRORS', 'RIVAL VENDETTA',
+    // Tier 5: High-Sec Megastructures (Levels 66-85)
+    'BLIND RUN', 'SIXTH LEVEL', 'HIGH VOLTAGE', 'SHADOW APEX', 'CITADEL LOWER',
+    'SENTINEL BASTION', 'PERFECT CRIME', 'GHOST FLIGHT', 'VAULT INTERCEPT', 'DEEP SECTOR',
+    'LASER LABYRINTH', 'HIGH SPEED GETAWAY', 'NIGHT PATROL MAX', 'OMEGA ROOFTOP', 'TITAN REACH',
+    'MASTER INFILTRATOR', 'SHADOW SYNDICATE', 'LIGHTNING ESCAPE', 'CITADEL APEX', 'FINAL PROTOCOL',
+    // Tier 6: The Apex Citadel (Levels 86-100)
+    'PENTHOUSE LOCKDOWN', 'QUANTUM HEIST', 'STEALTH MASTER', 'HYPER RUNNER', 'BLACKOUT TOWER',
+    'CYBER FORTRESS', 'APEX INTRUDER', 'NIGHTMARE SHAFT', 'RIVAL GAUNTLET', 'TITAN OVERLORD',
+    'MAXIMUM OVERDRIVE', 'THE VAULT MONOLITH', 'SHADOW ASCENSION', 'ZERO HOUR HEIST', 'THE OLYMPUS APEX'
+  ];
 
-  // Level 2: Petrol Shortage (3 Floors, 2 Guards, Fuel Needed + 2 Ladder Paths)
-  {
-    name: 'FUEL RESERVES',
-    floorsCount: 3,
-    requiresPetrol: true,
-    hasRival: true,
-    stairs: [
-      { fromFloor: 0, toFloor: 1, x: 75 },
-      { fromFloor: 0, toFloor: 1, x: 265 },
-      { fromFloor: 1, toFloor: 2, x: 75 },
-      { fromFloor: 1, toFloor: 2, x: 265 },
-    ],
-    guards: [
-      { id: 'g0', floor: 1, minX: 45, maxX: 295, x: 60, dir: 1, speed: 1.15, pauseTimer: 0, alertTimer: 0 },
-      { id: 'g1', floor: 2, minX: 45, maxX: 295, x: 280, dir: -1, speed: 1.2, pauseTimer: 0, alertTimer: 0 },
-    ],
-    diamond: { floor: 2, x: 170 },
-    petrol: { floor: 1, x: 170 },
-    car: { floor: 0, x: 170 },
-    stonePickup: { floor: 1, x: 45 },
-  },
+  const levels = [];
 
-  // Level 3: Rival Heist (4 Floors, 2 Guards, 1 Rival Thief + 2 Ladder Paths)
-  {
-    name: 'RIVAL SHADOWS',
-    floorsCount: 4,
-    requiresPetrol: false,
-    hasRival: true,
-    stairs: [
-      { fromFloor: 0, toFloor: 1, x: 75 },
-      { fromFloor: 0, toFloor: 1, x: 265 },
-      { fromFloor: 1, toFloor: 2, x: 75 },
-      { fromFloor: 1, toFloor: 2, x: 265 },
-      { fromFloor: 2, toFloor: 3, x: 75 },
-      { fromFloor: 2, toFloor: 3, x: 265 },
-    ],
-    guards: [
-      { id: 'g0', floor: 1, minX: 45, maxX: 295, x: 60, dir: 1, speed: 1.2, pauseTimer: 0, alertTimer: 0 },
-      { id: 'g1', floor: 2, minX: 45, maxX: 295, x: 280, dir: -1, speed: 1.25, pauseTimer: 0, alertTimer: 0 },
-    ],
-    diamond: { floor: 3, x: 170 },
-    petrol: null,
-    car: { floor: 0, x: 170 },
-    stonePickup: { floor: 2, x: 285 },
-  },
+  for (let lvl = 1; lvl <= 100; lvl++) {
+    const name = LEVEL_NAMES[lvl - 1] || `SECTOR ${lvl}`;
 
-  // Level 4: Full Lockdown (4 Floors, 3 Guards, Petrol + Rival Thief + 2 Ladder Paths)
-  {
-    name: 'GRAND HIGH-RISE',
-    floorsCount: 4,
-    requiresPetrol: true,
-    hasRival: true,
-    stairs: [
-      { fromFloor: 0, toFloor: 1, x: 75 },
-      { fromFloor: 0, toFloor: 1, x: 265 },
-      { fromFloor: 1, toFloor: 2, x: 75 },
-      { fromFloor: 1, toFloor: 2, x: 265 },
-      { fromFloor: 2, toFloor: 3, x: 75 },
-      { fromFloor: 2, toFloor: 3, x: 265 },
-    ],
-    guards: [
-      { id: 'g0', floor: 1, minX: 45, maxX: 295, x: 60, dir: 1, speed: 1.25, pauseTimer: 0, alertTimer: 0 },
-      { id: 'g1', floor: 2, minX: 45, maxX: 295, x: 280, dir: -1, speed: 1.3, pauseTimer: 0, alertTimer: 0 },
-      { id: 'g2', floor: 3, minX: 45, maxX: 295, x: 60, dir: 1, speed: 1.35, pauseTimer: 0, alertTimer: 0 },
-    ],
-    diamond: { floor: 3, x: 170 },
-    petrol: { floor: 1, x: 65 },
-    car: { floor: 0, x: 170 },
-    stonePickup: { floor: 2, x: 45 },
-  },
+    // 1. Escalating Floor Count
+    let floorsCount = 2;
+    if (lvl >= 5 && lvl <= 18) floorsCount = 3;
+    else if (lvl >= 19 && lvl <= 45) floorsCount = 4;
+    else if (lvl >= 46 && lvl <= 75) floorsCount = 5;
+    else if (lvl >= 76) floorsCount = (lvl % 2 === 0 || lvl >= 95) ? 6 : 5;
 
-  // Level 5: Penthouse Apex (5 Floors, 4 Guards, Master Infiltration + 2 Ladder Paths)
-  {
-    name: 'PENTHOUSE APEX',
-    floorsCount: 5,
-    requiresPetrol: true,
-    hasRival: true,
-    stairs: [
-      { fromFloor: 0, toFloor: 1, x: 75 },
-      { fromFloor: 0, toFloor: 1, x: 265 },
-      { fromFloor: 1, toFloor: 2, x: 75 },
-      { fromFloor: 1, toFloor: 2, x: 265 },
-      { fromFloor: 2, toFloor: 3, x: 75 },
-      { fromFloor: 2, toFloor: 3, x: 265 },
-      { fromFloor: 3, toFloor: 4, x: 75 },
-      { fromFloor: 3, toFloor: 4, x: 265 },
-    ],
-    guards: [
-      { id: 'g0', floor: 1, minX: 45, maxX: 295, x: 60, dir: 1, speed: 1.3, pauseTimer: 0, alertTimer: 0 },
-      { id: 'g1', floor: 2, minX: 45, maxX: 295, x: 280, dir: -1, speed: 1.35, pauseTimer: 0, alertTimer: 0 },
-      { id: 'g2', floor: 3, minX: 45, maxX: 295, x: 60, dir: 1, speed: 1.4, pauseTimer: 0, alertTimer: 0 },
-      { id: 'g3', floor: 4, minX: 45, maxX: 295, x: 280, dir: -1, speed: 1.45, pauseTimer: 0, alertTimer: 0 },
-    ],
-    diamond: { floor: 4, x: 170 },
-    petrol: { floor: 2, x: 65 },
-    car: { floor: 0, x: 170 },
-    stonePickup: { floor: 3, x: 285 },
-  },
-];
+    // 2. Ladder Paths (Horizontal Ways: 1 ladder, 2 ladders, or 3 ladders)
+    const isTripleLadder = lvl >= 25 && (lvl % 3 === 0);
+    const stairs = [];
+
+    for (let f = 0; f < floorsCount - 1; f++) {
+      if (lvl <= 3) {
+        // Single ladder path
+        const xPos = f % 2 === 0 ? 265 : 75;
+        stairs.push({ fromFloor: f, toFloor: f + 1, x: xPos });
+      } else if (isTripleLadder) {
+        // 3 horizontal shafts
+        stairs.push({ fromFloor: f, toFloor: f + 1, x: 65 });
+        stairs.push({ fromFloor: f, toFloor: f + 1, x: 170 });
+        stairs.push({ fromFloor: f, toFloor: f + 1, x: 275 });
+      } else {
+        // 2 distinct vertical paths
+        stairs.push({ fromFloor: f, toFloor: f + 1, x: 75 });
+        stairs.push({ fromFloor: f, toFloor: f + 1, x: 265 });
+      }
+    }
+
+    // 3. Rival Thief Appearance
+    let hasRival = false;
+    if (lvl >= 6 && lvl <= 20) hasRival = (lvl % 2 === 0);
+    else if (lvl >= 21 && lvl <= 60) hasRival = (lvl % 3 !== 1);
+    else if (lvl >= 61) hasRival = (lvl % 5 !== 0);
+
+    // 4. Guards Scaling & Speed Ramp
+    let guardCount = 0;
+    if (lvl === 1) guardCount = 0;
+    else if (lvl <= 10) guardCount = 1;
+    else if (lvl <= 25) guardCount = 2;
+    else if (lvl <= 55) guardCount = 3;
+    else if (lvl <= 80) guardCount = 4;
+    else guardCount = Math.min(floorsCount - 1, (lvl >= 90 ? 5 : 4));
+
+    const guards = [];
+    const baseSpeed = 1.0 + Math.min(0.55, (lvl - 1) * 0.0055);
+
+    const availableFloors = [];
+    for (let f = 1; f < floorsCount; f++) availableFloors.push(f);
+
+    for (let g = 0; g < guardCount; g++) {
+      const gFloor = availableFloors[g % availableFloors.length];
+      const dir = (g % 2 === 0) ? 1 : -1;
+      const startX = dir === 1 ? 60 : 280;
+      const speed = Math.round((baseSpeed + g * 0.04) * 100) / 100;
+      guards.push({
+        id: `g${g}`,
+        floor: gFloor,
+        minX: 45,
+        maxX: 295,
+        x: startX,
+        dir,
+        speed,
+        pauseTimer: 0,
+        alertTimer: 0,
+      });
+    }
+
+    // 5. Petrol Requirement
+    const requiresPetrol = lvl === 3 || (lvl >= 7 && (lvl % 2 === 1 || lvl >= 80));
+    let petrol = null;
+    if (requiresPetrol) {
+      const petrolFloor = Math.max(1, Math.min(floorsCount - 2, Math.floor(floorsCount / 2)));
+      const petrolX = (lvl % 2 === 0) ? 65 : 270;
+      petrol = { floor: petrolFloor, x: petrolX };
+    }
+
+    // 6. Diamond Vault (Top Floor)
+    const diamondFloor = floorsCount - 1;
+    const diamondX = (lvl % 3 === 0) ? 170 : (lvl % 2 === 0) ? 250 : 85;
+    const diamond = { floor: diamondFloor, x: diamondX };
+
+    // 7. Getaway Car (Floor 0)
+    const carX = (lvl <= 3) ? 60 : isTripleLadder ? 120 : 170;
+    const car = { floor: 0, x: carX };
+
+    // 8. Distractor Stone Refill Stash
+    let stonePickup = null;
+    if (guardCount >= 2) {
+      const stoneFloor = Math.max(1, Math.min(floorsCount - 2, 2));
+      const stoneX = (lvl % 2 === 0) ? 45 : 290;
+      stonePickup = { floor: stoneFloor, x: stoneX };
+    }
+
+    levels.push({
+      name,
+      floorsCount,
+      requiresPetrol,
+      hasRival,
+      stairs,
+      guards,
+      diamond,
+      petrol,
+      car,
+      stonePickup,
+    });
+  }
+
+  return levels;
+}
+
+const CURATED_LEVELS = generate100CuratedLevels();
 
 export default function ThiefEscapeGame({
   isPaused = false,
@@ -1231,12 +1266,19 @@ export default function ThiefEscapeGame({
     }));
   };
 
-  // Next Level Handler (continues to next level and saves progress)
+  // Next Level Handler (advances through all 100 handcrafted levels)
   const handleNextLevel = useCallback(() => {
     const nextLvl = level + 1;
-    setLevel(nextLvl);
-    saveCurrentLevel(nextLvl);
-    initLevel(nextLvl);
+    if (nextLvl > CURATED_LEVELS.length) {
+      juiceRef.current?.popup('🏆 MASTER OPERATIVE', 'All 100 Heists Completed!', COLORS.matrixMint);
+      setLevel(100);
+      saveCurrentLevel(100);
+      initLevel(100);
+    } else {
+      setLevel(nextLvl);
+      saveCurrentLevel(nextLvl);
+      initLevel(nextLvl);
+    }
   }, [level, initLevel, saveCurrentLevel]);
 
   // Retry Current Level Handler (continues same level on game over)
