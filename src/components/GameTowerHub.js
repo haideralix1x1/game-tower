@@ -55,7 +55,6 @@ import ColorTubeSortGame from '../games/ColorTubeSortGame';
 import ColorSwitchGame from '../games/ColorSwitchGame';
 import HardcoreRunnerGame from '../games/HardcoreRunnerGame';
 import CyberTetrisGame from '../games/CyberTetrisGame';
-import Match3SagaGame from '../games/Match3SagaGame';
 import TapAwayArrowsGame from '../games/TapAwayArrowsGame';
 import IcyTowerClimberGame from '../games/IcyTowerClimberGame';
 import WordScrambleGame from '../games/WordScrambleGame';
@@ -95,8 +94,8 @@ const monoFont = Platform.select({
 export const TOWER_GAMES = [
   {
     id: 'thief_escape',
-    floorNum: 34,
-    floor: 'FLOOR 34',
+    floorNum: 33,
+    floor: 'FLOOR 33',
     tier: 'APEX',
     title: 'THIEF ESCAPE',
     category: 'STRATEGY',
@@ -109,8 +108,8 @@ export const TOWER_GAMES = [
   },
   {
     id: 'cyber_bomber',
-    floorNum: 33,
-    floor: 'FLOOR 33',
+    floorNum: 32,
+    floor: 'FLOOR 32',
     tier: 'APEX',
     title: 'BOMBERMAN',
     category: 'ARCADE',
@@ -123,8 +122,8 @@ export const TOWER_GAMES = [
   },
   {
     id: 'cyber_screw',
-    floorNum: 32,
-    floor: 'FLOOR 32',
+    floorNum: 31,
+    floor: 'FLOOR 31',
     tier: 'APEX',
     title: 'SCREW PUZZLE',
     category: 'PUZZLE',
@@ -137,8 +136,8 @@ export const TOWER_GAMES = [
   },
   {
     id: 'cyber_pathfinder',
-    floorNum: 31,
-    floor: 'FLOOR 31',
+    floorNum: 30,
+    floor: 'FLOOR 30',
     tier: 'APEX',
     title: 'PATHFINDER',
     category: 'PUZZLE',
@@ -151,8 +150,8 @@ export const TOWER_GAMES = [
   },
   {
     id: 'knife_hit',
-    floorNum: 30,
-    floor: 'FLOOR 30',
+    floorNum: 29,
+    floor: 'FLOOR 29',
     tier: 'APEX',
     title: 'WORD SCRAMBLE',
     category: 'ANAGRAM MATRIX',
@@ -165,8 +164,8 @@ export const TOWER_GAMES = [
   },
   {
     id: 'icy_climber',
-    floorNum: 29,
-    floor: 'FLOOR 29',
+    floorNum: 28,
+    floor: 'FLOOR 28',
     tier: 'ORBIT',
     title: 'SPIRE ASCENT',
     category: 'ARCADE',
@@ -179,8 +178,8 @@ export const TOWER_GAMES = [
   },
   {
     id: 'tap_away',
-    floorNum: 28,
-    floor: 'FLOOR 28',
+    floorNum: 27,
+    floor: 'FLOOR 27',
     tier: 'ORBIT',
     title: 'TAP AWAY ARROWS',
     category: 'BRAIN',
@@ -190,20 +189,6 @@ export const TOWER_GAMES = [
     secondary: '#00F5FF',
     icon: '🎯',
     storageKey: '@game_tower:best_arrows_v1',
-  },
-  {
-    id: 'match3_saga',
-    floorNum: 27,
-    floor: 'FLOOR 27',
-    tier: 'ORBIT',
-    title: 'MATCH 3 SAGA',
-    category: 'PUZZLE',
-    badge: 'BRICKS & STARS',
-    desc: 'Match glowing gems, shatter armored bricks, and collect caged stars before the countdown ends.',
-    accent: '#FF007F',
-    secondary: '#FFD166',
-    icon: '👑',
-    storageKey: '@game_tower:best_match3_v1',
   },
   {
     id: 'cyber_tetris',
@@ -1153,14 +1138,6 @@ export default function GameTowerHub({ initialGameId = null, isSplashActive = fa
             isPaused={isPaused}
             onBackToHub={requestExitToHub}
             onScoreUpdate={(s) => handleScoreUpdate('cyber_tetris', s)}
-          />
-        );
-      case 'match3_saga':
-        return (
-          <Match3SagaGame
-            isPaused={isPaused}
-            onBackToHub={requestExitToHub}
-            onScoreUpdate={(s) => handleScoreUpdate('match3_saga', s)}
           />
         );
       case 'tap_away':

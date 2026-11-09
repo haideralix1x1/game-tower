@@ -106,16 +106,10 @@ export const UNLOCK_REQUIREMENTS = {
   },
 
   // PUZZLES CATEGORY
-  match3_saga: {
+  color_tube: {
     reqGame: 'block_blast',
     targetScore: 150,
     desc: 'Score 150+ in BLOCK BLAST 8x8',
-    category: 'PUZZLES',
-  },
-  color_tube: {
-    reqGame: 'match3_saga',
-    targetScore: 120,
-    desc: 'Score 120+ in MATCH 3 SAGA',
     category: 'PUZZLES',
   },
   hanoi_tower: {
@@ -235,7 +229,6 @@ export const GAME_CATEGORY_MAP = {
 
   // Puzzles
   block_blast: 'PUZZLES',
-  match3_saga: 'PUZZLES',
   color_tube: 'PUZZLES',
   hanoi_tower: 'PUZZLES',
   lights_out: 'PUZZLES',
