@@ -614,12 +614,24 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
       const eng = engineRef.current;
       if (eng.levelClearing) return;
       eng.levelClearing = true;
-      eng.running = false;
+
+      // Halt balls during celebration
+      for (const b of eng.balls) {
+        b.vx = 0;
+        b.vy = 0;
+      }
 
       const clearBonus = 150;
       eng.score += clearBonus;
       setScore(eng.score);
       persistBest(eng.score);
+
+      // Immediately render breakable bricks cleared
+      setRenderState((prev) => ({
+        ...prev,
+        bricks: eng.bricks.filter((b) => b.type === 'UNBREAKABLE'),
+        balls: [...eng.balls],
+      }));
 
       safeSound(playPerfectSound);
       safeHaptic(triggerPerfectHaptic);
@@ -800,7 +812,7 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
       const eng = engineRef.current;
 
       try {
-        if (!isPausedRef.current && eng.running) {
+        if (!isPausedRef.current && eng.running && !eng.levelClearing) {
           // --- 0. SPRING BACK PADDLE RECOIL ---
           if (Math.abs(eng.paddleRecoil) > 0.05) {
             eng.paddleRecoil *= 0.82;
@@ -844,7 +856,6 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
               hasLaser: eng.laserTimer > 0,
               hasMagnet: eng.magnetTimer > 0,
             });
-            frameId = requestAnimationFrame(tick);
             return;
           }
 
@@ -1257,7 +1268,6 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
             if (breakableLeft === 0) {
               if (eng.mode === 'SINGLE_BRICKS') {
                 handleLevelClear(eng.level);
-                frameId = requestAnimationFrame(tick);
                 return;
               } else if (eng.mode === 'AI_BRICK_DUEL') {
                 eng.running = false;
@@ -1268,7 +1278,6 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
                 setModalTitle(won ? 'DUEL VICTORY!' : 'AI RIVAL WON!');
                 setModalSubtitle(`FINAL SCORE: ${eng.score} VS AI: ${eng.aiScore}`);
                 setModalVisible(true);
-                frameId = requestAnimationFrame(tick);
                 return;
               }
             }
@@ -1590,7 +1599,7 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
                     if (breakableLeft === 0) {
                       if (eng.mode === 'SINGLE_BRICKS') {
                         handleLevelClear(eng.level);
-                        return;
+                        break;
                       } else if (eng.mode === 'AI_BRICK_DUEL') {
                         eng.running = false;
                         eng.levelClearing = true;
@@ -1600,7 +1609,7 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
                         setModalTitle(won ? 'DUEL VICTORY!' : 'AI RIVAL WON!');
                         setModalSubtitle(`FINAL SCORE: ${eng.score} VS AI: ${eng.aiScore}`);
                         setModalVisible(true);
-                        return;
+                        break;
                       }
                     }
                   }
@@ -1858,9 +1867,9 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
         }
       } catch (_err) {
         // Prevent any game-loop error from crashing the entire app
+      } finally {
+        frameId = requestAnimationFrame(tick);
       }
-
-      frameId = requestAnimationFrame(tick);
     };
 
     frameId = requestAnimationFrame(tick);

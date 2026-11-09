@@ -93,7 +93,7 @@ const CURATED_LEVELS = [
     stonePickup: null,
   },
 
-  // Level 2: Petrol Shortage (3 Floors, 2 Guards, Fuel Needed)
+  // Level 2: Petrol Shortage (3 Floors, 2 Guards, Fuel Needed + 2 Ladder Paths)
   {
     name: 'FUEL RESERVES',
     floorsCount: 3,
@@ -101,19 +101,21 @@ const CURATED_LEVELS = [
     hasRival: true,
     stairs: [
       { fromFloor: 0, toFloor: 1, x: 75 },
+      { fromFloor: 0, toFloor: 1, x: 265 },
+      { fromFloor: 1, toFloor: 2, x: 75 },
       { fromFloor: 1, toFloor: 2, x: 265 },
     ],
     guards: [
       { id: 'g0', floor: 1, minX: 45, maxX: 295, x: 60, dir: 1, speed: 1.15, pauseTimer: 0, alertTimer: 0 },
       { id: 'g1', floor: 2, minX: 45, maxX: 295, x: 280, dir: -1, speed: 1.2, pauseTimer: 0, alertTimer: 0 },
     ],
-    diamond: { floor: 2, x: 70 },
-    petrol: { floor: 1, x: 285 },
-    car: { floor: 0, x: 265 },
+    diamond: { floor: 2, x: 170 },
+    petrol: { floor: 1, x: 170 },
+    car: { floor: 0, x: 170 },
     stonePickup: { floor: 1, x: 45 },
   },
 
-  // Level 3: Rival Heist (4 Floors, 2 Guards, 1 Rival Thief)
+  // Level 3: Rival Heist (4 Floors, 2 Guards, 1 Rival Thief + 2 Ladder Paths)
   {
     name: 'RIVAL SHADOWS',
     floorsCount: 4,
@@ -121,28 +123,34 @@ const CURATED_LEVELS = [
     hasRival: true,
     stairs: [
       { fromFloor: 0, toFloor: 1, x: 75 },
+      { fromFloor: 0, toFloor: 1, x: 265 },
+      { fromFloor: 1, toFloor: 2, x: 75 },
       { fromFloor: 1, toFloor: 2, x: 265 },
       { fromFloor: 2, toFloor: 3, x: 75 },
+      { fromFloor: 2, toFloor: 3, x: 265 },
     ],
     guards: [
       { id: 'g0', floor: 1, minX: 45, maxX: 295, x: 60, dir: 1, speed: 1.2, pauseTimer: 0, alertTimer: 0 },
       { id: 'g1', floor: 2, minX: 45, maxX: 295, x: 280, dir: -1, speed: 1.25, pauseTimer: 0, alertTimer: 0 },
     ],
-    diamond: { floor: 3, x: 265 },
+    diamond: { floor: 3, x: 170 },
     petrol: null,
-    car: { floor: 0, x: 265 },
+    car: { floor: 0, x: 170 },
     stonePickup: { floor: 2, x: 285 },
   },
 
-  // Level 4: Full Lockdown (4 Floors, 3 Guards, Petrol + Rival Thief)
+  // Level 4: Full Lockdown (4 Floors, 3 Guards, Petrol + Rival Thief + 2 Ladder Paths)
   {
     name: 'GRAND HIGH-RISE',
     floorsCount: 4,
     requiresPetrol: true,
     hasRival: true,
     stairs: [
+      { fromFloor: 0, toFloor: 1, x: 75 },
       { fromFloor: 0, toFloor: 1, x: 265 },
       { fromFloor: 1, toFloor: 2, x: 75 },
+      { fromFloor: 1, toFloor: 2, x: 265 },
+      { fromFloor: 2, toFloor: 3, x: 75 },
       { fromFloor: 2, toFloor: 3, x: 265 },
     ],
     guards: [
@@ -150,13 +158,13 @@ const CURATED_LEVELS = [
       { id: 'g1', floor: 2, minX: 45, maxX: 295, x: 280, dir: -1, speed: 1.3, pauseTimer: 0, alertTimer: 0 },
       { id: 'g2', floor: 3, minX: 45, maxX: 295, x: 60, dir: 1, speed: 1.35, pauseTimer: 0, alertTimer: 0 },
     ],
-    diamond: { floor: 3, x: 70 },
+    diamond: { floor: 3, x: 170 },
     petrol: { floor: 1, x: 65 },
-    car: { floor: 0, x: 60 },
+    car: { floor: 0, x: 170 },
     stonePickup: { floor: 2, x: 45 },
   },
 
-  // Level 5: Penthouse Apex (5 Floors, 4 Guards, Master Infiltration)
+  // Level 5: Penthouse Apex (5 Floors, 4 Guards, Master Infiltration + 2 Ladder Paths)
   {
     name: 'PENTHOUSE APEX',
     floorsCount: 5,
@@ -164,8 +172,12 @@ const CURATED_LEVELS = [
     hasRival: true,
     stairs: [
       { fromFloor: 0, toFloor: 1, x: 75 },
+      { fromFloor: 0, toFloor: 1, x: 265 },
+      { fromFloor: 1, toFloor: 2, x: 75 },
       { fromFloor: 1, toFloor: 2, x: 265 },
       { fromFloor: 2, toFloor: 3, x: 75 },
+      { fromFloor: 2, toFloor: 3, x: 265 },
+      { fromFloor: 3, toFloor: 4, x: 75 },
       { fromFloor: 3, toFloor: 4, x: 265 },
     ],
     guards: [
@@ -174,9 +186,9 @@ const CURATED_LEVELS = [
       { id: 'g2', floor: 3, minX: 45, maxX: 295, x: 60, dir: 1, speed: 1.4, pauseTimer: 0, alertTimer: 0 },
       { id: 'g3', floor: 4, minX: 45, maxX: 295, x: 280, dir: -1, speed: 1.45, pauseTimer: 0, alertTimer: 0 },
     ],
-    diamond: { floor: 4, x: 70 },
+    diamond: { floor: 4, x: 170 },
     petrol: { floor: 2, x: 65 },
-    car: { floor: 0, x: 265 },
+    car: { floor: 0, x: 170 },
     stonePickup: { floor: 3, x: 285 },
   },
 ];
@@ -233,6 +245,10 @@ export default function ThiefEscapeGame({
   const [rival, setRival] = useState(() => ({
     floor: 0,
     x: levelConfig.car.x + (levelConfig.car.x < 150 ? 140 : -140),
+    y: null,
+    isClimbing: false,
+    stairIdx: null,
+    climbDir: 0,
     facing: 1,
     hasDiamond: false,
     isAlive: levelConfig.hasRival,
@@ -351,6 +367,10 @@ export default function ThiefEscapeGame({
       const initialRival = {
         floor: 0,
         x: cfg.car.x + (cfg.car.x < 150 ? 140 : -140),
+        y: null,
+        isClimbing: false,
+        stairIdx: null,
+        climbDir: 0,
         facing: 1,
         hasDiamond: false,
         isAlive: cfg.hasRival,
@@ -697,175 +717,287 @@ export default function ThiefEscapeGame({
         });
       }
 
-      // 5. Update Rival AI Thief: Sneaks, Hides from Guards, Snatches Diamond, Pursues Player, Escapes to Screen Edge
+      // 5. Update Rival AI Thief: Sneaks, Hides from Guards, Snatches Diamond, Dual-Ladder Climbing, Evasive Downward Escape
       if (levelConfig.hasRival && curRival.isAlive) {
         if (curRival.snatchCooldown > 0) curRival.snatchCooldown -= 1;
         if (curRival.hideTimer > 0) curRival.hideTimer -= 1;
 
-        // Check if there is a guard on rival's floor
-        const guardOnFloor = curGuards.find((g) => g.floor === curRival.floor);
-        let guardThreat = false;
-        let distToGuard = 999;
-        let guardFacingRival = false;
+        const curRivalY = curRival.isClimbing && curRival.y != null ? curRival.y : getFloorY(curRival.floor);
+        const curPlayerY = curPlayer.isClimbing && curPlayer.y != null ? curPlayer.y : getFloorY(curPlayer.floor);
 
-        if (guardOnFloor) {
-          distToGuard = curRival.x - guardOnFloor.x;
-          guardFacingRival =
-            (guardOnFloor.dir === 1 && distToGuard > 0) ||
-            (guardOnFloor.dir === -1 && distToGuard < 0);
-          const absDist = Math.abs(distToGuard);
+        // A. Handle Physical Climbing Movement on Ladders
+        if (curRival.isClimbing && curRival.stairIdx != null) {
+          const stair = levelConfig.stairs[curRival.stairIdx];
+          const yBottom = getFloorY(stair.fromFloor);
+          const yTop = getFloorY(stair.toFloor);
+          const climbSpeed = curRival.hasDiamond ? 2.3 : 1.8;
 
-          // Threat if guard is facing rival within 110px
-          if (guardFacingRival && absDist < 110) {
-            guardThreat = true;
+          curRival.isHiding = false;
+          curRival.hiddenWindowX = null;
+          curRival.x = stair.x;
+
+          if (curRival.y == null) {
+            curRival.y = curRival.climbDir === -1 ? yBottom - 4 : yTop + 4;
           }
 
-          // Caught in guard flashlight cone while NOT hiding
-          if (!curRival.isHiding && guardFacingRival && absDist < FLASHLIGHT_LEN) {
-            guardOnFloor.alertTimer = 60;
-            if (curRival.hasDiamond) {
-              curRival.hasDiamond = false;
-              levelConfig.diamond.floor = curRival.floor;
-              levelConfig.diamond.x = Math.max(30, Math.min(ARENA_W - 30, curRival.x));
-              diamondTakenRef.current = false;
-              setDiamondTaken(false);
-              triggerSliceHaptic();
-              playSliceSound();
-              juiceRef.current?.popup('🚨 GUARD SPOTTED RIVAL!', 'Rival dropped the diamond!', '#FFE600');
-            }
-          }
-        }
+          curRival.y += curRival.climbDir * climbSpeed;
 
-        // HIDING LOGIC:
-        if (curRival.isHiding) {
-          if (guardThreat) {
-            curRival.hideTimer = 35; // keep hiding while guard approaches
-          } else if (curRival.hideTimer <= 0) {
-            // Guard turned away or safe -> emerge from hiding
-            curRival.isHiding = false;
-            curRival.hiddenWindowX = null;
+          // Stepping off onto Top Floor (climbing up, dir = -1)
+          if (curRival.climbDir === -1 && curRival.y <= yTop) {
+            curRival.y = null;
+            curRival.floor = stair.toFloor;
+            curRival.isClimbing = false;
+            curRival.stairIdx = null;
+            curRival.climbDir = 0;
           }
-        } else if (guardThreat) {
-          // Guard approaching! Find nearest window on this floor to HIDE!
-          let bestWin = WINDOW_X_LIST[0];
-          let bestDist = Infinity;
-          for (const wx of WINDOW_X_LIST) {
-            const d = Math.abs(curRival.x - wx);
-            if (d < bestDist) {
-              bestDist = d;
-              bestWin = wx;
-            }
-          }
-
-          if (Math.abs(curRival.x - bestWin) <= 6) {
-            curRival.x = bestWin;
-            curRival.isHiding = true;
-            curRival.hiddenWindowX = bestWin;
-            curRival.hideTimer = 40;
-          } else {
-            // Sneak-sprint to window
-            curRival.facing = curRival.x < bestWin ? 1 : -1;
-            curRival.x += curRival.facing * 2.2;
+          // Stepping off onto Bottom Floor (climbing down, dir = 1)
+          else if (curRival.climbDir === 1 && curRival.y >= yBottom) {
+            curRival.y = null;
+            curRival.floor = stair.fromFloor;
+            curRival.isClimbing = false;
+            curRival.stairIdx = null;
+            curRival.climbDir = 0;
           }
         } else {
-          // SAFE TO SNEAK, PURSUE OR ESCAPE
-          const hasD = curRival.hasDiamond;
-          const playerHasD = curPlayer.hasDiamond || hasDiamondRef.current;
+          // B. Catwalk Navigation & Guard Evasion
+          const guardOnFloor = curGuards.find((g) => g.floor === curRival.floor);
+          let guardThreat = false;
+          let distToGuard = 999;
+          let guardFacingRival = false;
 
-          let targetFloor = 0;
-          let targetX = 0;
-          let isEscaping = false;
+          if (guardOnFloor) {
+            distToGuard = curRival.x - guardOnFloor.x;
+            guardFacingRival =
+              (guardOnFloor.dir === 1 && distToGuard > 0) ||
+              (guardOnFloor.dir === -1 && distToGuard < 0);
+            const absDist = Math.abs(distToGuard);
 
-          if (hasD) {
-            // Rival has diamond: Escape down to Floor 0, then run to screen end!
-            targetFloor = 0;
-            const exitX = levelConfig.car.x < 170 ? ARENA_W - 12 : 12;
-            targetX = exitX;
-            isEscaping = true;
-          } else if (playerHasD) {
-            // Player has diamond: Rival actively follows player to snatch it back!
-            targetFloor = curPlayer.floor;
-            targetX = curPlayer.x;
-          } else {
-            // Diamond uncollected: Rival sneaks up to steal it
-            targetFloor = levelConfig.diamond.floor;
-            targetX = levelConfig.diamond.x;
+            // Threat if guard is facing rival within 110px
+            if (guardFacingRival && absDist < 110) {
+              guardThreat = true;
+            }
+
+            // Caught in guard flashlight cone while NOT hiding
+            if (!curRival.isHiding && guardFacingRival && absDist < FLASHLIGHT_LEN) {
+              guardOnFloor.alertTimer = 60;
+              if (curRival.hasDiamond) {
+                curRival.hasDiamond = false;
+                levelConfig.diamond.floor = curRival.floor;
+                levelConfig.diamond.x = Math.max(30, Math.min(ARENA_W - 30, curRival.x));
+                diamondTakenRef.current = false;
+                setDiamondTaken(false);
+                triggerSliceHaptic();
+                playSliceSound();
+                juiceRef.current?.popup('🚨 GUARD SPOTTED RIVAL!', 'Rival dropped the diamond!', '#FFE600');
+              }
+            }
           }
 
-          if (curRival.floor < targetFloor) {
-            const upStair = levelConfig.stairs.find((s) => s.fromFloor === curRival.floor);
-            if (upStair) {
-              if (Math.abs(curRival.x - upStair.x) < 6) {
-                curRival.floor += 1;
-                curRival.x = upStair.x;
-              } else {
-                curRival.facing = curRival.x < upStair.x ? 1 : -1;
-                const speed = playerHasD ? 2.0 : 1.5;
-                curRival.x += curRival.facing * speed;
+          // HIDING LOGIC:
+          if (curRival.isHiding) {
+            if (guardThreat) {
+              curRival.hideTimer = 35; // keep hiding while guard approaches
+            } else if (curRival.hideTimer <= 0) {
+              // Guard turned away or safe -> emerge from hiding
+              curRival.isHiding = false;
+              curRival.hiddenWindowX = null;
+            }
+          } else if (guardThreat) {
+            // Guard approaching! Find nearest window on this floor to HIDE!
+            let bestWin = WINDOW_X_LIST[0];
+            let bestDist = Infinity;
+            for (const wx of WINDOW_X_LIST) {
+              const d = Math.abs(curRival.x - wx);
+              if (d < bestDist) {
+                bestDist = d;
+                bestWin = wx;
               }
             }
-          } else if (curRival.floor > targetFloor) {
-            const downStair = levelConfig.stairs.find((s) => s.toFloor === curRival.floor);
-            if (downStair) {
-              if (Math.abs(curRival.x - downStair.x) < 6) {
-                curRival.floor -= 1;
-                curRival.x = downStair.x;
-              } else {
-                curRival.facing = curRival.x < downStair.x ? 1 : -1;
-                const speed = isEscaping ? 2.4 : 1.6;
-                curRival.x += curRival.facing * speed;
-              }
+
+            if (Math.abs(curRival.x - bestWin) <= 6) {
+              curRival.x = bestWin;
+              curRival.isHiding = true;
+              curRival.hiddenWindowX = bestWin;
+              curRival.hideTimer = 40;
+            } else {
+              // Sneak-sprint to window
+              curRival.facing = curRival.x < bestWin ? 1 : -1;
+              curRival.x += curRival.facing * 2.2;
             }
           } else {
-            // Same floor as target:
-            if (isEscaping && curRival.floor === 0) {
-              // SPRINT TOWARDS SCREEN END TO ESCAPE!
-              curRival.facing = curRival.x < targetX ? 1 : -1;
-              curRival.x += curRival.facing * 2.5;
+            // SAFE TO SNEAK, PURSUE OR ESCAPE
+            const hasD = curRival.hasDiamond;
+            const playerHasD = curPlayer.hasDiamond || hasDiamondRef.current;
 
-              // Check if reached screen edge
-              const reachedEdge =
-                (targetX > 170 && curRival.x >= targetX - 4) ||
-                (targetX < 170 && curRival.x <= targetX + 4);
+            let targetFloor = 0;
+            let targetX = 0;
+            let isEscaping = false;
 
-              if (reachedEdge) {
-                curRival.isAlive = false;
-                handlePlayerBusted('RIVAL THIEF ESCAPED WITH THE DIAMOND!');
-                juiceRef.current?.popup('❌ HEIST FAILED!', 'Rival escaped with the loot!', COLORS.danger);
-                return;
+            if (hasD) {
+              // Rival has diamond: Escape down to Floor 0, then run to screen end!
+              targetFloor = 0;
+              const playerX = curPlayer.x;
+              // Sprint towards screen edge opposite to player's current side
+              const exitX = playerX > 170 ? 12 : ARENA_W - 12;
+              targetX = exitX;
+              isEscaping = true;
+            } else if (playerHasD) {
+              // Player has diamond: Rival actively follows player to snatch it back!
+              targetFloor = curPlayer.floor;
+              targetX = curPlayer.x;
+            } else {
+              // Diamond uncollected: Rival sneaks up to steal it
+              targetFloor = levelConfig.diamond.floor;
+              targetX = levelConfig.diamond.x;
+            }
+
+            if (curRival.floor < targetFloor) {
+              // CLIMB UP: Find all upward ladders from this floor
+              const upStairs = levelConfig.stairs
+                .map((s, idx) => ({ ...s, idx }))
+                .filter((s) => s.fromFloor === curRival.floor);
+
+              if (upStairs.length > 0) {
+                let chosenStair = upStairs[0];
+                if (upStairs.length > 1) {
+                  // Choose ladder optimizing path to target
+                  let bestScore = -Infinity;
+                  for (const s of upStairs) {
+                    const dRival = Math.abs(curRival.x - s.x);
+                    const dTarget = Math.abs(s.x - targetX);
+                    const score = -(dRival * 0.7 + dTarget * 0.3);
+                    if (score > bestScore) {
+                      bestScore = score;
+                      chosenStair = s;
+                    }
+                  }
+                }
+
+                if (Math.abs(curRival.x - chosenStair.x) < 6) {
+                  curRival.isClimbing = true;
+                  curRival.stairIdx = chosenStair.idx;
+                  curRival.climbDir = -1;
+                  curRival.x = chosenStair.x;
+                  curRival.y = getFloorY(chosenStair.fromFloor) - 4;
+                } else {
+                  curRival.facing = curRival.x < chosenStair.x ? 1 : -1;
+                  const speed = playerHasD ? 2.0 : 1.5;
+                  curRival.x += curRival.facing * speed;
+                }
               }
-            } else if (playerHasD && curRival.floor === curPlayer.floor) {
-              // PURSUING PLAYER TO SNATCH DIAMOND BACK!
-              curRival.facing = curRival.x < curPlayer.x ? 1 : -1;
-              curRival.x += curRival.facing * 2.0;
+            } else if (curRival.floor > targetFloor) {
+              // CLIMB DOWN: Rival escapes down using 2 distinct ladder paths
+              // Evaluates player & guard positions so player has a hard time catching him!
+              const downStairs = levelConfig.stairs
+                .map((s, idx) => ({ ...s, idx }))
+                .filter((s) => s.toFloor === curRival.floor);
 
-              // If reaches player and player is NOT hiding: SNATCH BACK!
-              if (
-                Math.abs(curRival.x - curPlayer.x) < 22 &&
-                !curPlayer.isHiding &&
-                !curPlayer.isClimbing &&
-                curRival.snatchCooldown <= 0
-              ) {
-                curRival.hasDiamond = true;
-                curPlayer.hasDiamond = false;
-                hasDiamondRef.current = false;
-                curRival.snatchCooldown = 75;
-                triggerMediumHaptic();
-                playSliceSound();
-                juiceRef.current?.burst(curPlayer.x, getFloorY(curPlayer.floor), '#FF0055', 20);
-                juiceRef.current?.popup('⚠️ RIVAL SNATCHED DIAMOND!', 'Chase him before he reaches the exit!', '#FF0055');
+              if (downStairs.length > 0) {
+                let chosenStair = downStairs[0];
+
+                if (downStairs.length > 1) {
+                  let bestEvasionScore = -Infinity;
+                  for (const s of downStairs) {
+                    const distToLadder = Math.abs(curRival.x - s.x);
+                    const playerDistToLadder = Math.abs(curPlayer.x - s.x);
+
+                    let evasionScore = 0;
+
+                    // If player is on the same floor, run to the ladder AWAY from player
+                    if (curPlayer.floor === curRival.floor) {
+                      const ladderDir = s.x > curRival.x ? 1 : -1;
+                      const playerDir = curPlayer.x > curRival.x ? 1 : -1;
+                      if (ladderDir !== playerDir) {
+                        evasionScore += 120;
+                      }
+                      evasionScore += playerDistToLadder * 0.8;
+                    }
+                    // If player is on the floor below, pick the ladder that avoids landing near player
+                    else if (curPlayer.floor === curRival.floor - 1) {
+                      evasionScore += playerDistToLadder * 1.5;
+                    } else {
+                      evasionScore += playerDistToLadder * 0.6;
+                    }
+
+                    // Penalize extra walking distance to ladder
+                    evasionScore -= distToLadder * 0.45;
+
+                    // Avoid guard stationed at ladder exit
+                    const guardBelow = curGuards.find((g) => g.floor === s.fromFloor);
+                    if (guardBelow && Math.abs(guardBelow.x - s.x) < 70) {
+                      evasionScore -= 60;
+                    }
+
+                    if (evasionScore > bestEvasionScore) {
+                      bestEvasionScore = evasionScore;
+                      chosenStair = s;
+                    }
+                  }
+                }
+
+                if (Math.abs(curRival.x - chosenStair.x) < 6) {
+                  curRival.isClimbing = true;
+                  curRival.stairIdx = chosenStair.idx;
+                  curRival.climbDir = 1;
+                  curRival.x = chosenStair.x;
+                  curRival.y = getFloorY(chosenStair.toFloor) + 4;
+                } else {
+                  curRival.facing = curRival.x < chosenStair.x ? 1 : -1;
+                  const speed = isEscaping ? 2.3 : 1.6;
+                  curRival.x += curRival.facing * speed;
+                }
               }
-            } else if (!hasD && !diamondTakenRef.current && curRival.floor === levelConfig.diamond.floor) {
-              if (Math.abs(curRival.x - levelConfig.diamond.x) < 8) {
-                playSliceSound();
-                triggerMediumHaptic();
-                juiceRef.current?.popup('⚠️ RIVAL STOLE DIAMOND!', 'Intercept him before he escapes!', '#FF0055');
-                curRival.hasDiamond = true;
-                setDiamondTaken(true);
-                diamondTakenRef.current = true;
-              } else {
-                curRival.facing = curRival.x < levelConfig.diamond.x ? 1 : -1;
-                curRival.x += curRival.facing * 1.5;
+            } else {
+              // Same floor as target:
+              if (isEscaping && curRival.floor === 0) {
+                // SPRINT TOWARDS SCREEN END TO ESCAPE!
+                curRival.facing = curRival.x < targetX ? 1 : -1;
+                curRival.x += curRival.facing * 2.5;
+
+                // Check if reached screen edge
+                const reachedEdge =
+                  (targetX > 170 && curRival.x >= targetX - 4) ||
+                  (targetX < 170 && curRival.x <= targetX + 4);
+
+                if (reachedEdge) {
+                  curRival.isAlive = false;
+                  handlePlayerBusted('RIVAL THIEF ESCAPED WITH THE DIAMOND!');
+                  juiceRef.current?.popup('❌ HEIST FAILED!', 'Rival escaped with the loot!', COLORS.danger);
+                  return;
+                }
+              } else if (playerHasD) {
+                // PURSUING PLAYER TO SNATCH DIAMOND BACK!
+                curRival.facing = curRival.x < curPlayer.x ? 1 : -1;
+                curRival.x += curRival.facing * 2.0;
+
+                // If reaches player and player is NOT hiding: SNATCH BACK!
+                if (
+                  Math.abs(curRival.x - curPlayer.x) < 22 &&
+                  Math.abs(curRivalY - curPlayerY) < 22 &&
+                  !curPlayer.isHiding &&
+                  curRival.snatchCooldown <= 0
+                ) {
+                  curRival.hasDiamond = true;
+                  curPlayer.hasDiamond = false;
+                  hasDiamondRef.current = false;
+                  curRival.snatchCooldown = 75;
+                  triggerMediumHaptic();
+                  playSliceSound();
+                  juiceRef.current?.burst(curPlayer.x, curPlayerY, '#FF0055', 20);
+                  juiceRef.current?.popup('⚠️ RIVAL SNATCHED DIAMOND!', 'Chase him before he reaches the exit!', '#FF0055');
+                }
+              } else if (!hasD && !diamondTakenRef.current && curRival.floor === levelConfig.diamond.floor) {
+                if (Math.abs(curRival.x - levelConfig.diamond.x) < 8) {
+                  playSliceSound();
+                  triggerMediumHaptic();
+                  juiceRef.current?.popup('⚠️ RIVAL STOLE DIAMOND!', 'Intercept him before he escapes!', '#FF0055');
+                  curRival.hasDiamond = true;
+                  setDiamondTaken(true);
+                  diamondTakenRef.current = true;
+                } else {
+                  curRival.facing = curRival.x < levelConfig.diamond.x ? 1 : -1;
+                  curRival.x += curRival.facing * 1.5;
+                }
               }
             }
           }
@@ -922,15 +1054,22 @@ export default function ThiefEscapeGame({
         }
       }
 
-      // 9. Check Stealing Diamond Back from Rival Thief
-      if (levelConfig.hasRival && curRival.hasDiamond && curPlayer.floor === curRival.floor && !curPlayer.isClimbing) {
-        if (Math.abs(curPlayer.x - curRival.x) < 26) {
+      // 9. Check Stealing Diamond Back from Rival Thief (Catwalks and Ladders)
+      if (levelConfig.hasRival && curRival.hasDiamond) {
+        const playerY = curPlayer.isClimbing && curPlayer.y != null ? curPlayer.y : getFloorY(curPlayer.floor);
+        const rivalY = curRival.isClimbing && curRival.y != null ? curRival.y : getFloorY(curRival.floor);
+
+        const closeY = Math.abs(playerY - rivalY) < 24;
+        const closeX = Math.abs(curPlayer.x - curRival.x) < 26;
+
+        if (closeY && closeX) {
           curRival.hasDiamond = false;
           curPlayer.hasDiamond = true;
           hasDiamondRef.current = true;
           curRival.snatchCooldown = 75;
           triggerPerfectHaptic();
           playPerfectSound();
+          juiceRef.current?.burst(curRival.x, rivalY, '#00F5FF', 20);
           juiceRef.current?.popup('🥷 TACKLED RIVAL!', 'Diamond reclaimed!', COLORS.matrixMint);
         }
       }
@@ -1571,16 +1710,28 @@ export default function ThiefEscapeGame({
                 </G>
               ))}
 
-              {/* Rival Thief */}
-              {levelConfig.hasRival && rival.isAlive && !rival.isHiding && (
-                <G>
-                  <Rect x={rival.x - 6} y={getFloorY(rival.floor) - 24} width={12} height={22} rx={3} fill="#2A0845" stroke="#9D4EDD" strokeWidth={1.4} />
-                  <Circle cx={rival.x} cy={getFloorY(rival.floor) - 26} r={5} fill="#9D4EDD" />
-                  {rival.hasDiamond && (
-                    <Circle cx={rival.x} cy={getFloorY(rival.floor) - 34} r={4} fill="#00F5FF" stroke="#FFFFFF" strokeWidth={1} />
-                  )}
-                </G>
-              )}
+              {/* Rival Thief (Floor Walking or Physically Climbing Ladders) */}
+              {levelConfig.hasRival && rival.isAlive && !rival.isHiding && (() => {
+                const rY = rival.isClimbing && rival.y != null ? rival.y : getFloorY(rival.floor);
+                return (
+                  <G>
+                    {rival.isClimbing && (
+                      <G>
+                        {/* Gripping Hands on Ladder Rails */}
+                        <Line x1={rival.x - 10} y1={rY - 18} x2={rival.x - 5} y2={rY - 14} stroke="#9D4EDD" strokeWidth={2.2} />
+                        <Line x1={rival.x + 5} y1={rY - 14} x2={rival.x + 10} y2={rY - 18} stroke="#9D4EDD" strokeWidth={2.2} />
+                      </G>
+                    )}
+                    <Rect x={rival.x - 6} y={rY - 24} width={12} height={22} rx={3} fill="#2A0845" stroke="#9D4EDD" strokeWidth={1.4} />
+                    <Circle cx={rival.x} cy={rY - 26} r={5} fill="#9D4EDD" />
+                    <Line x1={rival.x - 3} y1={rY - 26} x2={rival.x - 1} y2={rY - 26} stroke="#FFFFFF" strokeWidth={1.2} />
+                    <Line x1={rival.x + 1} y1={rY - 26} x2={rival.x + 3} y2={rY - 26} stroke="#FFFFFF" strokeWidth={1.2} />
+                    {rival.hasDiamond && (
+                      <Circle cx={rival.x} cy={rY - 34} r={4} fill="#00F5FF" stroke="#FFFFFF" strokeWidth={1} />
+                    )}
+                  </G>
+                );
+              })()}
 
               {/* Player Stealth Thief Operative: Hidden when inside window or inside getaway car */}
               {!player.isHiding && !carState.thiefInside && (() => {
