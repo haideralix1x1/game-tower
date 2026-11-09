@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   StyleSheet,
   Platform,
   useWindowDimensions,
+  PanResponder,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS } from '../../styles';
@@ -28,7 +29,7 @@ const STORAGE_KEY = '@game_tower:best_blockblast_v1';
 const GRID_SIZE = 8;
 
 const SHAPES = [
-  { cells: [[0, 0]], color: '#FFE600', name: 'DOT' }, // Single yellow dot (matches screenshot!)
+  { cells: [[0, 0]], color: '#FFE600', name: 'DOT' },
   { cells: [[0, 0], [0, 1]], color: '#00F5FF', name: 'DUO-H' },
   { cells: [[0, 0], [1, 0]], color: '#00F5FF', name: 'DUO-V' },
   { cells: [[0, 0], [0, 1], [0, 2]], color: '#FF007F', name: 'BAR-3H' },
@@ -53,6 +54,17 @@ const randomHand = () =>
     used: false,
   }));
 
+function checkPieceFit(g, piece, r, c) {
+  if (!piece || r < 0 || c < 0) return false;
+  for (const [dr, dc] of piece.cells) {
+    const nr = r + dr;
+    const nc = c + dc;
+    if (nr < 0 || nr >= GRID_SIZE || nc < 0 || nc >= GRID_SIZE) return false;
+    if (g[nr][nc] !== null) return false;
+  }
+  return true;
+}
+
 /**
  * 3D Glossy Candy/Jewel Block with Specular Shine & Bevel
  */
@@ -74,7 +86,7 @@ function JuicyBlock({ color, size, isPreview = false }) {
         borderBottomWidth: 3,
         borderBottomColor: 'rgba(0, 0, 0, 0.55)',
         overflow: 'hidden',
-        opacity: isPreview ? 0.75 : 1,
+        opacity: isPreview ? 0.65 : 1,
         shadowColor: color,
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.65,
@@ -112,6 +124,83 @@ function JuicyBlock({ color, size, isPreview = false }) {
   );
 }
 
+/**
+ * Draggable Dock Card Piece
+ */
+function DraggableDockPiece({
+  piece,
+  idx,
+  selected,
+  isDraggingThis,
+  onSelect,
+  onDragStart,
+  onDragMove,
+  onDragEnd,
+}) {
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => !piece.used,
+        onMoveShouldSetPanResponder: (evt, gesture) =>
+          !piece.used && (Math.abs(gesture.dx) > 4 || Math.abs(gesture.dy) > 4),
+        onPanResponderGrant: (evt, gesture) => {
+          onSelect(idx);
+          onDragStart(idx, piece, gesture.x0, gesture.y0);
+        },
+        onPanResponderMove: (evt, gesture) => {
+          onDragMove(gesture.moveX, gesture.moveY);
+        },
+        onPanResponderRelease: (evt, gesture) => {
+          onDragEnd(gesture.moveX, gesture.moveY, Math.hypot(gesture.dx, gesture.dy) > 8);
+        },
+        onPanResponderTerminate: () => {
+          onDragEnd(0, 0, false);
+        },
+      }),
+    [piece, idx, onSelect, onDragStart, onDragMove, onDragEnd]
+  );
+
+  return (
+    <View
+      {...panResponder.panHandlers}
+      style={[
+        localStyles.dockCard,
+        selected && {
+          borderColor: piece.color,
+          backgroundColor: `${piece.color}25`,
+          shadowColor: piece.color,
+          shadowOpacity: 0.8,
+          shadowRadius: 10,
+          elevation: 8,
+          transform: [{ scale: 1.05 }],
+        },
+        piece.used && { opacity: 0.2 },
+        isDraggingThis && { opacity: 0.3 },
+      ]}
+    >
+      <View style={localStyles.miniPieceContainer}>
+        {piece.cells.map(([r, c], cIdx) => (
+          <View
+            key={`cell_preview_${cIdx}`}
+            style={[
+              localStyles.miniPieceDot,
+              {
+                left: c * 13,
+                top: r * 13,
+                backgroundColor: piece.color,
+              },
+            ]}
+          />
+        ))}
+      </View>
+
+      <Text style={[localStyles.dockName, { color: piece.color }]}>
+        {piece.name}
+      </Text>
+    </View>
+  );
+}
+
 export default function BlockBlastGame({
   onScoreUpdate,
   onBackToHub,
@@ -129,8 +218,28 @@ export default function BlockBlastGame({
   const [bestScore, setBestScore] = useState(0);
   const [isGameOver, setIsGameOver] = useState(false);
 
+  // Dragging states
+  const [draggingPiece, setDraggingPiece] = useState(null);
+  const [draggingPos, setDraggingPos] = useState({ x: 0, y: 0 });
+  const [hoverCell, setHoverCell] = useState(null);
+
+  const boardRef = useRef(null);
+  const boardRectRef = useRef(null);
+  const hoverCellRef = useRef(null);
+  const draggingPieceRef = useRef(null);
+
   const boardSize = Math.min(width - 32, 360);
   const cellSize = Math.floor((boardSize - 16) / GRID_SIZE);
+
+  const updateBoardRect = useCallback(() => {
+    if (boardRef.current && boardRef.current.measureInWindow) {
+      boardRef.current.measureInWindow((x, y, w, h) => {
+        if (w > 0 && h > 0) {
+          boardRectRef.current = { x, y, width: w, height: h };
+        }
+      });
+    }
+  }, []);
 
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY)
@@ -161,6 +270,8 @@ export default function BlockBlastGame({
     setSelectedIdx(0);
     setScore(0);
     setIsGameOver(false);
+    setDraggingPiece(null);
+    setHoverCell(null);
     if (juiceRef.current) juiceRef.current.flash(COLORS.cyan);
   }, []);
 
@@ -182,11 +293,11 @@ export default function BlockBlastGame({
     return false;
   };
 
-  const handleCellTap = useCallback(
-    (r, c) => {
-      if (isGameOver || isPaused) return;
-      const piece = hand[selectedIdx];
-      if (!piece || piece.used) return;
+  const executePlacement = useCallback(
+    (r, c, pieceIdx) => {
+      if (isGameOver || isPaused) return false;
+      const piece = hand[pieceIdx];
+      if (!piece || piece.used) return false;
 
       // Verify all cells fit and are empty
       for (const [dr, dc] of piece.cells) {
@@ -199,9 +310,7 @@ export default function BlockBlastGame({
           nc >= GRID_SIZE ||
           grid[nr][nc] !== null
         ) {
-          triggerSliceHaptic();
-          if (juiceRef.current) juiceRef.current.shake(5, 3);
-          return;
+          return false;
         }
       }
 
@@ -273,7 +382,7 @@ export default function BlockBlastGame({
 
       // Mark piece used
       const nextHand = hand.map((p, idx) =>
-        idx === selectedIdx ? { ...p, used: true } : p
+        idx === pieceIdx ? { ...p, used: true } : p
       );
 
       // If all pieces used, deal 3 new pieces
@@ -299,8 +408,83 @@ export default function BlockBlastGame({
           juiceRef.current.popup('NO MOVES LEFT', 'GRID IS FULL', COLORS.danger);
         }
       }
+
+      return true;
     },
-    [isGameOver, isPaused, hand, selectedIdx, grid, score, updateBest, width]
+    [isGameOver, isPaused, hand, grid, score, updateBest, width]
+  );
+
+  const handleCellTap = useCallback(
+    (r, c) => {
+      const success = executePlacement(r, c, selectedIdx);
+      if (!success) {
+        triggerSliceHaptic();
+        if (juiceRef.current) juiceRef.current.shake(5, 3);
+      }
+    },
+    [executePlacement, selectedIdx]
+  );
+
+  // Drag callbacks
+  const handleDragStart = useCallback(
+    (idx, piece, x0, y0) => {
+      updateBoardRect();
+      triggerLightHaptic();
+      const maxR = Math.max(...piece.cells.map((c) => c[0]));
+      const maxC = Math.max(...piece.cells.map((c) => c[1]));
+      const dragObj = { ...piece, idx, maxR, maxC };
+      draggingPieceRef.current = dragObj;
+      setDraggingPiece(dragObj);
+      setDraggingPos({ x: x0, y: y0 });
+      setHoverCell(null);
+      hoverCellRef.current = null;
+    },
+    [updateBoardRect]
+  );
+
+  const handleDragMove = useCallback(
+    (moveX, moveY) => {
+      setDraggingPos({ x: moveX, y: moveY });
+      const piece = draggingPieceRef.current;
+      if (!piece || !boardRectRef.current) return;
+
+      const rect = boardRectRef.current;
+      const floatingCenterX = moveX;
+      const floatingCenterY = moveY - 65; // Lifted above thumb
+      const anchorX = floatingCenterX - ((piece.maxC + 1) * cellSize) / 2;
+      const anchorY = floatingCenterY - ((piece.maxR + 1) * cellSize) / 2;
+
+      const boardLeft = rect.x + 6;
+      const boardTop = rect.y + 6;
+
+      const c = Math.round((anchorX - boardLeft) / cellSize);
+      const r = Math.round((anchorY - boardTop) / cellSize);
+
+      const valid = checkPieceFit(grid, piece, r, c);
+      const nextHover = { r, c, valid };
+      hoverCellRef.current = nextHover;
+      setHoverCell(nextHover);
+    },
+    [cellSize, grid]
+  );
+
+  const handleDragEnd = useCallback(
+    (moveX, moveY, wasDragged) => {
+      const activeHover = hoverCellRef.current;
+      const piece = draggingPieceRef.current;
+
+      if (wasDragged && activeHover && activeHover.valid && piece) {
+        executePlacement(activeHover.r, activeHover.c, piece.idx);
+      } else if (wasDragged) {
+        triggerSliceHaptic();
+      }
+
+      draggingPieceRef.current = null;
+      hoverCellRef.current = null;
+      setDraggingPiece(null);
+      setHoverCell(null);
+    },
+    [executePlacement]
   );
 
   return (
@@ -334,6 +518,8 @@ export default function BlockBlastGame({
 
           {/* 8x8 Board with Juicy 3D Blocks */}
           <View
+            ref={boardRef}
+            onLayout={updateBoardRect}
             style={[
               localStyles.board,
               { width: boardSize, height: boardSize },
@@ -342,6 +528,15 @@ export default function BlockBlastGame({
             {grid.map((row, rIdx) => (
               <View key={`brow_${rIdx}`} style={localStyles.row}>
                 {row.map((color, cIdx) => {
+                  const isGhost =
+                    hoverCell &&
+                    hoverCell.valid &&
+                    draggingPiece &&
+                    draggingPiece.cells.some(
+                      ([dr, dc]) =>
+                        hoverCell.r + dr === rIdx && hoverCell.c + dc === cIdx
+                    );
+
                   if (color) {
                     return (
                       <Pressable
@@ -350,6 +545,25 @@ export default function BlockBlastGame({
                       >
                         <JuicyBlock color={color} size={cellSize} />
                       </Pressable>
+                    );
+                  }
+
+                  if (isGhost && draggingPiece) {
+                    return (
+                      <View
+                        key={`bcell_${rIdx}_${cIdx}`}
+                        style={{
+                          width: cellSize - 2,
+                          height: cellSize - 2,
+                          margin: 1,
+                        }}
+                      >
+                        <JuicyBlock
+                          color={draggingPiece.color}
+                          size={cellSize}
+                          isPreview={true}
+                        />
+                      </View>
                     );
                   }
 
@@ -371,56 +585,21 @@ export default function BlockBlastGame({
             ))}
           </View>
 
-          {/* 3-Piece Dock at Bottom */}
+          {/* 3-Piece Draggable Dock at Bottom */}
           <View style={[localStyles.dockRow, { width: boardSize }]}>
-            {hand.map((piece, idx) => {
-              const selected = idx === selectedIdx && !piece.used;
-              return (
-                <Pressable
-                  key={piece.id}
-                  disabled={piece.used}
-                  onPress={() => {
-                    triggerLightHaptic();
-                    playTapSound();
-                    setSelectedIdx(idx);
-                  }}
-                  style={[
-                    localStyles.dockCard,
-                    selected && {
-                      borderColor: piece.color,
-                      backgroundColor: `${piece.color}25`,
-                      shadowColor: piece.color,
-                      shadowOpacity: 0.8,
-                      shadowRadius: 10,
-                      elevation: 8,
-                      transform: [{ scale: 1.05 }],
-                    },
-                    piece.used && { opacity: 0.2 },
-                  ]}
-                >
-                  {/* Visual Mini Representation of the actual piece */}
-                  <View style={localStyles.miniPieceContainer}>
-                    {piece.cells.map(([r, c], cIdx) => (
-                      <View
-                        key={`cell_preview_${cIdx}`}
-                        style={[
-                          localStyles.miniPieceDot,
-                          {
-                            left: c * 13,
-                            top: r * 13,
-                            backgroundColor: piece.color,
-                          },
-                        ]}
-                      />
-                    ))}
-                  </View>
-
-                  <Text style={[localStyles.dockName, { color: piece.color }]}>
-                    {piece.name}
-                  </Text>
-                </Pressable>
-              );
-            })}
+            {hand.map((piece, idx) => (
+              <DraggableDockPiece
+                key={piece.id}
+                piece={piece}
+                idx={idx}
+                selected={idx === selectedIdx && !piece.used}
+                isDraggingThis={draggingPiece?.idx === idx}
+                onSelect={setSelectedIdx}
+                onDragStart={handleDragStart}
+                onDragMove={handleDragMove}
+                onDragEnd={handleDragEnd}
+              />
+            ))}
           </View>
 
           <GameResultModal
@@ -436,6 +615,40 @@ export default function BlockBlastGame({
             onBackToHub={onBackToHub}
           />
         </View>
+
+        {/* Floating Draggable Piece Following Finger */}
+        {draggingPiece && (
+          <View
+            pointerEvents="none"
+            style={[
+              StyleSheet.absoluteFillObject,
+              { zIndex: 9999, elevation: 9999 },
+            ]}
+          >
+            <View
+              style={{
+                position: 'absolute',
+                left: draggingPos.x - ((draggingPiece.maxC + 1) * cellSize) / 2,
+                top: draggingPos.y - 65 - ((draggingPiece.maxR + 1) * cellSize) / 2,
+                width: (draggingPiece.maxC + 1) * cellSize,
+                height: (draggingPiece.maxR + 1) * cellSize,
+              }}
+            >
+              {draggingPiece.cells.map(([dr, dc], cIdx) => (
+                <View
+                  key={`floating_cell_${cIdx}`}
+                  style={{
+                    position: 'absolute',
+                    left: dc * cellSize,
+                    top: dr * cellSize,
+                  }}
+                >
+                  <JuicyBlock color={draggingPiece.color} size={cellSize} />
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
       </View>
     </JuiceEngine>
   );
