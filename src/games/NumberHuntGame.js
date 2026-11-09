@@ -35,26 +35,26 @@ const monoFont = Platform.select({
 export const NUMBER_HUNT_MODES = {
   EASY: {
     id: 'EASY',
-    label: 'EASY (3×3)',
-    count: 9,
-    cols: 3,
-    bonus: 100,
+    label: 'EASY (5×5)',
+    count: 25,
+    cols: 5,
+    bonus: 250,
     accent: COLORS.matrixMint,
   },
   MEDIUM: {
     id: 'MEDIUM',
-    label: 'MEDIUM (5×5)',
-    count: 25,
-    cols: 5,
-    bonus: 250,
+    label: 'MID (6×6)',
+    count: 36,
+    cols: 6,
+    bonus: 500,
     accent: COLORS.cyan,
   },
   HARD: {
     id: 'HARD',
-    label: 'HARD (6×6)',
-    count: 36,
-    cols: 6,
-    bonus: 500,
+    label: 'HARD (8×8)',
+    count: 64,
+    cols: 8,
+    bonus: 1000,
     accent: COLORS.magenta,
   },
 };
@@ -75,19 +75,20 @@ export default function NumberHuntGame({ onBackToHub, onScoreUpdate, isPaused = 
   const boardSize = Math.min(360, width - 28);
   const juiceRef = useRef(null);
 
-  const [modeKey, setModeKey] = useState('MEDIUM');
-  const activeMode = NUMBER_HUNT_MODES[modeKey] || NUMBER_HUNT_MODES.MEDIUM;
+  const [modeKey, setModeKey] = useState('EASY');
+  const activeMode = NUMBER_HUNT_MODES[modeKey] || NUMBER_HUNT_MODES.EASY;
 
-  const [numbers, setNumbers] = useState(() => shuffleNumbers(NUMBER_HUNT_MODES.MEDIUM.count));
+  const [numbers, setNumbers] = useState(() => shuffleNumbers(NUMBER_HUNT_MODES.EASY.count));
   const [target, setTarget] = useState(1);
   const [score, setScore] = useState(0);
   const [bestScore, setBestScore] = useState(0);
 
   const cols = activeMode.cols;
   const count = activeMode.count;
-  const cellGap = cols === 3 ? 10 : cols === 5 ? 6 : 5;
+  const cellGap = cols === 5 ? 6 : cols === 6 ? 4 : 3;
   const cellSize = Math.floor((boardSize - 20 - (cols - 1) * cellGap) / cols);
-  const numFontSize = cols === 3 ? 32 : cols === 5 ? 20 : 16;
+  const numFontSize = cols === 5 ? 19 : cols === 6 ? 15 : 12;
+  const cellBorderRadius = cols === 8 ? 6 : cols === 6 ? 8 : 10;
 
   useEffect(() => {
     (async () => {
@@ -136,7 +137,7 @@ export default function NumberHuntGame({ onBackToHub, onScoreUpdate, isPaused = 
       }
 
       const isCompleted = num === count;
-      const nextScore = score + (cols === 3 ? 10 : cols === 5 ? 20 : 30) + (isCompleted ? activeMode.bonus : 0);
+      const nextScore = score + (cols === 5 ? 15 : cols === 6 ? 25 : 40) + (isCompleted ? activeMode.bonus : 0);
       setScore(nextScore);
       updateBest(nextScore);
 
@@ -242,6 +243,7 @@ export default function NumberHuntGame({ onBackToHub, onScoreUpdate, isPaused = 
                     {
                       width: cellSize,
                       height: cellSize,
+                      borderRadius: cellBorderRadius,
                       backgroundColor: cleared
                         ? `${activeMode.accent}28`
                         : 'rgba(255, 255, 255, 0.06)',

@@ -49,7 +49,7 @@ export const UNLOCK_REQUIREMENTS = {
   cyber_slide: {
     reqGame: 'number_hunt',
     targetScore: 60,
-    desc: 'Score 60+ in NUMBER HUNT 25',
+    desc: 'Score 60+ in NUMBER HUNT',
     category: 'NUMBERS',
   },
 
