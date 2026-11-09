@@ -5,6 +5,8 @@ import {
   Pressable,
   StyleSheet,
   Platform,
+  Animated,
+  PanResponder,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Svg, {
@@ -301,6 +303,7 @@ export default function CyberBomberGame({
     setPlayerPos({ x: 1, y: 1 });
     playerPosRef.current = { x: 1, y: 1 };
     inputDirRef.current = { dx: 0, dy: 0 };
+    knobAnim.setValue({ x: 0, y: 0 });
     setExitUnlocked(false);
     setGameOver(false);
     setVictoryModal(false);
@@ -513,8 +516,8 @@ export default function CyberBomberGame({
         } else {
           // Corner-sliding assist along Y
           const centerRow = Math.round(curP.y);
-          if (Math.abs(curP.y - centerRow) < 0.35) {
-            curP.y += (centerRow - curP.y) * 0.25;
+          if (Math.abs(curP.y - centerRow) < 0.42) {
+            curP.y += (centerRow - curP.y) * 0.32;
           }
         }
 
@@ -529,8 +532,8 @@ export default function CyberBomberGame({
         } else {
           // Corner-sliding assist along X
           const centerCol = Math.round(curP.x);
-          if (Math.abs(curP.x - centerCol) < 0.35) {
-            curP.x += (centerCol - curP.x) * 0.25;
+          if (Math.abs(curP.x - centerCol) < 0.42) {
+            curP.x += (centerCol - curP.x) * 0.32;
           }
         }
 
@@ -707,28 +710,106 @@ export default function CyberBomberGame({
   }, [isPaused, gameOver, victoryModal, playerSpeed, detonateBomb, handlePlayerDamage, exitUnlocked, score, highScore, stage, onScoreUpdate]);
 
   // Touch Direction Handlers (Press & Hold for D-Pad)
-  const pressTimerRef = useRef(null);
+  const knobAnim = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
+  const isDeflectedRef = useRef(false);
+  const touchStartRef = useRef({ initialDx: 0, initialDy: 0 });
 
-  // Touch Direction Handlers (Press & Hold or Tap for D-Pad)
-  const handleDirectionPressIn = (dx, dy) => {
-    if (pressTimerRef.current) clearTimeout(pressTimerRef.current);
-    inputDirRef.current = { dx, dy };
-    triggerSelectionHaptic();
-    playSnapTickSound();
-  };
+  // Virtual Analog Thumbstick PanResponder
+  const joystickPanResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: () => true,
+        onPanResponderGrant: (e, gestureState) => {
+          // Measure location relative to center of 140x140 base (radius = 70)
+          const locX = e.nativeEvent.locationX;
+          const locY = e.nativeEvent.locationY;
+          const initialDx = locX - 70;
+          const initialDy = locY - 70;
+          touchStartRef.current = { initialDx, initialDy };
 
-  const handleDirectionPressOut = () => {
-    // Keep moving for 90ms after release so brief taps result in a clean, responsive step
-    pressTimerRef.current = setTimeout(() => {
-      inputDirRef.current = { dx: 0, dy: 0 };
-    }, 90);
-  };
+          const dist = Math.hypot(initialDx, initialDy);
+          const MAX_RADIUS = 42;
+          const DEADZONE = 6;
 
-  useEffect(() => {
-    return () => {
-      if (pressTimerRef.current) clearTimeout(pressTimerRef.current);
-    };
-  }, []);
+          let clampedX = initialDx;
+          let clampedY = initialDy;
+          if (dist > MAX_RADIUS) {
+            clampedX = (initialDx / dist) * MAX_RADIUS;
+            clampedY = (initialDy / dist) * MAX_RADIUS;
+          }
+          knobAnim.setValue({ x: clampedX, y: clampedY });
+
+          if (dist >= DEADZONE) {
+            if (!isDeflectedRef.current) {
+              isDeflectedRef.current = true;
+              triggerSelectionHaptic();
+              playSnapTickSound();
+            }
+            const intensity = Math.min(1, Math.max(0.4, dist / MAX_RADIUS));
+            inputDirRef.current = {
+              dx: (initialDx / dist) * intensity,
+              dy: (initialDy / dist) * intensity,
+            };
+          } else {
+            isDeflectedRef.current = false;
+            inputDirRef.current = { dx: 0, dy: 0 };
+          }
+        },
+        onPanResponderMove: (e, gestureState) => {
+          const currentDx = touchStartRef.current.initialDx + gestureState.dx;
+          const currentDy = touchStartRef.current.initialDy + gestureState.dy;
+
+          const dist = Math.hypot(currentDx, currentDy);
+          const MAX_RADIUS = 42;
+          const DEADZONE = 6;
+
+          let clampedX = currentDx;
+          let clampedY = currentDy;
+          if (dist > MAX_RADIUS) {
+            clampedX = (currentDx / dist) * MAX_RADIUS;
+            clampedY = (currentDy / dist) * MAX_RADIUS;
+          }
+          knobAnim.setValue({ x: clampedX, y: clampedY });
+
+          if (dist >= DEADZONE) {
+            if (!isDeflectedRef.current) {
+              isDeflectedRef.current = true;
+              triggerSelectionHaptic();
+            }
+            const intensity = Math.min(1, Math.max(0.4, dist / MAX_RADIUS));
+            inputDirRef.current = {
+              dx: (currentDx / dist) * intensity,
+              dy: (currentDy / dist) * intensity,
+            };
+          } else {
+            isDeflectedRef.current = false;
+            inputDirRef.current = { dx: 0, dy: 0 };
+          }
+        },
+        onPanResponderRelease: () => {
+          isDeflectedRef.current = false;
+          inputDirRef.current = { dx: 0, dy: 0 };
+          Animated.spring(knobAnim, {
+            toValue: { x: 0, y: 0 },
+            friction: 5,
+            tension: 90,
+            useNativeDriver: true,
+          }).start();
+        },
+        onPanResponderTerminate: () => {
+          isDeflectedRef.current = false;
+          inputDirRef.current = { dx: 0, dy: 0 };
+          Animated.spring(knobAnim, {
+            toValue: { x: 0, y: 0 },
+            friction: 5,
+            tension: 90,
+            useNativeDriver: true,
+          }).start();
+        },
+      }),
+    [knobAnim]
+  );
 
   // Next Level Handler
   const handleNextStage = () => {
@@ -1072,58 +1153,43 @@ export default function CyberBomberGame({
           </View>
         </View>
 
-        {/* Tactical Controls: 4-Way D-Pad on Left, Bomb Button on Right */}
+        {/* Tactical Controls: Virtual Analog Joystick on Left, Bomb Button on Right */}
         <View style={styles.controlsRow}>
-          {/* Virtual D-Pad */}
-          <View style={styles.dpadMatrix}>
-            {/* UP */}
-            <Pressable
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              pressRetentionOffset={{ top: 25, bottom: 25, left: 25, right: 25 }}
-              style={({ pressed }) => [styles.dpadBtn, styles.dpadUp, pressed && styles.dpadBtnActive]}
-              onPressIn={() => handleDirectionPressIn(0, -1)}
-              onPressOut={handleDirectionPressOut}
+          {/* Virtual Analog Joystick */}
+          <View style={styles.analogContainer}>
+            <View
+              style={styles.analogBase}
+              {...joystickPanResponder.panHandlers}
             >
-              <Text style={styles.dpadText}>▲</Text>
-            </Pressable>
+              {/* Decorative crosshair guide */}
+              <View pointerEvents="none" style={styles.analogGuideRing} />
+              <View pointerEvents="none" style={styles.analogCrossHairH} />
+              <View pointerEvents="none" style={styles.analogCrossHairV} />
 
-            {/* MIDDLE ROW (LEFT, CORE, RIGHT) */}
-            <View style={styles.dpadMiddle}>
-              <Pressable
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                pressRetentionOffset={{ top: 25, bottom: 25, left: 25, right: 25 }}
-                style={({ pressed }) => [styles.dpadBtn, styles.dpadLeft, pressed && styles.dpadBtnActive]}
-                onPressIn={() => handleDirectionPressIn(-1, 0)}
-                onPressOut={handleDirectionPressOut}
+              {/* Cardinal directional hints */}
+              <Text pointerEvents="none" style={[styles.analogHint, styles.analogHintUp]}>▲</Text>
+              <Text pointerEvents="none" style={[styles.analogHint, styles.analogHintDown]}>▼</Text>
+              <Text pointerEvents="none" style={[styles.analogHint, styles.analogHintLeft]}>◀</Text>
+              <Text pointerEvents="none" style={[styles.analogHint, styles.analogHintRight]}>▶</Text>
+
+              {/* Animated Thumbstick Knob */}
+              <Animated.View
+                pointerEvents="none"
+                style={[
+                  styles.analogKnob,
+                  {
+                    transform: [
+                      { translateX: knobAnim.x },
+                      { translateY: knobAnim.y },
+                    ],
+                  },
+                ]}
               >
-                <Text style={styles.dpadText}>◀</Text>
-              </Pressable>
-
-              <View style={styles.dpadCore}>
-                <Text style={{ fontSize: 13, color: '#00F5FF' }}>⚡</Text>
-              </View>
-
-              <Pressable
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                pressRetentionOffset={{ top: 25, bottom: 25, left: 25, right: 25 }}
-                style={({ pressed }) => [styles.dpadBtn, styles.dpadRight, pressed && styles.dpadBtnActive]}
-                onPressIn={() => handleDirectionPressIn(1, 0)}
-                onPressOut={handleDirectionPressOut}
-              >
-                <Text style={styles.dpadText}>▶</Text>
-              </Pressable>
+                <View style={styles.analogKnobCenter}>
+                  <Text style={{ fontSize: 13, color: '#00F5FF' }}>⚡</Text>
+                </View>
+              </Animated.View>
             </View>
-
-            {/* DOWN */}
-            <Pressable
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              pressRetentionOffset={{ top: 25, bottom: 25, left: 25, right: 25 }}
-              style={({ pressed }) => [styles.dpadBtn, styles.dpadDown, pressed && styles.dpadBtnActive]}
-              onPressIn={() => handleDirectionPressIn(0, 1)}
-              onPressOut={handleDirectionPressOut}
-            >
-              <Text style={styles.dpadText}>▼</Text>
-            </Pressable>
           </View>
 
           {/* Action Trigger Button: DROP BOMB */}
@@ -1235,54 +1301,89 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: 'rgba(0, 245, 255, 0.15)',
   },
-  dpadMatrix: {
+  analogContainer: {
     alignItems: 'center',
     justifyContent: 'center',
+    padding: 4,
   },
-  dpadMiddle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  dpadBtn: {
-    width: 50,
-    height: 50,
-    backgroundColor: '#12162A',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: 'rgba(0, 245, 255, 0.4)',
-  },
-  dpadBtnActive: {
-    backgroundColor: 'rgba(0, 245, 255, 0.35)',
-    transform: [{ scale: 0.95 }],
-  },
-  dpadUp: {
-    borderTopLeftRadius: 14,
-    borderTopRightRadius: 14,
-  },
-  dpadDown: {
-    borderBottomLeftRadius: 14,
-    borderBottomRightRadius: 14,
-  },
-  dpadLeft: {
-    borderTopLeftRadius: 14,
-    borderBottomLeftRadius: 14,
-  },
-  dpadRight: {
-    borderTopRightRadius: 14,
-    borderBottomRightRadius: 14,
-  },
-  dpadCore: {
-    width: 42,
-    height: 42,
-    backgroundColor: '#0A0D1B',
+  analogBase: {
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    backgroundColor: 'rgba(10, 14, 28, 0.92)',
+    borderWidth: 2,
+    borderColor: 'rgba(0, 245, 255, 0.45)',
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#00F5FF',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 8,
   },
-  dpadText: {
-    fontSize: 18,
-    color: '#00F5FF',
+  analogGuideRing: {
+    position: 'absolute',
+    width: 86,
+    height: 86,
+    borderRadius: 43,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 245, 255, 0.18)',
+    borderStyle: 'dashed',
+  },
+  analogCrossHairH: {
+    position: 'absolute',
+    width: 110,
+    height: 1,
+    backgroundColor: 'rgba(0, 245, 255, 0.12)',
+  },
+  analogCrossHairV: {
+    position: 'absolute',
+    width: 1,
+    height: 110,
+    backgroundColor: 'rgba(0, 245, 255, 0.12)',
+  },
+  analogHint: {
+    position: 'absolute',
+    fontSize: 10,
+    color: 'rgba(0, 245, 255, 0.45)',
     fontWeight: '900',
+  },
+  analogHintUp: {
+    top: 6,
+  },
+  analogHintDown: {
+    bottom: 6,
+  },
+  analogHintLeft: {
+    left: 8,
+  },
+  analogHintRight: {
+    right: 8,
+  },
+  analogKnob: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    backgroundColor: '#161F38',
+    borderWidth: 2.5,
+    borderColor: '#00F5FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#00F5FF',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.7,
+    shadowRadius: 8,
+    elevation: 7,
+  },
+  analogKnobCenter: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(0, 245, 255, 0.22)',
+    borderWidth: 1,
+    borderColor: '#00F5FF',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   actionContainer: {
     alignItems: 'center',
