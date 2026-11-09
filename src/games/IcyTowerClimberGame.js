@@ -65,6 +65,9 @@ export default function IcyTowerClimberGame({ onBackToHub, onScoreUpdate, isPaus
     laserFloorY: arenaHeight + 80,
     isGrounded: true,
     vy: 0,
+    projectiles: [],
+    explosions: [],
+    turrets: [],
   });
 
   // Active game world objects (platforms, sentry bombs, turrets, projectiles, scanning lasers, explosions)
@@ -316,6 +319,10 @@ export default function IcyTowerClimberGame({ onBackToHub, onScoreUpdate, isPaus
       floorsClimbed: 0,
       laserFloorY: arenaHeight + 80,
       isGrounded: true,
+      vy: 0,
+      projectiles: [],
+      explosions: [],
+      turrets: [],
     });
 
     // Spawn runway of platforms up ahead
@@ -533,7 +540,7 @@ export default function IcyTowerClimberGame({ onBackToHub, onScoreUpdate, isPaus
       for (const turret of turretsList) {
         turret.cooldown -= 1;
 
-        const muzzleX = turret.wall === 'LEFT' ? turret.x + 20 : turret.x + 2;
+        const muzzleX = turret.wall === 'LEFT' ? turret.x + 22 : turret.x;
         const muzzleY = turret.y + 8;
         const dx = pMidX - muzzleX;
         const dy = pMidY - muzzleY;
@@ -542,31 +549,34 @@ export default function IcyTowerClimberGame({ onBackToHub, onScoreUpdate, isPaus
         // Turret rotates towards player's position
         turret.aimAngle = Math.atan2(dy, dx) * (180 / Math.PI);
 
-        // Aiming laser telegraph when in vertical range (< 400px)
-        if (Math.abs(dy) < 400) {
-          if (turret.cooldown <= 35 && turret.cooldown > 0) {
+        // Aiming tracking when in vertical range (< 420px)
+        if (Math.abs(dy) < 420) {
+          if (turret.cooldown <= 40 && turret.cooldown > 0) {
             turret.isAiming = true;
+            turret.chargeRatio = (40 - turret.cooldown) / 40;
             turret.targetX = pMidX;
             turret.targetY = pMidY;
           } else if (turret.cooldown <= 0) {
             turret.isAiming = false;
+            turret.chargeRatio = 0;
             turret.cooldown = 110 + Math.floor(Math.random() * 45);
 
-            // Shoot plasma projectile directly towards player!
-            const projSpeed = 5.2;
+            // Shoot glowing ballistic plasma projectile directly towards player!
+            const projSpeed = 4.4; // Clearly visible, dodgeable ballistic plasma shot
             projectilesRef.current.push({
               id: `proj_${Date.now()}_${Math.random()}`,
-              x: muzzleX,
-              y: muzzleY,
+              x: muzzleX - 7,
+              y: muzzleY - 7,
               vx: (dx / distToPlayer) * projSpeed,
               vy: (dy / distToPlayer) * projSpeed,
-              w: 12,
-              h: 12,
+              w: 14,
+              h: 14,
             });
             playTapSound();
           }
         } else {
           turret.isAiming = false;
+          turret.chargeRatio = 0;
         }
       }
 
@@ -641,6 +651,14 @@ export default function IcyTowerClimberGame({ onBackToHub, onScoreUpdate, isPaus
           pr.y + pr.h > pHit.top &&
           pr.y < pHit.bottom
         ) {
+          explosionsRef.current.push({
+            id: `exp_${Date.now()}_${Math.random()}`,
+            x: pr.x + pr.w / 2,
+            y: pr.y + pr.h / 2,
+            r: 10,
+            opacity: 1,
+            color: '#00F5FF',
+          });
           handleGameOver('VAPORIZED BY TURRET PLASMA!');
           return;
         }
@@ -815,6 +833,9 @@ export default function IcyTowerClimberGame({ onBackToHub, onScoreUpdate, isPaus
         laserFloorY: laserFloorYRef.current,
         isGrounded: p.isGrounded,
         vy,
+        projectiles: [...projectilesRef.current],
+        explosions: [...explosionsRef.current],
+        turrets: [...turretsRef.current],
       });
 
       animFrameRef.current = requestAnimationFrame(tick);
@@ -848,7 +869,18 @@ export default function IcyTowerClimberGame({ onBackToHub, onScoreUpdate, isPaus
     initTower();
   };
 
-  const { playerX, playerY, cameraY, score, floorsClimbed, laserFloorY, isGrounded } = frameData;
+  const {
+    playerX,
+    playerY,
+    cameraY,
+    score,
+    floorsClimbed,
+    laserFloorY,
+    isGrounded,
+    projectiles: frameProjectiles = [],
+    explosions: frameExplosions = [],
+    turrets: frameTurrets = [],
+  } = frameData;
 
   // Filter visible elements
   const visiblePlatforms = platforms.filter((plat) => {
@@ -863,10 +895,14 @@ export default function IcyTowerClimberGame({ onBackToHub, onScoreUpdate, isPaus
     return dy > -40 && dy < arenaHeight + 40;
   });
 
-  const visibleTurrets = turrets.filter((t) => {
+  const activeTurretList = frameTurrets.length > 0 ? frameTurrets : turrets;
+  const visibleTurrets = activeTurretList.filter((t) => {
     const dy = t.y + cameraY;
     return dy > -40 && dy < arenaHeight + 40;
   });
+
+  const activeProjectiles = frameProjectiles.length > 0 ? frameProjectiles : projectiles;
+  const activeExplosions = frameExplosions.length > 0 ? frameExplosions : explosions;
 
   const visibleLasers = scanLasers.filter((l) => {
     const dy = l.y + cameraY;
@@ -1364,18 +1400,28 @@ export default function IcyTowerClimberGame({ onBackToHub, onScoreUpdate, isPaus
 
             return (
               <G key={turret.id}>
-                {/* Aiming Red Laser Beam directly to player cube */}
+                {/* Aiming Tracking Sight Line (Faint dashed targeting guide, not a laser weapon) */}
                 {isAiming && (
-                  <Line
-                    x1={pivotX}
-                    y1={pivotY}
-                    x2={turret.targetX}
-                    y2={turret.targetY + cameraY}
-                    stroke="#FF0055"
-                    strokeWidth={1.2}
-                    strokeDasharray="4 3"
-                    opacity={0.8}
-                  />
+                  <>
+                    <Line
+                      x1={pivotX}
+                      y1={pivotY}
+                      x2={turret.targetX}
+                      y2={turret.targetY + cameraY}
+                      stroke="#FF0055"
+                      strokeWidth={1}
+                      strokeDasharray="3 6"
+                      opacity={0.35}
+                    />
+                    {/* Charging plasma spark at muzzle before launching projectile */}
+                    <Circle
+                      cx={turret.wall === 'LEFT' ? turret.x + 22 : turret.x}
+                      cy={drawY + 8}
+                      r={2 + (turret.chargeRatio || 0) * 4.5}
+                      fill="#00F5FF"
+                      opacity={0.85}
+                    />
+                  </>
                 )}
 
                 {/* Turret Base Wall Mount */}
@@ -1413,31 +1459,43 @@ export default function IcyTowerClimberGame({ onBackToHub, onScoreUpdate, isPaus
             );
           })}
 
-          {/* ACTIVE PLASMA PROJECTILES */}
-          {projectiles.map((pr) => {
+          {/* ACTIVE PLASMA PROJECTILES (Glowing Ballistic Energy Orbs) */}
+          {activeProjectiles.map((pr) => {
             const drawY = pr.y + cameraY;
+            const cx = pr.x + pr.w / 2;
+            const cy = drawY + pr.h / 2;
             return (
               <G key={pr.id}>
+                {/* Outer Plasma Glow Halo */}
                 <Circle
-                  cx={pr.x + pr.w / 2}
-                  cy={drawY + pr.h / 2}
-                  r={pr.w / 2}
+                  cx={cx}
+                  cy={cy}
+                  r={9}
                   fill="#00F5FF"
-                  stroke="#FFFFFF"
+                  opacity={0.35}
+                />
+                {/* Plasma Fire Ball */}
+                <Circle
+                  cx={cx}
+                  cy={cy}
+                  r={6}
+                  fill="#00F5FF"
+                  stroke="#FFE600"
                   strokeWidth={1.5}
                 />
+                {/* White Hot Core */}
                 <Circle
-                  cx={pr.x + pr.w / 2}
-                  cy={drawY + pr.h / 2}
-                  r={pr.w / 4}
-                  fill="#FFE600"
+                  cx={cx}
+                  cy={cy}
+                  r={3}
+                  fill="#FFFFFF"
                 />
               </G>
             );
           })}
 
           {/* ACTIVE EXPLOSIONS */}
-          {explosions.map((exp) => {
+          {activeExplosions.map((exp) => {
             const drawY = exp.y + cameraY;
             return (
               <G key={exp.id}>
