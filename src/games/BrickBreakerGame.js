@@ -608,8 +608,16 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
   const handleLaunchBall = useCallback(() => {
     const eng = engineRef.current;
 
-    // Release any magnet-caught balls if ball is already launched
-    if (eng.ballLaunched) {
+    // Wake up physics engine immediately
+    eng.running = true;
+
+    // Check if there are any actively moving balls
+    const hasMovingBall = eng.balls.some(
+      (b) => Math.abs(b.vx) > 1 || Math.abs(b.vy) > 1
+    );
+
+    // If ball is already launched and moving, check for magnet-caught balls to release
+    if (eng.ballLaunched && hasMovingBall) {
       let releasedAny = false;
       for (const b of eng.balls) {
         if (b.caught) {
@@ -630,6 +638,56 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
       return;
     }
 
+    // Guarantee balls array is never empty when launching
+    if (eng.balls.length === 0) {
+      if (eng.mode === 'SINGLE_BRICKS') {
+        eng.balls = [
+          {
+            id: `solo_ball_${Date.now()}`,
+            x: eng.paddleX + eng.paddleW / 2,
+            y: paddleY - DEFAULT_BALL_RADIUS - 2,
+            vx: 0,
+            vy: 0,
+            r: DEFAULT_BALL_RADIUS,
+            color: '#00F5FF',
+            isFire: false,
+            isHeavy: false,
+            lastHitter: 'PLAYER',
+            owner: 'PLAYER',
+          },
+        ];
+      } else {
+        eng.balls = [
+          {
+            id: `duel_ball_player_${Date.now()}`,
+            x: eng.paddleX + eng.paddleW / 2,
+            y: paddleY - DEFAULT_BALL_RADIUS - 2,
+            vx: 0,
+            vy: 0,
+            r: DEFAULT_BALL_RADIUS,
+            color: '#00F5FF',
+            isFire: false,
+            isHeavy: false,
+            lastHitter: 'PLAYER',
+            owner: 'PLAYER',
+          },
+          {
+            id: `duel_ball_ai_${Date.now()}`,
+            x: eng.aiPaddleX + eng.aiPaddleW / 2,
+            y: aiPaddleY + PADDLE_HEIGHT + DEFAULT_BALL_RADIUS + 2,
+            vx: 0,
+            vy: 0,
+            r: DEFAULT_BALL_RADIUS,
+            color: '#FF007F',
+            isFire: false,
+            isHeavy: false,
+            lastHitter: 'AI',
+            owner: 'AI',
+          },
+        ];
+      }
+    }
+
     eng.ballLaunched = true;
     setBallLaunched(true);
     safeSound(playTapSound);
@@ -638,21 +696,19 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
     if (eng.mode === 'SINGLE_BRICKS') {
       if (eng.balls.length > 0) {
         const b = eng.balls[0];
-        const speed = 320; // Fast and snappy arcade velocity
+        const speed = 320;
         const angle = -Math.PI / 2 + (Math.random() - 0.5) * 0.5;
         b.vx = Math.cos(angle) * speed;
         b.vy = Math.sin(angle) * speed;
       }
     } else if (eng.mode === 'AI_BRICK_DUEL') {
       const speed = 270;
-      // Ball 0: Player ball launches upwards into center bricks
       if (eng.balls[0]) {
         const angle = -Math.PI / 2 + (Math.random() - 0.5) * 0.5;
         eng.balls[0].vx = Math.cos(angle) * speed;
         eng.balls[0].vy = Math.sin(angle) * speed;
         eng.balls[0].lastHitter = 'PLAYER';
       }
-      // Ball 1: AI ball launches downwards into center bricks
       if (eng.balls[1]) {
         const angle = Math.PI / 2 + (Math.random() - 0.5) * 0.5;
         eng.balls[1].vx = Math.cos(angle) * speed;
@@ -660,7 +716,6 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
         eng.balls[1].lastHitter = 'AI';
       }
     } else {
-      // HARD_SPHERE_DUEL
       const speed = 340;
       if (eng.balls[0]) {
         const angle = -Math.PI / 2 + (Math.random() - 0.5) * 0.6;
@@ -675,7 +730,7 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
         eng.balls[1].lastHitter = 'AI';
       }
     }
-  }, []);
+  }, [paddleY, aiPaddleY]);
 
   // Main 60 FPS Physics Loop
   useEffect(() => {
@@ -1527,6 +1582,8 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
 
                 if (eng.playerHearts <= 0) {
                   eng.running = false;
+                  eng.ballLaunched = false;
+                  setBallLaunched(false);
                   setModalType('gameover');
                   setModalTitle('SHIELD DEPLETED!');
                   setModalSubtitle(`FINAL SCORE: ${eng.score} IN LEVEL ${eng.level}`);
@@ -1564,6 +1621,8 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
 
                 if (eng.playerHearts <= 0) {
                   eng.running = false;
+                  eng.ballLaunched = false;
+                  setBallLaunched(false);
                   setModalType('gameover');
                   setModalTitle('YOUR SHIELD SHATTERED!');
                   setModalSubtitle(`AI WINS ${eng.aiScore} TO ${eng.score}`);
@@ -1755,6 +1814,11 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
           dragStartRef.current.startX = evt.nativeEvent.pageX;
           dragStartRef.current.startPaddleX = engineRef.current.paddleX;
           dragStartRef.current.hasMoved = false;
+
+          // If ball is not launched, tapping anywhere on the arena launches immediately!
+          if (!engineRef.current.ballLaunched) {
+            handleLaunchBall();
+          }
         },
         onPanResponderMove: (evt) => {
           const dx = evt.nativeEvent.pageX - dragStartRef.current.startX;
@@ -1767,6 +1831,11 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
           eng.paddleX = clamped;
         },
         onPanResponderRelease: () => {
+          if (!engineRef.current.ballLaunched) {
+            handleLaunchBall();
+          }
+        },
+        onPanResponderTerminate: () => {
           if (!engineRef.current.ballLaunched) {
             handleLaunchBall();
           }
