@@ -38,6 +38,7 @@ import {
 } from '../utils/sound';
 
 const STORAGE_KEY = '@game_tower:best_thief_v1';
+const STORAGE_LEVEL_KEY = '@game_tower:thief_current_level_v1';
 
 const monoFont = Platform.select({
   ios: 'Menlo',
@@ -300,13 +301,15 @@ export default function ThiefEscapeGame({
     stonePickupTakenRef.current = stonePickupTaken;
   }, [stonePickupTaken]);
 
-  // Load High Score
-  useEffect(() => {
-    AsyncStorage.getItem(STORAGE_KEY)
-      .then((val) => {
-        if (val) setHighScore(parseInt(val, 10) || 0);
-      })
-      .catch(() => {});
+  const hasDiamondRef = useRef(false);
+  const hasPetrolRef = useRef(!levelConfig.requiresPetrol);
+  const fuelWarningCooldownRef = useRef(false);
+
+  // Save current level to persistent storage
+  const saveCurrentLevel = useCallback(async (lvl) => {
+    try {
+      await AsyncStorage.setItem(STORAGE_LEVEL_KEY, String(lvl));
+    } catch {}
   }, []);
 
   // Initialize Level
@@ -328,7 +331,15 @@ export default function ThiefEscapeGame({
       setPlayer(initialPlayer);
       playerRef.current = initialPlayer;
 
-      const initialGuards = cfg.guards.map((g) => ({ ...g, alertTimer: 0 }));
+      const initialGuards = cfg.guards.map((g) => ({
+        ...g,
+        alertTimer: 0,
+        pauseTimer: 0,
+        isInvestigating: false,
+        investigateTargetX: g.x,
+        investigateTimer: 0,
+        investigateSpeed: g.speed,
+      }));
       setGuards(initialGuards);
       guardsRef.current = initialGuards;
 
@@ -345,8 +356,10 @@ export default function ThiefEscapeGame({
 
       setDiamondTaken(false);
       diamondTakenRef.current = false;
+      hasDiamondRef.current = false;
       setPetrolTaken(!cfg.requiresPetrol);
       petrolTakenRef.current = !cfg.requiresPetrol;
+      hasPetrolRef.current = !cfg.requiresPetrol;
 
       setStones(3);
       stonesRef.current = 3;
@@ -374,6 +387,25 @@ export default function ThiefEscapeGame({
     },
     []
   );
+
+  // Load High Score and Continue Saved Level on startup
+  useEffect(() => {
+    AsyncStorage.getItem(STORAGE_KEY)
+      .then((val) => {
+        if (val) setHighScore(parseInt(val, 10) || 0);
+      })
+      .catch(() => {});
+
+    AsyncStorage.getItem(STORAGE_LEVEL_KEY)
+      .then((savedLvl) => {
+        if (savedLvl) {
+          const l = Math.max(1, parseInt(savedLvl, 10) || 1);
+          setLevel(l);
+          initLevel(l);
+        }
+      })
+      .catch(() => {});
+  }, [initLevel]);
 
   // Player Caught / Damaged
   const handlePlayerBusted = useCallback(() => {
@@ -411,12 +443,12 @@ export default function ThiefEscapeGame({
 
     const newStone = {
       id: Date.now() + Math.random(),
-      x: curP.x + dir * 10,
-      y: curY - 18,
-      vx: dir * 5.2,
-      vy: -3.8, // ballistic upward angle
+      x: curP.x + dir * 8,
+      y: curY - 14,
+      vx: dir * 2.8, // Shorter, controlled throw distance (lands ~55-70px away instead of 180px!)
+      vy: -2.4, // Gentle upward arc
       active: true,
-      life: 90,
+      life: 60,
     };
 
     setStones((s) => {
@@ -549,7 +581,23 @@ export default function ThiefEscapeGame({
           g.alertTimer -= 1;
         }
 
-        if (g.pauseTimer > 0) {
+        if (g.isInvestigating) {
+          // Guard is actively moving towards where the stone landed!
+          const distToNoise = g.investigateTargetX - g.x;
+          if (Math.abs(distToNoise) > 5) {
+            g.dir = distToNoise > 0 ? 1 : -1;
+            g.x += g.dir * (g.investigateSpeed || g.speed * 0.95);
+            g.x = Math.max(g.minX, Math.min(g.maxX, g.x));
+          } else {
+            // Reached the spot where stone landed! Looks around
+            g.x = g.investigateTargetX;
+            g.investigateTimer = (g.investigateTimer || 0) - 1;
+            if (g.investigateTimer <= 0) {
+              g.isInvestigating = false;
+              g.pauseTimer = 25; // brief pause before resuming normal patrol
+            }
+          }
+        } else if (g.pauseTimer > 0) {
           g.pauseTimer -= 1;
         } else {
           g.x += g.dir * g.speed;
@@ -593,7 +641,7 @@ export default function ThiefEscapeGame({
         }
 
         if (hitFloor !== null && st.life > 0) {
-          // Stone hit floor: make sound & alert guards on this floor
+          // Stone hit floor: make sound & alert guards on this floor to walk towards it!
           playSnapTickSound();
           triggerLightHaptic();
           juiceRef.current?.burst(st.x, st.y, '#FFE600', 14);
@@ -601,10 +649,15 @@ export default function ThiefEscapeGame({
           curGuards.forEach((g) => {
             if (g.floor === hitFloor) {
               const dist = Math.abs(g.x - st.x);
-              if (dist < 150) {
-                g.pauseTimer = 100; // freeze in place / investigate for 1.6s
-                g.alertTimer = 100;
-                g.dir = st.x > g.x ? 1 : -1; // turn towards noise!
+              if (dist < 180) {
+                // Guard hears stone! Walk towards impact point to investigate
+                g.isInvestigating = true;
+                g.investigateTargetX = Math.max(g.minX, Math.min(g.maxX, st.x));
+                g.investigateTimer = 110;
+                g.alertTimer = 110;
+                g.pauseTimer = 0; // Don't stay frozen!
+                g.dir = g.investigateTargetX > g.x ? 1 : -1;
+                g.investigateSpeed = Math.max(0.85, g.speed * 0.95);
               }
             }
           });
@@ -685,33 +738,39 @@ export default function ThiefEscapeGame({
 
       // 6. Check Item Pickups: Diamond
       if (!curPlayer.hasDiamond && !diamondTakenRef.current && curPlayer.floor === levelConfig.diamond.floor && !curPlayer.isClimbing) {
-        if (Math.abs(curPlayer.x - levelConfig.diamond.x) < 22) {
+        if (Math.abs(curPlayer.x - levelConfig.diamond.x) < 26) {
           curPlayer.hasDiamond = true;
+          hasDiamondRef.current = true;
           setDiamondTaken(true);
           diamondTakenRef.current = true;
           triggerPerfectHaptic();
           playPerfectSound();
           juiceRef.current?.burst(levelConfig.diamond.x, getFloorY(curPlayer.floor), '#00F5FF', 24);
-          juiceRef.current?.popup('💎 DIAMOND SECURED!', 'Now escape to the getaway car!', '#00F5FF');
+          if (curPlayer.hasPetrol) {
+            juiceRef.current?.popup('💎 DIAMOND SECURED!', 'Escape to the getaway car on Floor 0!', '#00F5FF');
+          } else {
+            juiceRef.current?.popup('💎 DIAMOND SECURED!', `Now get fuel on Floor ${levelConfig.petrol?.floor || 1}!`, '#00F5FF');
+          }
         }
       }
 
       // 7. Check Item Pickups: Petrol Canister
       if (levelConfig.requiresPetrol && !curPlayer.hasPetrol && levelConfig.petrol && curPlayer.floor === levelConfig.petrol.floor && !curPlayer.isClimbing) {
-        if (Math.abs(curPlayer.x - levelConfig.petrol.x) < 22) {
+        if (Math.abs(curPlayer.x - levelConfig.petrol.x) < 26) {
           curPlayer.hasPetrol = true;
+          hasPetrolRef.current = true;
           setPetrolTaken(true);
           petrolTakenRef.current = true;
           triggerSelectionHaptic();
           playTapSound();
           juiceRef.current?.burst(levelConfig.petrol.x, getFloorY(curPlayer.floor), '#FFE600', 16);
-          juiceRef.current?.popup('⛽ FUEL CANISTER SECURED!', 'Getaway car fueled up', '#FFE600');
+          juiceRef.current?.popup('⛽ FUEL CANISTER SECURED!', 'Car fueled! Head to Floor 0 to escape!', '#FFE600');
         }
       }
 
       // 8. Check Item Pickups: Stone Cache Refill
       if (levelConfig.stonePickup && !stonePickupTakenRef.current && curPlayer.floor === levelConfig.stonePickup.floor && !curPlayer.isClimbing) {
-        if (Math.abs(curPlayer.x - levelConfig.stonePickup.x) < 22) {
+        if (Math.abs(curPlayer.x - levelConfig.stonePickup.x) < 24) {
           setStonePickupTaken(true);
           stonePickupTakenRef.current = true;
           setStones((s) => {
@@ -727,9 +786,10 @@ export default function ThiefEscapeGame({
 
       // 9. Check Stealing Diamond Back from Rival Thief
       if (levelConfig.hasRival && curRival.hasDiamond && curPlayer.floor === curRival.floor && !curPlayer.isClimbing) {
-        if (Math.abs(curPlayer.x - curRival.x) < 24) {
+        if (Math.abs(curPlayer.x - curRival.x) < 26) {
           curRival.hasDiamond = false;
           curPlayer.hasDiamond = true;
+          hasDiamondRef.current = true;
           triggerPerfectHaptic();
           playPerfectSound();
           juiceRef.current?.popup('🥷 TACKLED RIVAL!', 'Diamond reclaimed!', COLORS.matrixMint);
@@ -737,10 +797,20 @@ export default function ThiefEscapeGame({
       }
 
       // 10. Check Escape to Car on Ground Floor
-      if (curPlayer.floor === 0 && !curPlayer.isClimbing && curPlayer.hasDiamond && curPlayer.hasPetrol) {
-        if (!carStateRef.current.isEscaping && Math.abs(curPlayer.x - carStateRef.current.x) <= 40) {
+      const isGroundFloor = curPlayer.floor === 0 || (curPlayer.y != null && curPlayer.y >= getFloorY(0) - 16);
+      const isAtCar = Math.abs(curPlayer.x - carStateRef.current.x) <= 55;
+      const playerHasDiamond = curPlayer.hasDiamond || diamondTakenRef.current || hasDiamondRef.current;
+      const playerHasPetrol = !levelConfig.requiresPetrol || curPlayer.hasPetrol || petrolTakenRef.current || hasPetrolRef.current;
+
+      if (isGroundFloor && isAtCar && !carStateRef.current.isEscaping) {
+        if (playerHasDiamond && playerHasPetrol) {
           inputDirRef.current = 0;
           climbDirRef.current = 0;
+          curPlayer.floor = 0;
+          curPlayer.y = null;
+          curPlayer.isClimbing = false;
+          curPlayer.isHiding = false;
+
           carStateRef.current = {
             ...carStateRef.current,
             isEscaping: true,
@@ -753,6 +823,15 @@ export default function ThiefEscapeGame({
           triggerPerfectHaptic();
           playPerfectSound();
           juiceRef.current?.popup('🚗 JUMPING INTO CAR!', 'Hop into getaway vehicle!', COLORS.matrixMint);
+        } else if (playerHasDiamond && !playerHasPetrol) {
+          if (!fuelWarningCooldownRef.current) {
+            fuelWarningCooldownRef.current = true;
+            setTimeout(() => {
+              fuelWarningCooldownRef.current = false;
+            }, 1800);
+            triggerMediumHaptic();
+            juiceRef.current?.popup('⛽ NEED FUEL TO START!', `Canister is on Floor ${levelConfig.petrol?.floor || 1}!`, '#FF0055');
+          }
         }
       }
 
@@ -761,7 +840,7 @@ export default function ThiefEscapeGame({
         const cState = { ...carStateRef.current };
         if (!cState.thiefInside) {
           // Thief hops in an arc directly into the car cabin
-          cState.jumpPhase = Math.min(1, cState.jumpPhase + 0.1);
+          cState.jumpPhase = Math.min(1, cState.jumpPhase + 0.08);
           if (cState.jumpPhase >= 1) {
             cState.jumpPhase = 1;
             cState.thiefInside = true;
@@ -771,7 +850,7 @@ export default function ThiefEscapeGame({
           }
         } else {
           // Car accelerates and speeds off the screen
-          cState.vx = Math.min(18, cState.vx + 0.6);
+          cState.vx = Math.min(18, cState.vx + 0.8);
           cState.x += cState.escapeDir * cState.vx;
 
           // Once car has completely driven off screen, show victory popup for next level!
@@ -797,7 +876,10 @@ export default function ThiefEscapeGame({
         setCarState(cState);
       }
 
-      // Commit State updates
+      // Commit State updates synchronously to both refs and React state!
+      playerRef.current = curPlayer;
+      guardsRef.current = curGuards;
+      rivalRef.current = curRival;
       setPlayer(curPlayer);
       setGuards(curGuards);
       setRival(curRival);
@@ -843,20 +925,31 @@ export default function ThiefEscapeGame({
     }));
   };
 
-  // Next Level Handler
-  const handleNextLevel = () => {
+  // Next Level Handler (continues to next level and saves progress)
+  const handleNextLevel = useCallback(() => {
     const nextLvl = level + 1;
     setLevel(nextLvl);
+    saveCurrentLevel(nextLvl);
     initLevel(nextLvl);
-  };
+  }, [level, initLevel, saveCurrentLevel]);
 
-  // Restart Handler
-  const handleRestart = () => {
+  // Retry Current Level Handler (continues same level on game over)
+  const handleRetryCurrentLevel = useCallback(() => {
+    setLives(3);
+    setIsGameOver(false);
+    initLevel(level);
+  }, [level, initLevel]);
+
+  // New Game / Reset Handler (resets to Level 1 ONLY when user explicitly presses new button)
+  const handleNewGame = useCallback(() => {
     setLives(3);
     setScore(0);
     setLevel(1);
+    setIsGameOver(false);
+    saveCurrentLevel(1);
     initLevel(1);
-  };
+    juiceRef.current?.popup('NEW HEIST STARTED', 'Reset to Level 1', '#00F5FF');
+  }, [initLevel, saveCurrentLevel]);
 
   // Active player vertical position
   const activePlayerY = player.isClimbing && player.y != null ? player.y : getFloorY(player.floor);
@@ -874,7 +967,7 @@ export default function ThiefEscapeGame({
         bestScore={highScore}
         accentColor="#00F5FF"
         onBackToHub={onBackToHub}
-        onReset={handleRestart}
+        onReset={handleNewGame}
         disabled={isPaused}
       />
 
@@ -890,7 +983,7 @@ export default function ThiefEscapeGame({
 
           <View style={styles.statusBox}>
             <Text style={styles.statusDim}>STAGE</Text>
-            <Text style={[styles.statusVal, { color: '#FFE600' }]}>{levelConfig.name}</Text>
+            <Text style={[styles.statusVal, { color: '#FFE600' }]}>{`LVL ${level} // ${levelConfig.name}`}</Text>
           </View>
 
           <View style={styles.statusBox}>
@@ -1123,29 +1216,60 @@ export default function ThiefEscapeGame({
                 {player.hasDiamond && player.hasPetrol && !carState.isEscaping && (
                   <G>
                     <Rect
-                      x={carState.x - 34}
-                      y={getFloorY(0) - 24}
-                      width={68}
-                      height={26}
-                      rx={8}
-                      fill="none"
+                      x={carState.x - 44}
+                      y={getFloorY(0) - 44}
+                      width={88}
+                      height={18}
+                      rx={6}
+                      fill="rgba(0, 245, 212, 0.25)"
                       stroke={COLORS.matrixMint}
-                      strokeWidth={2}
-                      strokeDasharray="6 4"
+                      strokeWidth={1.5}
                     />
+                    <SvgText
+                      x={carState.x}
+                      y={getFloorY(0) - 31}
+                      fontSize={8}
+                      fontWeight="bold"
+                      fill={COLORS.matrixMint}
+                      textAnchor="middle"
+                    >
+                      ESCAPE HERE 🚗
+                    </SvgText>
                     <Polygon
-                      points={`${carState.x},${getFloorY(0) - 26} ${carState.x - 7},${getFloorY(0) - 34} ${carState.x + 7},${getFloorY(0) - 34}`}
+                      points={`${carState.x},${getFloorY(0) - 22} ${carState.x - 7},${getFloorY(0) - 30} ${carState.x + 7},${getFloorY(0) - 30}`}
                       fill={COLORS.matrixMint}
                     />
                   </G>
                 )}
 
                 {/* Warning beacon if diamond is ready but petrol still needed */}
-                {player.hasDiamond && !player.hasPetrol && (
-                  <Polygon
-                    points={`${carState.x},${getFloorY(0) - 24} ${carState.x - 6},${getFloorY(0) - 32} ${carState.x + 6},${getFloorY(0) - 32}`}
-                    fill="#FFE600"
-                  />
+                {player.hasDiamond && !player.hasPetrol && !carState.isEscaping && (
+                  <G>
+                    <Rect
+                      x={carState.x - 46}
+                      y={getFloorY(0) - 44}
+                      width={92}
+                      height={18}
+                      rx={6}
+                      fill="rgba(255, 0, 85, 0.25)"
+                      stroke="#FF0055"
+                      strokeWidth={1.5}
+                    />
+                    <SvgText
+                      x={carState.x}
+                      y={getFloorY(0) - 31}
+                      fontSize={7.5}
+                      fontWeight="bold"
+                      fill="#FF0055"
+                      textAnchor="middle"
+                    >
+                      NEED FUEL ⛽
+                    </SvgText>
+                    <Polygon
+                      points={`${carState.x},${getFloorY(0) - 22} ${carState.x - 6},${getFloorY(0) - 29} ${carState.x + 6},${getFloorY(0) - 29}`}
+                      fill="#FF0055"
+                    />
+                  </G>
                 )}
 
                 {/* Headlight beam shining when car is escaping off screen */}
@@ -1447,6 +1571,8 @@ export default function ThiefEscapeGame({
         bestScore={highScore}
         accentColor="#00F5FF"
         buttonText="NEXT HEIST ▶"
+        onNextLevel={handleNextLevel}
+        onNext={handleNextLevel}
         onRetry={handleNextLevel}
         onBackToHub={onBackToHub}
       />
@@ -1456,12 +1582,15 @@ export default function ThiefEscapeGame({
         visible={isGameOver}
         type="GAME_OVER"
         title="HEIST COMPROMISED"
-        subtitle="Security lockdown. All operatives detained."
+        subtitle={`Security lockdown on Level ${level}. Operative detected.`}
         score={score}
         bestScore={highScore}
         accentColor="#FF0055"
-        buttonText="RETRY MISSION"
-        onRetry={handleRestart}
+        buttonText="RETRY LEVEL ▶"
+        onRetry={handleRetryCurrentLevel}
+        onRestart={handleRetryCurrentLevel}
+        onNextLevel={handleRetryCurrentLevel}
+        onNext={handleRetryCurrentLevel}
         onBackToHub={onBackToHub}
       />
     </View>
