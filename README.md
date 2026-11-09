@@ -43,7 +43,6 @@ The main menu is designed and shaped like a **20-Floor Futuristic Skyscraper / M
 | **FL 09** | **Simon Pulse** | Brain | 9-pad musical synth sequence memory with escalating tempo |
 | **FL 08** | **Chroma Flood** | Strategy | 8x8 neon infection grid; flood the matrix within 18 moves |
 | **FL 07** | **Cyber Slide 15** | Puzzle | Classic 15-puzzle sliding blocks with move counter and win celebration |
-| **FL 06** | **Grid Hacker** | Puzzle | 5x5 Lights Out firewall node puzzle with auto-hint system |
 | **FL 05** | **Memory Matrix** | Brain | 4x4 data card match with streak multipliers and peek reveal |
 | **FL 04** | **Neon Mines** | Strategy | 7x7 tactical Minesweeper with cell reveals, long-press flag toggle, safe first tap |
 | **FL 03** | **Wordly Neo** | Word | 5-letter cyber password decryption in 6 tries with live QWERTY telemetry |

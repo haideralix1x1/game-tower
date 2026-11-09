@@ -118,16 +118,10 @@ export const UNLOCK_REQUIREMENTS = {
     desc: 'Clear 1 tube in COLOR TUBE SORT',
     category: 'PUZZLES',
   },
-  lights_out: {
+  tap_away: {
     reqGame: 'hanoi_tower',
     targetScore: 1,
     desc: 'Clear 1 level in TOWER OF HANOI',
-    category: 'PUZZLES',
-  },
-  tap_away: {
-    reqGame: 'lights_out',
-    targetScore: 1,
-    desc: 'Solve 1 puzzle in GRID HACKER',
     category: 'PUZZLES',
   },
   cyber_pathfinder: {
@@ -231,7 +225,6 @@ export const GAME_CATEGORY_MAP = {
   block_blast: 'PUZZLES',
   color_tube: 'PUZZLES',
   hanoi_tower: 'PUZZLES',
-  lights_out: 'PUZZLES',
   tap_away: 'PUZZLES',
   cyber_pathfinder: 'PUZZLES',
   cyber_screw: 'PUZZLES',
