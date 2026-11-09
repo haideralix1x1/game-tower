@@ -182,7 +182,7 @@ export default function IcyTowerClimberGame({ onBackToHub, onScoreUpdate, isPaus
       newPlats.push(platObj);
 
       // Red Enemy Sentry Box (Kamikaze Bomb)
-      if (floor >= 12 && type !== 'FIRE' && type !== 'BOUNCE' && type !== 'SPIKE' && Math.random() < 0.25) {
+      if (floor >= 12 && type !== 'FIRE' && type !== 'BOUNCE' && type !== 'SPIKE' && type !== 'MOVING' && Math.random() < 0.25) {
         newBombs.push({
           id: `bomb_${idx}`,
           platId,
@@ -190,9 +190,13 @@ export default function IcyTowerClimberGame({ onBackToHub, onScoreUpdate, isPaus
           y: curY - 20,
           w: 20,
           h: 20,
+          platMinX: platX + 4,
+          platMaxX: Math.max(platX + 4, platX + platW - 24),
+          patrolDir: Math.random() > 0.5 ? 1 : -1,
           state: 'IDLE',
-          speed: 2.2 + Math.min(1.5, floor / 50),
-          fuse: 45,
+          alertTimer: 0,
+          speed: 0.70 + Math.min(0.40, floor / 100), // Slowed down (~0.7 - 1.1 px/frame instead of 2.2 - 3.7) so player can react and jump to next platform
+          fuse: 90, // Generous fuse (1.5s instead of 0.75s)
           color: '#FF0055',
         });
       }
@@ -461,39 +465,59 @@ export default function IcyTowerClimberGame({ onBackToHub, onScoreUpdate, isPaus
         }
       }
 
-      // 4. Update Red Sentry Bombs
+      // 4. Update Red Sentry Bombs (Slowed bot enemies with telegraph alert and bounded platforms)
       const bombs = sentryBombsRef.current;
       for (const bomb of bombs) {
         if (bomb.state === 'EXPLODED') continue;
 
-        if (p.isGrounded && p.currentPlatId === bomb.platId && bomb.state === 'IDLE') {
-          bomb.state = 'RUSH';
-          triggerLightHaptic();
-        }
+        if (bomb.state === 'IDLE') {
+          // Slow pacing patrol along the platform so the player can see its timing
+          bomb.x += (bomb.patrolDir || 1) * 0.45;
+          if (bomb.platMinX !== undefined && bomb.x <= bomb.platMinX) {
+            bomb.x = bomb.platMinX;
+            bomb.patrolDir = 1;
+          } else if (bomb.platMaxX !== undefined && bomb.x >= bomb.platMaxX) {
+            bomb.x = bomb.platMaxX;
+            bomb.patrolDir = -1;
+          }
 
-        if (bomb.state === 'RUSH') {
+          // Trigger warning telegraph when player lands on this platform
+          if (p.isGrounded && p.currentPlatId === bomb.platId) {
+            bomb.state = 'ALERT';
+            bomb.alertTimer = 22; // ~0.36s warning window to give player time to leap to next platform
+            triggerLightHaptic();
+          }
+        } else if (bomb.state === 'ALERT') {
+          bomb.alertTimer = (bomb.alertTimer || 22) - 1;
+          if (bomb.alertTimer <= 0) {
+            bomb.state = 'RUSH';
+          }
+        } else if (bomb.state === 'RUSH') {
           const targetX = p.x;
           const diff = targetX - bomb.x;
           if (Math.abs(diff) > 2) {
             bomb.x += Math.sign(diff) * bomb.speed;
+            if (bomb.platMinX !== undefined && bomb.platMaxX !== undefined) {
+              bomb.x = Math.max(bomb.platMinX, Math.min(bomb.platMaxX, bomb.x));
+            }
           }
 
           bomb.fuse -= 1;
           const distToPlayer = Math.hypot((bomb.x + 10) - (p.x + PLAYER_SIZE / 2), (bomb.y + 10) - (p.y + PLAYER_SIZE / 2));
-          if (bomb.fuse <= 0 || distToPlayer < 24) {
+          if (bomb.fuse <= 0 || distToPlayer < 18) {
             bomb.state = 'EXPLODED';
             explosionsRef.current.push({
               id: `exp_${Date.now()}_${Math.random()}`,
               x: bomb.x + 10,
               y: bomb.y + 10,
               r: 10,
-              maxR: 44,
+              maxR: 36,
               opacity: 1,
             });
             triggerMediumHaptic();
             playSliceSound();
 
-            if (distToPlayer < 42) {
+            if (distToPlayer < 30) {
               handleGameOver('BLASTED BY SENTRY BOMB!');
               return;
             }
@@ -1279,10 +1303,24 @@ export default function IcyTowerClimberGame({ onBackToHub, onScoreUpdate, isPaus
           {visibleBombs.map((bomb) => {
             const drawY = bomb.y + cameraY;
             const isRushing = bomb.state === 'RUSH';
-            const strobe = isRushing && tickCountRef.current % 4 < 2;
+            const isAlert = bomb.state === 'ALERT';
+            const strobe = (isRushing || isAlert) && tickCountRef.current % 4 < 2;
 
             return (
               <G key={bomb.id}>
+                {/* Warning indicator when alerting */}
+                {isAlert && (
+                  <SvgText
+                    x={bomb.x + bomb.w / 2}
+                    y={drawY - 8}
+                    fill={strobe ? '#FFE600' : '#FF0055'}
+                    fontSize="11"
+                    fontWeight="bold"
+                    textAnchor="middle"
+                  >
+                    !
+                  </SvgText>
+                )}
                 <Rect
                   x={bomb.x}
                   y={drawY}
@@ -1298,9 +1336,9 @@ export default function IcyTowerClimberGame({ onBackToHub, onScoreUpdate, isPaus
                   y={drawY + 6}
                   width={bomb.w - 8}
                   height={4}
-                  fill={isRushing ? '#FFE600' : '#050114'}
+                  fill={isRushing || isAlert ? '#FFE600' : '#050114'}
                 />
-                {isRushing && (
+                {(isRushing || isAlert) && (
                   <>
                     <Line
                       x1={bomb.x + bomb.w / 2}
@@ -1310,7 +1348,7 @@ export default function IcyTowerClimberGame({ onBackToHub, onScoreUpdate, isPaus
                       stroke="#FFE600"
                       strokeWidth={1.5}
                     />
-                    <Circle cx={bomb.x + bomb.w / 2} cy={drawY - 7} r={2} fill="#FF0055" />
+                    <Circle cx={bomb.x + bomb.w / 2} cy={drawY - 7} r={2} fill={strobe ? '#FFE600' : '#FF0055'} />
                   </>
                 )}
               </G>
