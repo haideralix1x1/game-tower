@@ -17,6 +17,7 @@ import Svg, {
   G,
   Line,
   Polygon,
+  Text as SvgText,
 } from 'react-native-svg';
 import { COLORS } from '../../styles';
 import MiniGameHeader from '../components/MiniGameHeader';
@@ -743,10 +744,12 @@ export default function ThiefEscapeGame({
           hasDiamondRef.current = true;
           setDiamondTaken(true);
           diamondTakenRef.current = true;
-          triggerPerfectHaptic();
-          playPerfectSound();
-          juiceRef.current?.burst(levelConfig.diamond.x, getFloorY(curPlayer.floor), '#00F5FF', 24);
-          if (curPlayer.hasPetrol) {
+          try {
+            triggerPerfectHaptic();
+            playPerfectSound();
+            juiceRef.current?.burst(levelConfig.diamond.x, getFloorY(curPlayer.floor), '#00F5FF', 24);
+          } catch {}
+          if (!levelConfig.requiresPetrol || curPlayer.hasPetrol) {
             juiceRef.current?.popup('💎 DIAMOND SECURED!', 'Escape to the getaway car on Floor 0!', '#00F5FF');
           } else {
             juiceRef.current?.popup('💎 DIAMOND SECURED!', `Now get fuel on Floor ${levelConfig.petrol?.floor || 1}!`, '#00F5FF');
@@ -995,8 +998,8 @@ export default function ThiefEscapeGame({
 
           <View style={styles.statusBox}>
             <Text style={styles.statusDim}>FUEL</Text>
-            <Text style={[styles.statusVal, { color: player.hasPetrol ? COLORS.matrixMint : '#FF0055' }]}>
-              {player.hasPetrol ? 'READY ⛽' : 'EMPTY ⚠️'}
+            <Text style={[styles.statusVal, { color: (!levelConfig.requiresPetrol || player.hasPetrol) ? COLORS.matrixMint : '#FF0055' }]}>
+              {!levelConfig.requiresPetrol ? 'FULL ⛽' : player.hasPetrol ? 'READY ⛽' : 'EMPTY ⚠️'}
             </Text>
           </View>
 
@@ -1213,7 +1216,7 @@ export default function ThiefEscapeGame({
               {/* Ground Floor Getaway Car with Animated Escape Beacon & Getaway Drive */}
               <G>
                 {/* Active Escape Zone indicator when diamond & fuel are ready and not yet escaping */}
-                {player.hasDiamond && player.hasPetrol && !carState.isEscaping && (
+                {player.hasDiamond && (!levelConfig.requiresPetrol || player.hasPetrol) && !carState.isEscaping && (
                   <G>
                     <Rect
                       x={carState.x - 44}
@@ -1233,7 +1236,7 @@ export default function ThiefEscapeGame({
                       fill={COLORS.matrixMint}
                       textAnchor="middle"
                     >
-                      ESCAPE HERE 🚗
+                      ESCAPE HERE
                     </SvgText>
                     <Polygon
                       points={`${carState.x},${getFloorY(0) - 22} ${carState.x - 7},${getFloorY(0) - 30} ${carState.x + 7},${getFloorY(0) - 30}`}
@@ -1243,7 +1246,7 @@ export default function ThiefEscapeGame({
                 )}
 
                 {/* Warning beacon if diamond is ready but petrol still needed */}
-                {player.hasDiamond && !player.hasPetrol && !carState.isEscaping && (
+                {player.hasDiamond && levelConfig.requiresPetrol && !player.hasPetrol && !carState.isEscaping && (
                   <G>
                     <Rect
                       x={carState.x - 46}
@@ -1263,7 +1266,7 @@ export default function ThiefEscapeGame({
                       fill="#FF0055"
                       textAnchor="middle"
                     >
-                      NEED FUEL ⛽
+                      NEED FUEL
                     </SvgText>
                     <Polygon
                       points={`${carState.x},${getFloorY(0) - 22} ${carState.x - 6},${getFloorY(0) - 29} ${carState.x + 6},${getFloorY(0) - 29}`}
@@ -1290,9 +1293,9 @@ export default function ThiefEscapeGame({
                 )}
 
                 {/* Car Chassis */}
-                <Rect x={carState.x - 28} y={getFloorY(0) - 18} width={56} height={16} rx={5} fill="#141829" stroke={player.hasDiamond && player.hasPetrol ? COLORS.matrixMint : '#FF0055'} strokeWidth={1.8} />
-                <Circle cx={carState.x - 18} cy={getFloorY(0) - 2} r={5} fill="#05060C" stroke={player.hasDiamond && player.hasPetrol ? COLORS.matrixMint : '#FF0055'} strokeWidth={1} />
-                <Circle cx={carState.x + 18} cy={getFloorY(0) - 2} r={5} fill="#05060C" stroke={player.hasDiamond && player.hasPetrol ? COLORS.matrixMint : '#FF0055'} strokeWidth={1} />
+                <Rect x={carState.x - 28} y={getFloorY(0) - 18} width={56} height={16} rx={5} fill="#141829" stroke={player.hasDiamond && (!levelConfig.requiresPetrol || player.hasPetrol) ? COLORS.matrixMint : '#FF0055'} strokeWidth={1.8} />
+                <Circle cx={carState.x - 18} cy={getFloorY(0) - 2} r={5} fill="#05060C" stroke={player.hasDiamond && (!levelConfig.requiresPetrol || player.hasPetrol) ? COLORS.matrixMint : '#FF0055'} strokeWidth={1} />
+                <Circle cx={carState.x + 18} cy={getFloorY(0) - 2} r={5} fill="#05060C" stroke={player.hasDiamond && (!levelConfig.requiresPetrol || player.hasPetrol) ? COLORS.matrixMint : '#FF0055'} strokeWidth={1} />
                 <Polygon
                   points={
                     carState.escapeDir === -1
