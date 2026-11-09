@@ -1428,7 +1428,7 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
               }
             }
 
-            // --- 7. BRICK COLLISIONS (Solo & Center Duel) ---
+            // --- 7. BRICK COLLISIONS (Solo & Center Duel: strictly 1 brick per impact) ---
             if (eng.mode !== 'HARD_SPHERE_DUEL' && eng.bricks.length > 0) {
               for (let j = eng.bricks.length - 1; j >= 0; j--) {
                 const brk = eng.bricks[j];
@@ -1438,16 +1438,36 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
                 const distSq = (nextX - testX) ** 2 + (nextY - testY) ** 2;
 
                 if (distSq <= b.r * b.r) {
-                  const isPiercing = b.isPierce || eng.pierceTimer > 0;
-                  if (!b.isFire && !isPiercing) {
-                    const prevX = b.x;
-                    if (prevX < brk.x || prevX > brk.x + brk.w) {
-                      b.vx = -b.vx;
+                  // Determine collision face & separate ball cleanly to prevent tunneling/multiple hits
+                  const overlapLeft = nextX + b.r - brk.x;
+                  const overlapRight = brk.x + brk.w - (nextX - b.r);
+                  const overlapTop = nextY + b.r - brk.y;
+                  const overlapBottom = brk.y + brk.h - (nextY - b.r);
+
+                  const minOverlapX = Math.min(overlapLeft, overlapRight);
+                  const minOverlapY = Math.min(overlapTop, overlapBottom);
+
+                  if (minOverlapX < minOverlapY) {
+                    // Hit vertical edge (Left or Right)
+                    if (overlapLeft < overlapRight) {
+                      b.vx = -Math.abs(b.vx);
+                      nextX = brk.x - b.r - 1;
                     } else {
-                      b.vy = -b.vy;
+                      b.vx = Math.abs(b.vx);
+                      nextX = brk.x + brk.w + b.r + 1;
+                    }
+                  } else {
+                    // Hit horizontal edge (Top or Bottom)
+                    if (overlapTop < overlapBottom) {
+                      b.vy = -Math.abs(b.vy);
+                      nextY = brk.y - b.r - 1;
+                    } else {
+                      b.vy = Math.abs(b.vy);
+                      nextY = brk.y + brk.h + b.r + 1;
                     }
                   }
 
+                  // Award points for hitting this single brick
                   if (b.lastHitter === 'PLAYER') {
                     eng.score += brk.pts;
                     setScore(eng.score);
@@ -1460,63 +1480,20 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
                   safeSound(playTapSound);
                   safeHaptic(triggerLightHaptic);
 
-                  if (brk.type === 'UNBREAKABLE' && !isPiercing) {
+                  // Unbreakable brick bounces ball without taking damage
+                  if (brk.type === 'UNBREAKABLE') {
                     break;
                   }
 
+                  // Damage exactly this 1 brick
                   brk.hp -= 1;
-
-                  // Bomb shockwave ability on brick impact
-                  if (b.isExplosive || eng.explosiveTimer > 0) {
-                    if (juiceRef.current) juiceRef.current.shake(4, 2);
-                    for (let k = eng.bricks.length - 1; k >= 0; k--) {
-                      const nb = eng.bricks[k];
-                      if (nb !== brk && nb.type !== 'UNBREAKABLE') {
-                        const d = Math.hypot(
-                          nb.x + nb.w / 2 - (brk.x + brk.w / 2),
-                          nb.y + nb.h / 2 - (brk.y + brk.h / 2)
-                        );
-                        if (d <= 44) {
-                          nb.hp -= 1;
-                          if (nb.hp <= 0) {
-                            eng.bricks.splice(k, 1);
-                            eng.score += nb.pts;
-                            setScore(eng.score);
-                          }
-                        }
-                      }
-                    }
-                  }
 
                   if (brk.hp <= 0) {
                     eng.bricks.splice(j, 1);
                     safeSound(playSliceSound);
 
-                    if (brk.type === 'EXPLOSIVE') {
-                      if (juiceRef.current) {
-                        juiceRef.current.shake(5, 3);
-                      }
-                      for (let k = eng.bricks.length - 1; k >= 0; k--) {
-                        const nb = eng.bricks[k];
-                        if (
-                          nb.type !== 'UNBREAKABLE' &&
-                          Math.abs(nb.row - brk.row) <= 1 &&
-                          Math.abs(nb.col - brk.col) <= 1
-                        ) {
-                          eng.bricks.splice(k, 1);
-                          if (b.lastHitter === 'PLAYER') {
-                            eng.score += nb.pts;
-                            setScore(eng.score);
-                          } else {
-                            eng.aiScore += nb.pts;
-                            setAiScore(eng.aiScore);
-                          }
-                        }
-                      }
-                    }
-
-                    // Drop falling power-up capsule (varied abilities)
-                    if (brk.type === 'POWERUP' || Math.random() < 0.32) {
+                    // Drop falling power-up capsule
+                    if (brk.type === 'POWERUP' || Math.random() < 0.28) {
                       const capType = CAPSULE_TYPES[Math.floor(Math.random() * CAPSULE_TYPES.length)];
                       const isUpward = eng.mode === 'AI_BRICK_DUEL' && b.lastHitter === 'AI';
                       eng.capsules.push({
@@ -1554,6 +1531,8 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
                       }
                     }
                   }
+
+                  // Strictly 1 brick per bounce/impact — break out of brick loop immediately
                   break;
                 }
               }
