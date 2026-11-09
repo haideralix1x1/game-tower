@@ -72,6 +72,7 @@ const MODES = [
 ];
 
 // Artistic Brick Designs for Solo and Center Duel
+// Artistic Brick Designs for Solo and Center Duel (10 Distinct Levels)
 const BRICK_DESIGNS = [
   {
     name: 'HEART',
@@ -92,7 +93,7 @@ const BRICK_DESIGNS = [
       '. . . S S . . .',
       '. . S P P S . .',
       '. S A A A A S .',
-      'S A U A A U A S',
+      'S A P A A P A S',
       '. S A A A A S .',
       '. . S E E S . .',
       '. . . S S . . .',
@@ -134,15 +135,76 @@ const BRICK_DESIGNS = [
       'S S S S S S S S',
     ],
   },
+  {
+    name: 'CROWN',
+    icon: '👑',
+    rows: [
+      'S . . S . . S .',
+      'S S . S . S S .',
+      'S A S S S A S S',
+      'S P A A A A P S',
+      'S S S S S S S S',
+    ],
+  },
+  {
+    name: 'STAR',
+    icon: '⭐',
+    rows: [
+      '. . . S S . . .',
+      '. S S S S S S .',
+      '. . S P P S . .',
+      'S S A A A A S S',
+      '. . S A A S . .',
+      '. S S . . S S .',
+    ],
+  },
+  {
+    name: 'PYRAMID',
+    icon: '🔺',
+    rows: [
+      '. . . S S . . .',
+      '. . S P P S . .',
+      '. S A A A A S .',
+      'S A E A A E A S',
+      'S S S S S S S S',
+    ],
+  },
+  {
+    name: 'SKULL',
+    icon: '💀',
+    rows: [
+      '. S S S S S S .',
+      'S A E S S E A S',
+      'S A S S S S A S',
+      '. S S A A S S .',
+      '. . S S S S . .',
+    ],
+  },
+  {
+    name: 'GALAXY',
+    icon: '🌌',
+    rows: [
+      'S P S . . S P S',
+      'A S A S S A S A',
+      '. A S E E S A .',
+      'A S A S S A S A',
+      'S P S . . S P S',
+    ],
+  },
 ];
 
-// Power-Up Capsule Types falling from bricks
+// Power-Up Capsule Types falling from bricks (10 Various Abilities)
 const CAPSULE_TYPES = [
   { id: 'MULTI_BALL', name: 'MULTI-BALL', icon: '🔮', color: '#FFE600' },
   { id: 'WIDE_PADDLE', name: 'WIDE PADDLE', icon: '📏', color: '#00F5FF' },
   { id: 'FIRE_BALL', name: 'FIRE COMET', icon: '🔥', color: '#FF6D00' },
   { id: 'SLOW_BALL', name: 'SLOW MOTION', icon: '⏱️', color: '#C77DFF' },
   { id: 'SAFETY_SHIELD', name: 'SHIELD NET', icon: '🛡️', color: '#00F5D4' },
+  { id: 'LASER_CANNON', name: 'LASER BLASTER', icon: '🔫', color: '#FF0055' },
+  { id: 'PENETRATING_BALL', name: 'PLASMA PIERCER', icon: '⚡', color: '#A066FF' },
+  { id: 'MAGNET_PADDLE', name: 'MAGNET CATCH', icon: '🧲', color: '#FFB703' },
+  { id: 'EXPLOSIVE_BALL', name: 'BOMB SHOCKWAVE', icon: '💣', color: '#FF3366' },
+  { id: 'EXTRA_LIFE', name: 'SHIELD REPAIR', icon: '❤️', color: '#FF2A6D' },
 ];
 
 // Sphere Duel Ability Types (Mode 3)
@@ -209,8 +271,11 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
     balls: [],
     bricks: [],
     capsules: [],
+    lasers: [],
     hasShield: false,
     aiHasShield: false,
+    hasLaser: false,
+    hasMagnet: false,
   });
 
   const juiceRef = useRef(null);
@@ -234,6 +299,7 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
     balls: [],
     bricks: [],
     capsules: [],
+    lasers: [],
     hasShield: false,
     aiHasShield: false,
     ballLaunched: false,
@@ -244,6 +310,11 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
     aiWideTimer: 0,
     fireBallTimer: 0,
     slowTimer: 0,
+    laserTimer: 0,
+    laserCooldown: 0,
+    pierceTimer: 0,
+    magnetTimer: 0,
+    explosiveTimer: 0,
     // Sphere duel ability timer (Mode 3)
     abilityTimer: 5.0,
     nextAbilityIdx: 0,
@@ -368,10 +439,11 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
     (chosenMode = mode, nextLvl = 1) => {
       const eng = engineRef.current;
       const startPadX = (arenaWidth - basePaddleW) / 2;
+      const safeLvl = Math.max(1, Math.min(BRICK_DESIGNS.length, nextLvl));
 
       eng.running = true;
       eng.mode = chosenMode;
-      eng.level = nextLvl;
+      eng.level = safeLvl;
       eng.score = 0;
       eng.aiScore = 0;
       eng.playerHearts = INITIAL_HEARTS;
@@ -383,6 +455,7 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
       eng.aiPaddleW = basePaddleW;
       eng.aiPaddleRecoil = 0;
       eng.capsules = [];
+      eng.lasers = [];
       eng.hasShield = false;
       eng.aiHasShield = false;
       eng.ballLaunched = false;
@@ -391,6 +464,11 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
       eng.aiWideTimer = 0;
       eng.fireBallTimer = 0;
       eng.slowTimer = 0;
+      eng.laserTimer = 0;
+      eng.laserCooldown = 0;
+      eng.pierceTimer = 0;
+      eng.magnetTimer = 0;
+      eng.explosiveTimer = 0;
       eng.abilityTimer = 5.0;
       eng.nextAbilityIdx = 0;
       eng.activeAbility = null;
@@ -401,7 +479,7 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
 
       if (chosenMode === 'SINGLE_BRICKS') {
         // Mode 1: Solo Bricks (1 ball docked to player paddle)
-        initialBricks = createBricksForLevel(nextLvl, chosenMode);
+        initialBricks = createBricksForLevel(safeLvl, chosenMode);
         initialBalls = [
           {
             id: 'solo_ball_1',
@@ -419,7 +497,7 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
         ];
       } else if (chosenMode === 'AI_BRICK_DUEL') {
         // Mode 2: Center Brick Duel (1 ball on Player paddle, 1 ball on AI paddle)
-        initialBricks = createBricksForLevel(nextLvl, chosenMode);
+        initialBricks = createBricksForLevel(safeLvl, chosenMode);
         initialBalls = [
           {
             id: 'duel_ball_player',
@@ -485,7 +563,7 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
       eng.balls = initialBalls;
 
       setMode(chosenMode);
-      setLevel(nextLvl);
+      setLevel(safeLvl);
       setScore(0);
       setAiScore(0);
       setPlayerHearts(INITIAL_HEARTS);
@@ -505,8 +583,11 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
         balls: initialBalls,
         bricks: initialBricks,
         capsules: [],
+        lasers: [],
         hasShield: false,
         aiHasShield: false,
+        hasLaser: false,
+        hasMagnet: false,
       });
 
       if (juiceRef.current) {
@@ -523,10 +604,31 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
     return () => clearTimeout(timer);
   }, [mode, resetGame]);
 
-  // Launch Balls on Tap
+  // Launch Balls on Tap or Release Caught Balls
   const handleLaunchBall = useCallback(() => {
     const eng = engineRef.current;
-    if (eng.ballLaunched) return;
+
+    // Release any magnet-caught balls if ball is already launched
+    if (eng.ballLaunched) {
+      let releasedAny = false;
+      for (const b of eng.balls) {
+        if (b.caught) {
+          b.caught = false;
+          const hitOffset = (b.x - (eng.paddleX + eng.paddleW / 2)) / (eng.paddleW / 2);
+          const maxAngle = Math.PI * 0.38;
+          const angle = -Math.PI / 2 + hitOffset * maxAngle;
+          const spd = 320;
+          b.vx = Math.cos(angle) * spd;
+          b.vy = Math.sin(angle) * spd;
+          releasedAny = true;
+        }
+      }
+      if (releasedAny) {
+        safeSound(playTapSound);
+        safeHaptic(triggerLightHaptic);
+      }
+      return;
+    }
 
     eng.ballLaunched = true;
     setBallLaunched(true);
@@ -536,13 +638,13 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
     if (eng.mode === 'SINGLE_BRICKS') {
       if (eng.balls.length > 0) {
         const b = eng.balls[0];
-        const speed = 240;
+        const speed = 320; // Fast and snappy arcade velocity
         const angle = -Math.PI / 2 + (Math.random() - 0.5) * 0.5;
         b.vx = Math.cos(angle) * speed;
         b.vy = Math.sin(angle) * speed;
       }
     } else if (eng.mode === 'AI_BRICK_DUEL') {
-      const speed = 210;
+      const speed = 270;
       // Ball 0: Player ball launches upwards into center bricks
       if (eng.balls[0]) {
         const angle = -Math.PI / 2 + (Math.random() - 0.5) * 0.5;
@@ -559,7 +661,7 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
       }
     } else {
       // HARD_SPHERE_DUEL
-      const speed = 270;
+      const speed = 340;
       if (eng.balls[0]) {
         const angle = -Math.PI / 2 + (Math.random() - 0.5) * 0.6;
         eng.balls[0].vx = Math.cos(angle) * speed;
@@ -626,8 +728,11 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
               balls: [...eng.balls],
               bricks: [...eng.bricks],
               capsules: [...eng.capsules],
+              lasers: [...eng.lasers],
               hasShield: eng.hasShield,
               aiHasShield: eng.aiHasShield,
+              hasLaser: eng.laserTimer > 0,
+              hasMagnet: eng.magnetTimer > 0,
             });
             frameId = requestAnimationFrame(tick);
             return;
@@ -758,6 +863,84 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
           if (eng.slowTimer > 0) {
             eng.slowTimer -= dt;
           }
+          if (eng.pierceTimer > 0) {
+            eng.pierceTimer -= dt;
+            if (eng.pierceTimer <= 0) {
+              eng.balls.forEach((b) => {
+                b.isPierce = false;
+              });
+            }
+          }
+          if (eng.magnetTimer > 0) {
+            eng.magnetTimer -= dt;
+          }
+          if (eng.explosiveTimer > 0) {
+            eng.explosiveTimer -= dt;
+            if (eng.explosiveTimer <= 0) {
+              eng.balls.forEach((b) => {
+                b.isExplosive = false;
+              });
+            }
+          }
+
+          // Laser Cannon Blaster shooting
+          if (eng.laserTimer > 0) {
+            eng.laserTimer -= dt;
+            eng.laserCooldown -= dt;
+            if (eng.laserCooldown <= 0) {
+              eng.laserCooldown = 0.34;
+              const ySpawn = paddleY - 4;
+              eng.lasers.push(
+                { id: `lz_${Date.now()}_1`, x: eng.paddleX + 10, y: ySpawn, vy: -580 },
+                { id: `lz_${Date.now()}_2`, x: eng.paddleX + eng.paddleW - 10, y: ySpawn, vy: -580 }
+              );
+              safeSound(playTapSound);
+              safeHaptic(triggerLightHaptic);
+            }
+          }
+
+          // Laser beam physics & brick collision
+          if (eng.lasers.length > 0) {
+            const nextLasers = [];
+            for (let l = 0; l < eng.lasers.length; l++) {
+              const lz = eng.lasers[l];
+              lz.y += lz.vy * dt;
+              let hit = false;
+              if (eng.bricks.length > 0) {
+                for (let j = eng.bricks.length - 1; j >= 0; j--) {
+                  const brk = eng.bricks[j];
+                  if (
+                    lz.x >= brk.x - 4 &&
+                    lz.x <= brk.x + brk.w + 4 &&
+                    lz.y >= brk.y &&
+                    lz.y <= brk.y + brk.h
+                  ) {
+                    hit = true;
+                    safeSound(playTapSound);
+                    if (brk.type !== 'UNBREAKABLE') {
+                      brk.hp -= 1;
+                      eng.score += 25;
+                      setScore(eng.score);
+                      persistBest(eng.score);
+                      if (brk.hp <= 0) {
+                        eng.bricks.splice(j, 1);
+                        safeSound(playSliceSound);
+                        safeHaptic(triggerMediumHaptic);
+                        if (juiceRef.current) {
+                          juiceRef.current.popup('⚡ LASER BLAST!', '+25 PTS', '#FF0055');
+                        }
+                      }
+                    }
+                    break;
+                  }
+                }
+              }
+              if (!hit && lz.y > 10) {
+                nextLasers.push(lz);
+              }
+            }
+            eng.lasers = nextLasers;
+          }
 
           // --- 4. FALLING POWER-UP CAPSULES UPDATE ---
           const nextCapsules = [];
@@ -794,28 +977,52 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
                     color: '#FFE600',
                     isFire: b.isFire,
                     isHeavy: b.isHeavy || false,
+                    isPierce: b.isPierce || false,
+                    isExplosive: b.isExplosive || false,
                     lastHitter: 'PLAYER',
                     owner: 'PLAYER',
                   });
                 });
                 eng.balls.push(...extra);
               } else if (cap.type === 'WIDE_PADDLE') {
-                eng.paddleW = basePaddleW * 1.45;
-                eng.wideTimer = 11;
+                eng.paddleW = basePaddleW * 1.5;
+                eng.wideTimer = 12;
               } else if (cap.type === 'FIRE_BALL') {
                 eng.balls.forEach((b) => {
                   b.isFire = true;
                   b.color = '#FF6D00';
                 });
-                eng.fireBallTimer = 9;
+                eng.fireBallTimer = 10;
               } else if (cap.type === 'SLOW_BALL') {
                 eng.balls.forEach((b) => {
-                  b.vx *= 0.75;
-                  b.vy *= 0.75;
+                  b.vx *= 0.72;
+                  b.vy *= 0.72;
                 });
-                eng.slowTimer = 8;
+                eng.slowTimer = 9;
               } else if (cap.type === 'SAFETY_SHIELD') {
                 eng.hasShield = true;
+              } else if (cap.type === 'LASER_CANNON') {
+                eng.laserTimer = 10;
+                eng.laserCooldown = 0;
+              } else if (cap.type === 'PENETRATING_BALL') {
+                eng.pierceTimer = 10;
+                eng.balls.forEach((b) => {
+                  b.isPierce = true;
+                  b.color = '#A066FF';
+                });
+              } else if (cap.type === 'MAGNET_PADDLE') {
+                eng.magnetTimer = 12;
+              } else if (cap.type === 'EXPLOSIVE_BALL') {
+                eng.explosiveTimer = 10;
+                eng.balls.forEach((b) => {
+                  b.isExplosive = true;
+                  b.color = '#FF3366';
+                });
+              } else if (cap.type === 'EXTRA_LIFE') {
+                eng.playerHearts = Math.min(INITIAL_HEARTS + 1, eng.playerHearts + 1);
+                setPlayerHearts(eng.playerHearts);
+                safeSound(playSpeedUpSound);
+                safeHaptic(triggerPerfectHaptic);
               }
               continue;
             }
@@ -939,6 +1146,20 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
 
           for (let i = 0; i < eng.balls.length; i++) {
             const b = eng.balls[i];
+
+            // If ball is magnet-caught on player paddle, stick to paddle
+            if (b.caught) {
+              const offsetX = b.caughtOffset ?? eng.paddleW / 2;
+              b.x = Math.max(
+                eng.paddleX + b.r,
+                Math.min(eng.paddleX + eng.paddleW - b.r, eng.paddleX + offsetX)
+              );
+              b.y = paddleY + eng.paddleRecoil - b.r - 2;
+              b.vx = 0;
+              b.vy = 0;
+              nextBalls.push(b);
+              continue;
+            }
 
             let nextX = b.x + b.vx * dt;
             let nextY = b.y + b.vy * dt;
@@ -1085,11 +1306,32 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
               nextX >= eng.paddleX - 6 &&
               nextX <= eng.paddleX + eng.paddleW + 6
             ) {
+              // Magnet Paddle Catch
+              if (eng.magnetTimer > 0) {
+                b.caught = true;
+                b.caughtOffset = nextX - eng.paddleX;
+                b.x = nextX;
+                b.y = pTop - b.r - 2;
+                b.vx = 0;
+                b.vy = 0;
+                safeSound(playSpeedUpSound);
+                safeHaptic(triggerPerfectHaptic);
+                if (juiceRef.current) {
+                  juiceRef.current.popup('🧲 MAGNET LOCKED!', 'TAP/DRAG TO LAUNCH', '#FFB703');
+                }
+                nextBalls.push(b);
+                continue;
+              }
+
               nextY = pTop - b.r;
               const hitOffset = (nextX - (eng.paddleX + eng.paddleW / 2)) / (eng.paddleW / 2);
               const maxAngle = Math.PI * 0.40;
               const angle = hitOffset * maxAngle;
-              const spd = Math.hypot(b.vx, b.vy);
+              let spd = Math.hypot(b.vx, b.vy);
+              // Ensure minimum speed floor in Solo Bricks (310 px/s)
+              if (eng.mode === 'SINGLE_BRICKS' && eng.slowTimer <= 0) {
+                spd = Math.max(310, spd);
+              }
               b.vx = spd * Math.sin(angle);
               b.vy = -Math.abs(spd * Math.cos(angle));
               b.lastHitter = 'PLAYER';
@@ -1122,7 +1364,8 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
                 const distSq = (nextX - testX) ** 2 + (nextY - testY) ** 2;
 
                 if (distSq <= b.r * b.r) {
-                  if (!b.isFire) {
+                  const isPiercing = b.isPierce || eng.pierceTimer > 0;
+                  if (!b.isFire && !isPiercing) {
                     const prevX = b.x;
                     if (prevX < brk.x || prevX > brk.x + brk.w) {
                       b.vx = -b.vx;
@@ -1143,11 +1386,33 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
                   safeSound(playTapSound);
                   safeHaptic(triggerLightHaptic);
 
-                  if (brk.type === 'UNBREAKABLE') {
+                  if (brk.type === 'UNBREAKABLE' && !isPiercing) {
                     break;
                   }
 
                   brk.hp -= 1;
+
+                  // Bomb shockwave ability on brick impact
+                  if (b.isExplosive || eng.explosiveTimer > 0) {
+                    if (juiceRef.current) juiceRef.current.shake(4, 2);
+                    for (let k = eng.bricks.length - 1; k >= 0; k--) {
+                      const nb = eng.bricks[k];
+                      if (nb !== brk && nb.type !== 'UNBREAKABLE') {
+                        const d = Math.hypot(
+                          nb.x + nb.w / 2 - (brk.x + brk.w / 2),
+                          nb.y + nb.h / 2 - (brk.y + brk.h / 2)
+                        );
+                        if (d <= 44) {
+                          nb.hp -= 1;
+                          if (nb.hp <= 0) {
+                            eng.bricks.splice(k, 1);
+                            eng.score += nb.pts;
+                            setScore(eng.score);
+                          }
+                        }
+                      }
+                    }
+                  }
 
                   if (brk.hp <= 0) {
                     eng.bricks.splice(j, 1);
@@ -1176,8 +1441,8 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
                       }
                     }
 
-                    // Drop falling power-up capsule
-                    if (brk.type === 'POWERUP' || Math.random() < 0.25) {
+                    // Drop falling power-up capsule (varied abilities)
+                    if (brk.type === 'POWERUP' || Math.random() < 0.32) {
                       const capType = CAPSULE_TYPES[Math.floor(Math.random() * CAPSULE_TYPES.length)];
                       const isUpward = eng.mode === 'AI_BRICK_DUEL' && b.lastHitter === 'AI';
                       eng.capsules.push({
@@ -1188,7 +1453,7 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
                         color: capType.color,
                         x: brk.x + brk.w / 2,
                         y: brk.y + brk.h / 2,
-                        vy: isUpward ? -125 : 130,
+                        vy: isUpward ? -155 : 165,
                       });
                     }
 
@@ -1197,7 +1462,7 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
                     if (breakableLeft === 0) {
                       if (eng.mode === 'SINGLE_BRICKS') {
                         eng.running = false;
-                        const nextLvl = eng.level + 1;
+                        const nextLvl = (eng.level % BRICK_DESIGNS.length) + 1;
                         safeSound(playGameOverSound);
                         setModalType('win');
                         setModalTitle('DESIGN CLEARED!');
@@ -1454,8 +1719,11 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
             balls: [...eng.balls],
             bricks: [...eng.bricks],
             capsules: [...eng.capsules],
+            lasers: [...eng.lasers],
             hasShield: eng.hasShield,
             aiHasShield: eng.aiHasShield,
+            hasLaser: eng.laserTimer > 0,
+            hasMagnet: eng.magnetTimer > 0,
           });
         }
       } catch (_err) {
@@ -1574,13 +1842,39 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
           <View style={[localStyles.heartsRow, { width: arenaWidth }]}>
             {mode === 'SINGLE_BRICKS' ? (
               <>
-                <View style={localStyles.heartSide}>
-                  <Text style={localStyles.heartLabel}>
-                    LEVEL {level}: {currentDesign.name} {currentDesign.icon}
-                  </Text>
-                  <Text style={localStyles.subInfoText}>
-                    BRICKS: {renderState.bricks.filter((b) => b.type !== 'UNBREAKABLE').length} REMAINING
-                  </Text>
+                <View style={localStyles.levelSelectorBox}>
+                  <Pressable
+                    style={localStyles.levelNavBtn}
+                    onPress={() => {
+                      const cur = engineRef.current.level || level;
+                      const prev = cur > 1 ? cur - 1 : BRICK_DESIGNS.length;
+                      resetGame('SINGLE_BRICKS', prev);
+                    }}
+                    hitSlop={12}
+                  >
+                    <Text style={localStyles.levelNavBtnText}>◀</Text>
+                  </Pressable>
+
+                  <View style={localStyles.levelCenterInfo}>
+                    <Text style={localStyles.heartLabel}>
+                      LVL {level}/{BRICK_DESIGNS.length}: {currentDesign.name} {currentDesign.icon}
+                    </Text>
+                    <Text style={localStyles.subInfoText}>
+                      BRICKS: {renderState.bricks.filter((b) => b.type !== 'UNBREAKABLE').length} REMAINING
+                    </Text>
+                  </View>
+
+                  <Pressable
+                    style={localStyles.levelNavBtn}
+                    onPress={() => {
+                      const cur = engineRef.current.level || level;
+                      const next = cur < BRICK_DESIGNS.length ? cur + 1 : 1;
+                      resetGame('SINGLE_BRICKS', next);
+                    }}
+                    hitSlop={12}
+                  >
+                    <Text style={localStyles.levelNavBtnText}>▶</Text>
+                  </Pressable>
                 </View>
 
                 <View style={[localStyles.heartSide, { alignItems: 'flex-end' }]}>
@@ -1729,6 +2023,21 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
                 </View>
               ))}
 
+              {/* LASER BLASTER PROJECTILES */}
+              {renderState.lasers.map((lz) => (
+                <View
+                  key={lz.id}
+                  pointerEvents="none"
+                  style={[
+                    localStyles.laserBeam,
+                    {
+                      left: lz.x - 2,
+                      top: lz.y,
+                    },
+                  ]}
+                />
+              ))}
+
               {/* FALLING POWER-UP CAPSULES */}
               {renderState.capsules.map((cap) => (
                 <View
@@ -1746,7 +2055,7 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
                 </View>
               ))}
 
-              {/* BALLS WITH HEAVY BALL & HIGH-VELOCITY KINETIC STYLING */}
+              {/* BALLS WITH HEAVY BALL, PIERCE, EXPLOSIVE & HIGH-VELOCITY KINETIC STYLING */}
               {renderState.balls.map((b) => {
                 const isHighSpeed = mode === 'HARD_SPHERE_DUEL' && (b.speed || 0) > 310;
                 return (
@@ -1765,6 +2074,10 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
                           ? '#FF4500'
                           : b.isFire
                           ? '#FF6D00'
+                          : b.isPierce
+                          ? '#A066FF'
+                          : b.isExplosive
+                          ? '#FF3366'
                           : isHighSpeed
                           ? '#FF0055'
                           : b.color,
@@ -1772,13 +2085,17 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
                           ? '#FF4500'
                           : b.isFire
                           ? '#FF6D00'
+                          : b.isPierce
+                          ? '#A066FF'
+                          : b.isExplosive
+                          ? '#FF3366'
                           : isHighSpeed
                           ? '#FFE600'
                           : b.color,
                         shadowRadius: isHighSpeed ? 14 : 8,
                         elevation: isHighSpeed ? 10 : 6,
-                        borderWidth: b.isHeavy ? 2.5 : isHighSpeed ? 1.5 : 0,
-                        borderColor: b.isHeavy || isHighSpeed ? '#FFE600' : 'transparent',
+                        borderWidth: b.isHeavy ? 2.5 : isHighSpeed || b.isPierce ? 1.5 : 0,
+                        borderColor: b.isHeavy || isHighSpeed ? '#FFE600' : b.isPierce ? '#E0AAFF' : 'transparent',
                       },
                     ]}
                   >
@@ -1789,6 +2106,10 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
                           ? { backgroundColor: '#FFE600', width: '48%', height: '48%' }
                           : b.isFire
                           ? { backgroundColor: '#FFE600' }
+                          : b.isPierce
+                          ? { backgroundColor: '#E0AAFF', width: '50%', height: '50%' }
+                          : b.isExplosive
+                          ? { backgroundColor: '#FFE600', width: '45%', height: '45%' }
                           : isHighSpeed
                           ? { backgroundColor: '#FFE600', width: '45%', height: '45%' }
                           : null,
@@ -1803,7 +2124,7 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
                 <View style={[localStyles.safetyShieldLine, { width: arenaWidth }]} />
               )}
 
-              {/* Player Paddle with Recoil Offset */}
+              {/* Player Paddle with Recoil Offset & Laser Blaster Turrets */}
               <View
                 style={[
                   localStyles.playerPaddle,
@@ -1812,10 +2133,32 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
                     top: paddleY + renderState.paddleOffsetY,
                     width: renderState.paddleW,
                     height: PADDLE_HEIGHT,
+                    borderColor: renderState.hasMagnet
+                      ? '#FFB703'
+                      : renderState.hasLaser
+                      ? '#FF0055'
+                      : '#00F5FF',
                   },
                 ]}
               >
-                <View style={localStyles.paddleInnerCore} />
+                <View
+                  style={[
+                    localStyles.paddleInnerCore,
+                    {
+                      backgroundColor: renderState.hasMagnet
+                        ? '#FFB703'
+                        : renderState.hasLaser
+                        ? '#FF0055'
+                        : '#00F5FF',
+                    },
+                  ]}
+                />
+                {renderState.hasLaser && (
+                  <>
+                    <View style={localStyles.paddleLaserLeft} />
+                    <View style={localStyles.paddleLaserRight} />
+                  </>
+                )}
               </View>
 
               {/* PROMINENT "TAP TO START" BUTTON IN ALL MODES */}
@@ -1874,11 +2217,16 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
           score={score}
           bestScore={bestScore}
           accentColor={mode === 'HARD_SPHERE_DUEL' ? '#FF0055' : '#00F5FF'}
+          onNextLevel={() => {
+            const nextLvl = ((engineRef.current.level - 1 + 1) % BRICK_DESIGNS.length) + 1;
+            resetGame(mode, nextLvl);
+          }}
           onRetry={() => {
             if (modalType === 'win' && mode === 'SINGLE_BRICKS') {
-              resetGame(mode, level + 1);
+              const nextLvl = ((engineRef.current.level - 1 + 1) % BRICK_DESIGNS.length) + 1;
+              resetGame(mode, nextLvl);
             } else {
-              resetGame(mode, 1);
+              resetGame(mode, engineRef.current.level);
             }
           }}
           retryLabel={
@@ -2237,5 +2585,62 @@ const localStyles = StyleSheet.create({
     color: '#64748B',
     fontWeight: '800',
     letterSpacing: 1,
+  },
+  levelSelectorBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  levelNavBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: 'rgba(0, 245, 255, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 245, 255, 0.4)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  levelNavBtnText: {
+    fontSize: 12,
+    color: '#00F5FF',
+    fontWeight: '900',
+  },
+  levelCenterInfo: {
+    justifyContent: 'center',
+  },
+  laserBeam: {
+    position: 'absolute',
+    width: 4,
+    height: 14,
+    borderRadius: 2,
+    backgroundColor: '#FF0055',
+    shadowColor: '#FF0055',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.9,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  paddleLaserLeft: {
+    position: 'absolute',
+    top: -6,
+    left: 4,
+    width: 6,
+    height: 8,
+    borderRadius: 2,
+    backgroundColor: '#FF0055',
+    borderWidth: 1,
+    borderColor: '#FFE600',
+  },
+  paddleLaserRight: {
+    position: 'absolute',
+    top: -6,
+    right: 4,
+    width: 6,
+    height: 8,
+    borderRadius: 2,
+    backgroundColor: '#FF0055',
+    borderWidth: 1,
+    borderColor: '#FFE600',
   },
 });
