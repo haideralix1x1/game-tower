@@ -143,7 +143,7 @@ function createInitialNpcShips() {
       zone: 'SKY_TOP',
       type: 'CUTE_UFO',
       x: 70,
-      margin: 40,
+      margin: 52,
       speed: 1.1,
       dir: 1,
       scale: 1.1,
@@ -153,7 +153,7 @@ function createInitialNpcShips() {
       zone: 'SKY_TOP',
       type: 'STAR_KITTY',
       x: 310,
-      margin: 58,
+      margin: 68,
       speed: 0.85,
       dir: -1,
       scale: 1.05,
@@ -163,7 +163,7 @@ function createInitialNpcShips() {
       zone: 'SKY_TOP',
       type: 'WARP_FIGHTER',
       x: 180,
-      margin: 36,
+      margin: 46,
       speed: 1.4,
       dir: 1,
       scale: 1.0,
@@ -173,7 +173,7 @@ function createInitialNpcShips() {
       zone: 'SKY_BOTTOM',
       type: 'CHIBI_ROCKET',
       x: 110,
-      margin: 42,
+      margin: 48,
       speed: 1.3,
       dir: 1,
       scale: 1.0,
@@ -183,7 +183,7 @@ function createInitialNpcShips() {
       zone: 'SKY_BOTTOM',
       type: 'CYBER_SHUTTLE',
       x: 270,
-      margin: 54,
+      margin: 60,
       speed: 1.2,
       dir: -1,
       scale: 1.05,
@@ -1184,9 +1184,9 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
               .map((ship) => {
                 const elevAtShip = getTrackElevation(distance + ship.x, segments);
                 const ceilY = baseFloorY - elevAtShip - CORRIDOR_HEIGHT;
-                // Strictly above ceiling line with at least 26px clearance
-                const candidateY = ceilY - (ship.margin || 40);
-                const sY = Math.max(20, Math.min(ceilY - 26, candidateY));
+                // Strictly above ceiling line with at least 38px clearance
+                const candidateY = ceilY - (ship.margin || 52);
+                const sY = Math.max(18, Math.min(ceilY - 38, candidateY));
 
                 const scaleX = ship.dir * ship.scale;
                 const scaleY = ship.scale;
