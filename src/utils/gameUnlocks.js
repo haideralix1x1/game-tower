@@ -94,16 +94,10 @@ export const UNLOCK_REQUIREMENTS = {
   },
 
   // PUZZLES CATEGORY
-  color_tube: {
+  hanoi_tower: {
     reqGame: 'block_blast',
     targetScore: 150,
     desc: 'Score 150+ in BLOCK BLAST 8x8',
-    category: 'PUZZLES',
-  },
-  hanoi_tower: {
-    reqGame: 'color_tube',
-    targetScore: 1,
-    desc: 'Clear 1 tube in COLOR TUBE SORT',
     category: 'PUZZLES',
   },
   tap_away: {
@@ -152,16 +146,10 @@ export const UNLOCK_REQUIREMENTS = {
     desc: 'Clear 1 minefield in NEON MINES',
     category: 'STRATEGY',
   },
-  save_the_dog: {
+  thief_escape: {
     reqGame: 'rope_cut',
     targetScore: 1,
     desc: 'Complete 1 level in ROPE DROP',
-    category: 'STRATEGY',
-  },
-  thief_escape: {
-    reqGame: 'save_the_dog',
-    targetScore: 1,
-    desc: 'Clear 1 level in SAVE THE DOGE',
     category: 'STRATEGY',
   },
 };
@@ -191,7 +179,6 @@ export const GAME_CATEGORY_MAP = {
 
   // Puzzles
   block_blast: 'PUZZLES',
-  color_tube: 'PUZZLES',
   hanoi_tower: 'PUZZLES',
   tap_away: 'PUZZLES',
   cyber_pathfinder: 'PUZZLES',
@@ -206,7 +193,6 @@ export const GAME_CATEGORY_MAP = {
   tic_tac_toe: 'STRATEGY',
   neon_mines: 'STRATEGY',
   rope_cut: 'STRATEGY',
-  save_the_dog: 'STRATEGY',
   thief_escape: 'STRATEGY',
 };
 

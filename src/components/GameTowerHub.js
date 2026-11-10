@@ -45,9 +45,7 @@ import HanoiTowerGame from '../games/HanoiTowerGame';
 import NumberHuntGame from '../games/NumberHuntGame';
 import SpaceShooterGame from '../games/SpaceShooterGame';
 import CyberSudokuGame from '../games/CyberSudokuGame';
-import SaveTheDogGame from '../games/SaveTheDogGame';
 import RopeCutGame from '../games/RopeCutGame';
-import ColorTubeSortGame from '../games/ColorTubeSortGame';
 import ColorSwitchGame from '../games/ColorSwitchGame';
 import HardcoreRunnerGame from '../games/HardcoreRunnerGame';
 import CyberTetrisGame from '../games/CyberTetrisGame';
@@ -88,8 +86,8 @@ const monoFont = Platform.select({
 export const TOWER_GAMES = [
   {
     id: 'thief_escape',
-    floorNum: 27,
-    floor: 'FLOOR 27',
+    floorNum: 25,
+    floor: 'FLOOR 25',
     tier: 'APEX',
     title: 'THIEF ESCAPE',
     category: 'STRATEGY',
@@ -102,8 +100,8 @@ export const TOWER_GAMES = [
   },
   {
     id: 'cyber_pathfinder',
-    floorNum: 26,
-    floor: 'FLOOR 26',
+    floorNum: 24,
+    floor: 'FLOOR 24',
     tier: 'APEX',
     title: 'PATHFINDER',
     category: 'PUZZLE',
@@ -116,8 +114,8 @@ export const TOWER_GAMES = [
   },
   {
     id: 'knife_hit',
-    floorNum: 25,
-    floor: 'FLOOR 25',
+    floorNum: 23,
+    floor: 'FLOOR 23',
     tier: 'APEX',
     title: 'WORD SCRAMBLE',
     category: 'ANAGRAM MATRIX',
@@ -130,8 +128,8 @@ export const TOWER_GAMES = [
   },
   {
     id: 'icy_climber',
-    floorNum: 24,
-    floor: 'FLOOR 24',
+    floorNum: 22,
+    floor: 'FLOOR 22',
     tier: 'ORBIT',
     title: 'SPIRE ASCENT',
     category: 'ARCADE',
@@ -144,8 +142,8 @@ export const TOWER_GAMES = [
   },
   {
     id: 'tap_away',
-    floorNum: 23,
-    floor: 'FLOOR 23',
+    floorNum: 21,
+    floor: 'FLOOR 21',
     tier: 'ORBIT',
     title: 'TAP AWAY ARROWS',
     category: 'BRAIN',
@@ -158,8 +156,8 @@ export const TOWER_GAMES = [
   },
   {
     id: 'cyber_tetris',
-    floorNum: 22,
-    floor: 'FLOOR 22',
+    floorNum: 20,
+    floor: 'FLOOR 20',
     tier: 'ORBIT',
     title: 'TETRIS NEO',
     category: 'ARCADE',
@@ -172,8 +170,8 @@ export const TOWER_GAMES = [
   },
   {
     id: 'hardcore_runner',
-    floorNum: 21,
-    floor: 'FLOOR 21',
+    floorNum: 19,
+    floor: 'FLOOR 19',
     tier: 'ORBIT',
     title: 'CUBE DASH',
     category: 'HARDCORE',
@@ -186,8 +184,8 @@ export const TOWER_GAMES = [
   },
   {
     id: 'color_switch',
-    floorNum: 20,
-    floor: 'FLOOR 20',
+    floorNum: 18,
+    floor: 'FLOOR 18',
     tier: 'APEX',
     title: 'COLOR SWITCH NEO',
     category: 'REFLEX',
@@ -199,23 +197,9 @@ export const TOWER_GAMES = [
     storageKey: '@game_tower:best_switch_v1',
   },
   {
-    id: 'color_tube',
-    floorNum: 19,
-    floor: 'FLOOR 19',
-    tier: 'APEX',
-    title: 'COLOR TUBE SORT',
-    category: 'LOGIC',
-    badge: 'WATER SORT NEO',
-    desc: 'Transfer neon fluids between lab flasks until each tube holds a single pure wavelength.',
-    accent: '#00F5FF',
-    secondary: '#FFD166',
-    icon: '🧪',
-    storageKey: '@game_tower:best_tubes_v1',
-  },
-  {
     id: 'rope_cut',
-    floorNum: 18,
-    floor: 'FLOOR 18',
+    floorNum: 17,
+    floor: 'FLOOR 17',
     tier: 'APEX',
     title: 'ROPE DROP',
     category: 'PHYSICS',
@@ -225,20 +209,6 @@ export const TOWER_GAMES = [
     secondary: '#FFD166',
     icon: '✂️',
     storageKey: '@game_tower:best_rope_v1',
-  },
-  {
-    id: 'save_the_dog',
-    floorNum: 17,
-    floor: 'FLOOR 17',
-    tier: 'APEX',
-    title: 'SAVE THE DOG',
-    category: 'PHYSICS',
-    badge: 'DRAW SHIELD',
-    desc: 'Draw energy barrier lines to shelter the dog from attacking drone wasp swarms.',
-    accent: '#FFD166',
-    secondary: '#FF6D00',
-    icon: '🐕',
-    storageKey: '@game_tower:best_doge_v1',
   },
   {
     id: 'cyber_sudoku',
@@ -968,28 +938,12 @@ export default function GameTowerHub({ initialGameId = null, isSplashActive = fa
             onScoreUpdate={(s) => handleScoreUpdate('cyber_sudoku', s)}
           />
         );
-      case 'save_the_dog':
-        return (
-          <SaveTheDogGame
-            isPaused={isPaused}
-            onBackToHub={requestExitToHub}
-            onScoreUpdate={(s) => handleScoreUpdate('save_the_dog', s)}
-          />
-        );
       case 'rope_cut':
         return (
           <RopeCutGame
             isPaused={isPaused}
             onBackToHub={requestExitToHub}
             onScoreUpdate={(s) => handleScoreUpdate('rope_cut', s)}
-          />
-        );
-      case 'color_tube':
-        return (
-          <ColorTubeSortGame
-            isPaused={isPaused}
-            onBackToHub={requestExitToHub}
-            onScoreUpdate={(s) => handleScoreUpdate('color_tube', s)}
           />
         );
       case 'color_switch':
