@@ -12,8 +12,13 @@ import Svg, { Path, Polygon, Rect, G, Line, Defs, LinearGradient, Stop } from 'r
 import MiniGameHeader from '../components/MiniGameHeader';
 import GameResultModal from '../components/GameResultModal';
 import JuiceEngine from '../components/JuiceEngine';
-import { playTapSound, playSliceSound } from '../utils/sound';
-import { triggerLightHaptic, triggerMediumHaptic } from '../utils/haptics';
+import { playTapSound, playSliceSound, playGameOverSound, playPerfectSound } from '../utils/sound';
+import {
+  triggerLightHaptic,
+  triggerMediumHaptic,
+  triggerGameOverHaptic,
+  triggerPerfectHaptic,
+} from '../utils/haptics';
 
 const monoFont = Platform.select({
   ios: 'Menlo',
@@ -46,17 +51,91 @@ const STORAGE_LEVEL_KEY = '@game_tower:level_arrows_v1';
 const STORAGE_BEST_KEY = '@game_tower:best_arrows_v1';
 
 const PATTERN_TYPES = [
-  { name: 'PINWHEEL VORTEX', bias: 'vortex', minCount: 22, maxCount: 28 },
-  { name: 'CONCENTRIC FORTRESS', bias: 'fortress', minCount: 24, maxCount: 30 },
-  { name: 'TWIN HIGHWAYS', bias: 'highways', minCount: 24, maxCount: 32 },
-  { name: 'SPIRAL GALAXY', bias: 'spiral', minCount: 26, maxCount: 34 },
-  { name: 'CHEVRON MATRIX', bias: 'chevron', minCount: 26, maxCount: 34 },
-  { name: 'CYBER LABYRINTH', bias: 'labyrinth', minCount: 28, maxCount: 36 },
+  {
+    name: 'DIAMOND PRISM',
+    icon: '💎',
+    bias: 'vortex',
+    mask: (r, c, midR, midC) => Math.abs(r - midR) * 1.05 + Math.abs(c - midC) * 1.35 <= 4.6,
+    minCount: 18,
+    maxCount: 26,
+  },
+  {
+    name: 'TITAN CROSS',
+    icon: '✚',
+    bias: 'fortress',
+    mask: (r, c, midR, midC) =>
+      (Math.abs(c - midC) <= 1 && Math.abs(r - midR) <= 4) ||
+      (Math.abs(r - midR) <= 1 && Math.abs(c - midC) <= 3),
+    minCount: 18,
+    maxCount: 26,
+  },
+  {
+    name: 'PYRAMID CREST',
+    icon: '▲',
+    bias: 'chevron',
+    mask: (r, c, midR, midC) => {
+      const relR = r - (midR - 3);
+      return relR >= 0 && relR <= 6 && Math.abs(c - midC) <= Math.floor(relR * 0.55) + 1;
+    },
+    minCount: 18,
+    maxCount: 28,
+  },
+  {
+    name: 'HOURGLASS NEXUS',
+    icon: '⧗',
+    bias: 'spiral',
+    mask: (r, c, midR, midC) => {
+      const distFromMid = Math.abs(r - midR);
+      return distFromMid <= 4 && Math.abs(c - midC) <= Math.max(1, Math.floor(distFromMid * 0.75) + 1);
+    },
+    minCount: 20,
+    maxCount: 28,
+  },
+  {
+    name: 'SHIELD BASTION',
+    icon: '🛡️',
+    bias: 'fortress',
+    mask: (r, c, midR, midC) => {
+      if (r < midR - 3 || r > midR + 4) return false;
+      if (r <= midR) return Math.abs(c - midC) <= 3;
+      const taper = r - midR;
+      return Math.abs(c - midC) <= Math.max(0, 3 - taper);
+    },
+    minCount: 20,
+    maxCount: 30,
+  },
+  {
+    name: 'CYBER HEART',
+    icon: '🖤',
+    bias: 'labyrinth',
+    mask: (r, c, midR, midC) => {
+      const dy = r - (midR - 1);
+      const dx = c - midC;
+      if (dy < -2 || dy > 5) return false;
+      if (dy < 0) {
+        return Math.abs(dx) <= 3 && !(dy === -2 && dx === 0);
+      }
+      return Math.abs(dx) <= Math.max(0, 3 - Math.floor(dy * 0.75));
+    },
+    minCount: 20,
+    maxCount: 30,
+  },
+  {
+    name: 'HEXAGON SEAL',
+    icon: '⬡',
+    bias: 'highways',
+    mask: (r, c, midR, midC) =>
+      Math.abs(r - midR) <= 4 &&
+      Math.abs(c - midC) <= 3 &&
+      Math.abs(r - midR) + Math.abs(c - midC) <= 5,
+    minCount: 22,
+    maxCount: 32,
+  },
 ];
 
 /**
  * Reverse-generate guaranteed 100% solvable labyrinths according to architectural pattern templates
- * Strictly packs arrows directly adjacent to each other in a dense, interlocking knot.
+ * Strictly packs arrows directly adjacent to each other within the pattern design silhouette.
  */
 function generatePatternArrows(lvl = 1) {
   const patternIndex = (lvl - 1) % PATTERN_TYPES.length;
@@ -66,22 +145,29 @@ function generatePatternArrows(lvl = 1) {
   const grid = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
   const arrows = [];
   const placedPoints = [];
+  const midR = Math.floor(ROWS / 2);
+  const midC = Math.floor(COLS / 2);
 
   for (let id = 0; id < targetCount; id++) {
     let placed = false;
 
-    // Gather candidate cells: must be directly touching existing arrows (or center for first arrow)
+    // Gather candidate cells inside the pattern mask
     const candidates = [];
     if (placedPoints.length === 0) {
-      candidates.push(
-        { r: Math.floor(ROWS / 2), c: Math.floor(COLS / 2) },
-        { r: Math.floor(ROWS / 2) - 1, c: Math.floor(COLS / 2) },
-        { r: Math.floor(ROWS / 2) + 1, c: Math.floor(COLS / 2) }
-      );
+      if (pattern.mask(midR, midC, midR, midC)) {
+        candidates.push({ r: midR, c: midC });
+      }
+      if (pattern.mask(midR - 1, midC, midR, midC)) {
+        candidates.push({ r: midR - 1, c: midC });
+      }
+      if (pattern.mask(midR + 1, midC, midR, midC)) {
+        candidates.push({ r: midR + 1, c: midC });
+      }
+      if (candidates.length === 0) candidates.push({ r: midR, c: midC });
     } else {
       for (let r = 1; r < ROWS - 1; r++) {
         for (let c = 1; c < COLS - 1; c++) {
-          if (grid[r][c] === null) {
+          if (grid[r][c] === null && pattern.mask(r, c, midR, midC)) {
             const isAdj = placedPoints.some(
               (p) => Math.abs(p.r - r) + Math.abs(p.c - c) === 1
             );
@@ -92,10 +178,10 @@ function generatePatternArrows(lvl = 1) {
     }
 
     if (candidates.length === 0) {
-      // Fallback: search radius 2
+      // Fallback: search radius 2 inside mask
       for (let r = 1; r < ROWS - 1; r++) {
         for (let c = 1; c < COLS - 1; c++) {
-          if (grid[r][c] === null) {
+          if (grid[r][c] === null && pattern.mask(r, c, midR, midC)) {
             const isNear = placedPoints.some(
               (p) => Math.abs(p.r - r) + Math.abs(p.c - c) <= 2
             );
@@ -117,10 +203,10 @@ function generatePatternArrows(lvl = 1) {
       let dIdx = Math.floor(Math.random() * 4);
 
       if (pattern.bias === 'fortress') {
-        if (hr < 4) dIdx = 0; // Top ring UP
-        else if (hr > 8) dIdx = 2; // Bottom ring DOWN
-        else if (hc < 3) dIdx = 3; // Left flank LEFT
-        else if (hc > 5) dIdx = 1; // Right flank RIGHT
+        if (hr < 4) dIdx = 0;
+        else if (hr > 8) dIdx = 2;
+        else if (hc < 3) dIdx = 3;
+        else if (hc > 5) dIdx = 1;
         else dIdx = Math.floor(Math.random() * 4);
       } else if (pattern.bias === 'vortex') {
         if (hr < 6 && hc < 4) dIdx = Math.random() > 0.4 ? 0 : 1;
@@ -166,7 +252,8 @@ function generatePatternArrows(lvl = 1) {
         step1R >= ROWS ||
         step1C < 0 ||
         step1C >= COLS ||
-        grid[step1R][step1C] !== null
+        grid[step1R][step1C] !== null ||
+        !pattern.mask(step1R, step1C, midR, midC)
       ) {
         continue;
       }
@@ -190,6 +277,7 @@ function generatePatternArrows(lvl = 1) {
             nc >= 0 &&
             nc < COLS &&
             grid[nr][nc] === null &&
+            pattern.mask(nr, nc, midR, midC) &&
             !path.some((p) => p.r === nr && p.c === nc)
           ) {
             curR = nr;
@@ -225,12 +313,11 @@ function generatePatternArrows(lvl = 1) {
     }
 
     if (!placed && arrows.length >= pattern.minCount) {
-      // Reached satisfactory dense puzzle
       break;
     }
   }
 
-  return { arrows, patternName: pattern.name };
+  return { arrows, patternName: pattern.name, patternIcon: pattern.icon };
 }
 
 export default function TapAwayArrowsGame({ onBackToHub, onScoreUpdate, isPaused = false }) {
@@ -247,8 +334,12 @@ export default function TapAwayArrowsGame({ onBackToHub, onScoreUpdate, isPaused
   const cellH = cellW * 1.12;
   const boardHeight = cellH * ROWS + boardPadding * 2;
 
+  const MAX_MISTAKES = 3;
   const [level, setLevel] = useState(1);
   const [bestScore, setBestScore] = useState(0);
+  const [mistakes, setMistakes] = useState(0);
+  const [modalType, setModalType] = useState('VICTORY');
+  const [patternIcon, setPatternIcon] = useState('💎');
 
   useEffect(() => {
     (async () => {
@@ -290,11 +381,14 @@ export default function TapAwayArrowsGame({ onBackToHub, onScoreUpdate, isPaused
     setEscapingArrows([]);
     setBlockedArrowId(null);
     setBlockingArrowId(null);
+    setMistakes(0);
     setModalVisible(false);
+    setModalType('VICTORY');
 
     const generated = generatePatternArrows(lvl);
     setArrows(generated.arrows);
     setPatternName(generated.patternName);
+    setPatternIcon(generated.patternIcon || '💎');
   }, []);
 
   useEffect(() => {
@@ -398,17 +492,35 @@ export default function TapAwayArrowsGame({ onBackToHub, onScoreUpdate, isPaused
 
     if (blocker) {
       // Blocked! Shake and flash warning
+      const nextMistakes = mistakes + 1;
+      setMistakes(nextMistakes);
       playTapSound();
       triggerLightHaptic();
       setBlockedArrowId(arrow.id);
       setBlockingArrowId(blocker.id);
 
-      if (juiceRef.current) juiceRef.current.shake(3, 2);
+      if (juiceRef.current) {
+        juiceRef.current.shake(6, 4);
+        juiceRef.current.popup(
+          `BLOCKED! (${nextMistakes}/${MAX_MISTAKES})`,
+          nextMistakes >= MAX_MISTAKES ? 'NO CHANCES LEFT!' : `${MAX_MISTAKES - nextMistakes} CHANCES LEFT`,
+          '#FF0055'
+        );
+      }
 
       setTimeout(() => {
         setBlockedArrowId(null);
         setBlockingArrowId(null);
       }, 420);
+
+      if (nextMistakes >= MAX_MISTAKES) {
+        setTimeout(() => {
+          playGameOverSound();
+          triggerGameOverHaptic();
+          setModalType('GAMEOVER');
+          setModalVisible(true);
+        }, 450);
+      }
     } else {
       // FREE TO ESCAPE! Fly off the screen!
       playSliceSound();
@@ -447,6 +559,8 @@ export default function TapAwayArrowsGame({ onBackToHub, onScoreUpdate, isPaused
 
       if (remainingArrows.length === 0) {
         setTimeout(() => {
+          playPerfectSound(8);
+          triggerPerfectHaptic(3);
           if (juiceRef.current) {
             juiceRef.current.celebrate(
               'MAZE SOLVED!',
@@ -454,6 +568,7 @@ export default function TapAwayArrowsGame({ onBackToHub, onScoreUpdate, isPaused
               '#00F5FF'
             );
           }
+          setModalType('VICTORY');
           setModalVisible(true);
         }, 400);
       }
@@ -646,7 +761,16 @@ export default function TapAwayArrowsGame({ onBackToHub, onScoreUpdate, isPaused
           </View>
 
           <View style={styles.centerHintBox}>
-            <Text style={styles.hintPattern}>{patternName}</Text>
+            <Text style={styles.hintPattern}>
+              {patternIcon} {patternName}
+            </Text>
+            <View style={styles.mistakesRow}>
+              {[0, 1, 2].map((i) => (
+                <Text key={i} style={styles.heartText}>
+                  {i < MAX_MISTAKES - mistakes ? '❤️' : '🖤'}
+                </Text>
+              ))}
+            </View>
             <Text style={styles.hintSub}>
               REMAINING: <Text style={styles.remainCount}>{arrows.length}</Text>
             </Text>
@@ -843,11 +967,19 @@ export default function TapAwayArrowsGame({ onBackToHub, onScoreUpdate, isPaused
 
         <GameResultModal
           visible={modalVisible}
-          type="win"
+          type={modalType}
+          title={modalType === 'VICTORY' ? 'PATTERN SOLVED!' : 'PATTERN LOCKED OUT!'}
+          subtitle={
+            modalType === 'VICTORY'
+              ? `${patternIcon} ${patternName} CLEARED // ZERO CONFLICTS`
+              : '3 MISTAKES EXCEEDED // TRAJECTORY BLOCKED'
+          }
           score={score}
-          onRetry={handleNextLevel}
+          bestScore={bestScore}
+          accentColor={modalType === 'VICTORY' ? '#00F5FF' : '#FF0055'}
+          onRetry={modalType === 'VICTORY' ? handleNextLevel : () => initLevel(level)}
+          retryLabel={modalType === 'VICTORY' ? 'NEXT PATTERN' : 'RETRY PATTERN'}
           onBackToHub={onBackToHub}
-          buttonText="NEXT PATTERN"
         />
       </View>
     </JuiceEngine>
@@ -892,10 +1024,19 @@ const styles = StyleSheet.create({
   },
   hintPattern: {
     fontFamily: monoFont,
-    fontSize: 11,
+    fontSize: 11.5,
     fontWeight: '900',
     color: '#FFD166',
     letterSpacing: 1.2,
+  },
+  mistakesRow: {
+    flexDirection: 'row',
+    gap: 4,
+    marginTop: 2,
+    marginBottom: 2,
+  },
+  heartText: {
+    fontSize: 13,
   },
   hintSub: {
     fontFamily: monoFont,
