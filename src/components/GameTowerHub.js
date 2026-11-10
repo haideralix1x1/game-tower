@@ -39,7 +39,6 @@ import CyberSnakeGame from '../games/CyberSnakeGame';
 import NeonFlappyGame from '../games/NeonFlappyGame';
 import BoxEscapeGame from '../games/BoxEscapeGame';
 import BlockBlastGame from '../games/BlockBlastGame';
-import WhackABotGame from '../games/WhackABotGame';
 import MathBlitzGame from '../games/MathBlitzGame';
 import ColorStroopGame from '../games/ColorStroopGame';
 import HanoiTowerGame from '../games/HanoiTowerGame';
@@ -56,8 +55,6 @@ import TapAwayArrowsGame from '../games/TapAwayArrowsGame';
 import IcyTowerClimberGame from '../games/IcyTowerClimberGame';
 import WordScrambleGame from '../games/WordScrambleGame';
 import CyberPathGame from '../games/CyberPathGame';
-import CyberScrewGame from '../games/CyberScrewGame';
-import CyberBomberGame from '../games/CyberBomberGame';
 import ThiefEscapeGame from '../games/ThiefEscapeGame';
 
 import {
@@ -91,8 +88,8 @@ const monoFont = Platform.select({
 export const TOWER_GAMES = [
   {
     id: 'thief_escape',
-    floorNum: 31,
-    floor: 'FLOOR 31',
+    floorNum: 27,
+    floor: 'FLOOR 27',
     tier: 'APEX',
     title: 'THIEF ESCAPE',
     category: 'STRATEGY',
@@ -104,37 +101,9 @@ export const TOWER_GAMES = [
     storageKey: '@game_tower:best_thief_v1',
   },
   {
-    id: 'cyber_bomber',
-    floorNum: 30,
-    floor: 'FLOOR 30',
-    tier: 'APEX',
-    title: 'BOMBERMAN',
-    category: 'ARCADE',
-    badge: 'PLASMA CHARGES',
-    desc: 'Deploy timed bombs to blast crates, eradicate enemy patrol bots, collect tactical power-ups, and reach the exit gate!',
-    accent: '#FF0055',
-    secondary: '#00F5FF',
-    icon: '💥',
-    storageKey: '@game_tower:best_bomber_v1',
-  },
-  {
-    id: 'cyber_screw',
-    floorNum: 29,
-    floor: 'FLOOR 29',
-    tier: 'APEX',
-    title: 'SCREW PUZZLE',
-    category: 'PUZZLE',
-    badge: 'BOLTS & STRUTS',
-    desc: 'Unscrew bolts and relocate them into open sockets to strategically dismantle interlocking struts within limited moves!',
-    accent: '#FFE600',
-    secondary: '#00F5FF',
-    icon: '🔧',
-    storageKey: '@game_tower:best_screw_v1',
-  },
-  {
     id: 'cyber_pathfinder',
-    floorNum: 28,
-    floor: 'FLOOR 28',
+    floorNum: 26,
+    floor: 'FLOOR 26',
     tier: 'APEX',
     title: 'PATHFINDER',
     category: 'PUZZLE',
@@ -147,8 +116,8 @@ export const TOWER_GAMES = [
   },
   {
     id: 'knife_hit',
-    floorNum: 27,
-    floor: 'FLOOR 27',
+    floorNum: 25,
+    floor: 'FLOOR 25',
     tier: 'APEX',
     title: 'WORD SCRAMBLE',
     category: 'ANAGRAM MATRIX',
@@ -161,8 +130,8 @@ export const TOWER_GAMES = [
   },
   {
     id: 'icy_climber',
-    floorNum: 26,
-    floor: 'FLOOR 26',
+    floorNum: 24,
+    floor: 'FLOOR 24',
     tier: 'ORBIT',
     title: 'SPIRE ASCENT',
     category: 'ARCADE',
@@ -175,8 +144,8 @@ export const TOWER_GAMES = [
   },
   {
     id: 'tap_away',
-    floorNum: 25,
-    floor: 'FLOOR 25',
+    floorNum: 23,
+    floor: 'FLOOR 23',
     tier: 'ORBIT',
     title: 'TAP AWAY ARROWS',
     category: 'BRAIN',
@@ -189,8 +158,8 @@ export const TOWER_GAMES = [
   },
   {
     id: 'cyber_tetris',
-    floorNum: 24,
-    floor: 'FLOOR 24',
+    floorNum: 22,
+    floor: 'FLOOR 22',
     tier: 'ORBIT',
     title: 'TETRIS NEO',
     category: 'ARCADE',
@@ -203,8 +172,8 @@ export const TOWER_GAMES = [
   },
   {
     id: 'hardcore_runner',
-    floorNum: 23,
-    floor: 'FLOOR 23',
+    floorNum: 21,
+    floor: 'FLOOR 21',
     tier: 'ORBIT',
     title: 'CUBE DASH',
     category: 'HARDCORE',
@@ -217,8 +186,8 @@ export const TOWER_GAMES = [
   },
   {
     id: 'color_switch',
-    floorNum: 22,
-    floor: 'FLOOR 22',
+    floorNum: 20,
+    floor: 'FLOOR 20',
     tier: 'APEX',
     title: 'COLOR SWITCH NEO',
     category: 'REFLEX',
@@ -231,8 +200,8 @@ export const TOWER_GAMES = [
   },
   {
     id: 'color_tube',
-    floorNum: 21,
-    floor: 'FLOOR 21',
+    floorNum: 19,
+    floor: 'FLOOR 19',
     tier: 'APEX',
     title: 'COLOR TUBE SORT',
     category: 'LOGIC',
@@ -245,8 +214,8 @@ export const TOWER_GAMES = [
   },
   {
     id: 'rope_cut',
-    floorNum: 20,
-    floor: 'FLOOR 20',
+    floorNum: 18,
+    floor: 'FLOOR 18',
     tier: 'APEX',
     title: 'ROPE DROP',
     category: 'PHYSICS',
@@ -259,8 +228,8 @@ export const TOWER_GAMES = [
   },
   {
     id: 'save_the_dog',
-    floorNum: 19,
-    floor: 'FLOOR 19',
+    floorNum: 17,
+    floor: 'FLOOR 17',
     tier: 'APEX',
     title: 'SAVE THE DOG',
     category: 'PHYSICS',
@@ -273,8 +242,8 @@ export const TOWER_GAMES = [
   },
   {
     id: 'cyber_sudoku',
-    floorNum: 18,
-    floor: 'FLOOR 18',
+    floorNum: 16,
+    floor: 'FLOOR 16',
     tier: 'APEX',
     title: 'SUDOKU',
     category: 'BRAIN',
@@ -287,8 +256,8 @@ export const TOWER_GAMES = [
   },
   {
     id: 'space_shooter',
-    floorNum: 17,
-    floor: 'FLOOR 17',
+    floorNum: 15,
+    floor: 'FLOOR 15',
     tier: 'SKY',
     title: 'SPACE SHOOTER NEO',
     category: 'ARCADE',
@@ -301,8 +270,8 @@ export const TOWER_GAMES = [
   },
   {
     id: 'number_hunt',
-    floorNum: 16,
-    floor: 'FLOOR 16',
+    floorNum: 14,
+    floor: 'FLOOR 14',
     tier: 'SKY',
     title: 'NUMBER HUNT',
     category: 'BRAIN',
@@ -315,8 +284,8 @@ export const TOWER_GAMES = [
   },
   {
     id: 'hanoi_tower',
-    floorNum: 15,
-    floor: 'FLOOR 15',
+    floorNum: 13,
+    floor: 'FLOOR 13',
     tier: 'SKY',
     title: 'TOWER OF HANOI',
     category: 'PUZZLE',
@@ -329,8 +298,8 @@ export const TOWER_GAMES = [
   },
   {
     id: 'color_stroop',
-    floorNum: 14,
-    floor: 'FLOOR 14',
+    floorNum: 12,
+    floor: 'FLOOR 12',
     tier: 'SKY',
     title: 'COLOR STROOP',
     category: 'BRAIN',
@@ -343,8 +312,8 @@ export const TOWER_GAMES = [
   },
   {
     id: 'math_blitz',
-    floorNum: 13,
-    floor: 'FLOOR 13',
+    floorNum: 11,
+    floor: 'FLOOR 11',
     tier: 'SKY',
     title: 'MATH BLITZ',
     category: 'BRAIN',
@@ -356,23 +325,9 @@ export const TOWER_GAMES = [
     storageKey: '@game_tower:best_mathblitz_v1',
   },
   {
-    id: 'whack_a_bot',
-    floorNum: 12,
-    floor: 'FLOOR 12',
-    tier: 'CORE',
-    title: 'WHACK-A-BOT',
-    category: 'ARCADE',
-    badge: '16 & 25 HOLES',
-    desc: 'Smash rogue drones across 16 (4x4) or 25 (5x5) grid holes with multi-target reflex speed.',
-    accent: '#FF2A85',
-    secondary: '#FF9E00',
-    icon: '🤖',
-    storageKey: '@game_tower:best_whackabot_v1',
-  },
-  {
     id: 'block_blast',
-    floorNum: 11,
-    floor: 'FLOOR 11',
+    floorNum: 10,
+    floor: 'FLOOR 10',
     tier: 'CORE',
     title: 'BLOCK BLAST 8x8',
     category: 'PUZZLE',
@@ -385,8 +340,8 @@ export const TOWER_GAMES = [
   },
   {
     id: 'tic_tac_toe',
-    floorNum: 10,
-    floor: 'FLOOR 10',
+    floorNum: 9,
+    floor: 'FLOOR 09',
     tier: 'CORE',
     title: 'BOX ESCAPE',
     category: 'STRATEGY',
@@ -399,8 +354,8 @@ export const TOWER_GAMES = [
   },
   {
     id: 'neon_flappy',
-    floorNum: 9,
-    floor: 'FLOOR 09',
+    floorNum: 8,
+    floor: 'FLOOR 08',
     tier: 'CORE',
     title: 'NEON FLAPPY',
     category: 'ARCADE',
@@ -413,8 +368,8 @@ export const TOWER_GAMES = [
   },
   {
     id: 'cyber_snake',
-    floorNum: 8,
-    floor: 'FLOOR 08',
+    floorNum: 7,
+    floor: 'FLOOR 07',
     tier: 'CORE',
     title: 'SNAKE',
     category: 'ARCADE',
@@ -427,8 +382,8 @@ export const TOWER_GAMES = [
   },
   {
     id: 'brick_breaker',
-    floorNum: 7,
-    floor: 'FLOOR 07',
+    floorNum: 6,
+    floor: 'FLOOR 06',
     tier: 'CORE',
     title: 'BRICK BREAKER NEO',
     category: 'ARCADE',
@@ -965,14 +920,6 @@ export default function GameTowerHub({ initialGameId = null, isSplashActive = fa
             onScoreUpdate={(s) => handleScoreUpdate('block_blast', s)}
           />
         );
-      case 'whack_a_bot':
-        return (
-          <WhackABotGame
-            isPaused={isPaused}
-            onBackToHub={requestExitToHub}
-            onScoreUpdate={(s) => handleScoreUpdate('whack_a_bot', s)}
-          />
-        );
       case 'math_blitz':
         return (
           <MathBlitzGame
@@ -1099,22 +1046,6 @@ export default function GameTowerHub({ initialGameId = null, isSplashActive = fa
             isPaused={isPaused}
             onBackToHub={requestExitToHub}
             onScoreUpdate={(s) => handleScoreUpdate('cyber_pathfinder', s)}
-          />
-        );
-      case 'cyber_screw':
-        return (
-          <CyberScrewGame
-            isPaused={isPaused}
-            onBackToHub={requestExitToHub}
-            onScoreUpdate={(s) => handleScoreUpdate('cyber_screw', s)}
-          />
-        );
-      case 'cyber_bomber':
-        return (
-          <CyberBomberGame
-            isPaused={isPaused}
-            onBackToHub={requestExitToHub}
-            onScoreUpdate={(s) => handleScoreUpdate('cyber_bomber', s)}
           />
         );
       case 'thief_escape':

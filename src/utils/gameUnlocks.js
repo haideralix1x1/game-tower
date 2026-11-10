@@ -80,28 +80,16 @@ export const UNLOCK_REQUIREMENTS = {
     desc: 'Score 5+ in NEON FLAPPY',
     category: 'ARCADE',
   },
-  whack_a_bot: {
+  icy_climber: {
     reqGame: 'space_shooter',
     targetScore: 80,
     desc: 'Score 80+ in SPACE SHOOTER NEO',
-    category: 'ARCADE',
-  },
-  icy_climber: {
-    reqGame: 'whack_a_bot',
-    targetScore: 100,
-    desc: 'Score 100+ in WHACK-A-BOT',
     category: 'ARCADE',
   },
   cyber_tetris: {
     reqGame: 'icy_climber',
     targetScore: 100,
     desc: 'Score 100+ in SPIRE ASCENT',
-    category: 'ARCADE',
-  },
-  cyber_bomber: {
-    reqGame: 'cyber_tetris',
-    targetScore: 100,
-    desc: 'Score 100+ in TETRIS NEO',
     category: 'ARCADE',
   },
 
@@ -129,12 +117,6 @@ export const UNLOCK_REQUIREMENTS = {
     targetScore: 1,
     desc: 'Clear 1 level in TAP AWAY ARROWS',
     category: 'PUZZLES',
-  },
-  cyber_screw: {
-    reqGame: 'cyber_pathfinder',
-    targetScore: 1,
-    desc: 'Clear 1 level in PATHFINDER',
-    category: 'PUZZLE',
   },
 
   // BRAIN CATEGORY
@@ -204,10 +186,8 @@ export const GAME_CATEGORY_MAP = {
   brick_breaker: 'ARCADE',
   neon_flappy: 'ARCADE',
   space_shooter: 'ARCADE',
-  whack_a_bot: 'ARCADE',
   icy_climber: 'ARCADE',
   cyber_tetris: 'ARCADE',
-  cyber_bomber: 'ARCADE',
 
   // Puzzles
   block_blast: 'PUZZLES',
@@ -215,7 +195,6 @@ export const GAME_CATEGORY_MAP = {
   hanoi_tower: 'PUZZLES',
   tap_away: 'PUZZLES',
   cyber_pathfinder: 'PUZZLES',
-  cyber_screw: 'PUZZLES',
 
   // Brain
   memory_matrix: 'BRAIN',

@@ -47,10 +47,27 @@ export default function NeonFlappyGame({ onBackToHub, onScoreUpdate, isPaused = 
   const { width, height } = useWindowDimensions();
   const arenaWidth = Math.min(380, width - 24);
   const arenaHeight = Math.min(490, Math.max(350, height - 190));
-  const baseGapHeight = 130;
+  const baseGapHeight = 168; // Initial forgiving gap for smooth learning curve
   const pipeWidth = 48;
   const droneSize = 26;
   const droneX = 68;
+
+  // Helper for dynamic difficulty scaling
+  const getGapHeight = (cleared) => {
+    // 0 cleared -> 168px (very spacious, easy to learn rhythm)
+    // 10 cleared -> ~152px
+    // 20 cleared -> ~136px
+    // 35+ cleared -> 118px (tight expert challenge)
+    return Math.max(118, Math.round(168 - Math.min(cleared, 35) * 1.42));
+  };
+
+  const getScrollSpeed = (cleared) => {
+    // 0 cleared -> 115 px/s (relaxed, gentle pace)
+    // 10 cleared -> 138 px/s
+    // 20 cleared -> 160 px/s (standard baseline)
+    // 35+ cleared -> 195 px/s (blistering fast)
+    return Math.min(195, 115 + Math.min(cleared, 35) * 2.3);
+  };
 
   const juiceRef = useRef(null);
   const [score, setScore] = useState(0);
@@ -86,6 +103,7 @@ export default function NeonFlappyGame({ onBackToHub, onScoreUpdate, isPaused = 
     score: 0,
     best: 0,
     gameTime: 0,
+    pipesCleared: 0,
   });
 
   useEffect(() => {
@@ -133,6 +151,7 @@ export default function NeonFlappyGame({ onBackToHub, onScoreUpdate, isPaused = 
       slowTimer: 0,
       score: 0,
       gameTime: 0,
+      pipesCleared: 0,
     };
     setScore(0);
     setStatus('READY');
@@ -199,6 +218,8 @@ export default function NeonFlappyGame({ onBackToHub, onScoreUpdate, isPaused = 
         const timeScale = eng.slowTimer > 0 ? 0.6 : 1.0;
         const dt = rawDt * timeScale;
         eng.gameTime += dt;
+        const pipesCleared = eng.pipesCleared || 0;
+        const currentSpeed = getScrollSpeed(pipesCleared);
 
         // Update Timers
         if (eng.blasterTimer > 0) eng.blasterTimer -= dt;
@@ -246,15 +267,36 @@ export default function NeonFlappyGame({ onBackToHub, onScoreUpdate, isPaused = 
           }
         }
 
-        // 1. Pipe Spawning & Oscillating Hurdles
+        // 1. Pipe Spawning & Gradual Scaling
+        const currentGap = getGapHeight(pipesCleared);
+        const currentSpawnInterval = 235 / currentSpeed;
         eng.spawnTimer += dt;
-        if (eng.spawnTimer >= 1.6) {
+        if (eng.spawnTimer >= currentSpawnInterval) {
           eng.spawnTimer = 0;
-          const minTop = 40;
-          const maxTop = arenaHeight - baseGapHeight - 50;
-          const initialTop = minTop + Math.random() * Math.max(40, maxTop - minTop);
-          const isMoving = Math.random() < 0.45; // 45% of pipes oscillate dynamically!
-          const isLaserBarrier = Math.random() < 0.25;
+          const minTop = 36;
+          const maxTop = arenaHeight - currentGap - 45;
+          const initialTop = minTop + Math.random() * Math.max(20, maxTop - minTop);
+
+          // Moving pipes only after 7 pipes cleared
+          let isMoving = false;
+          let moveAmp = 20;
+          if (pipesCleared >= 25) {
+            isMoving = Math.random() < 0.45;
+            moveAmp = 24;
+          } else if (pipesCleared >= 15) {
+            isMoving = Math.random() < 0.35;
+            moveAmp = 18;
+          } else if (pipesCleared >= 7) {
+            isMoving = Math.random() < 0.20;
+            moveAmp = 12;
+          }
+
+          // Laser barriers only after 12 pipes cleared
+          const isLaserBarrier = pipesCleared >= 25
+            ? Math.random() < 0.25
+            : pipesCleared >= 12
+            ? Math.random() < 0.15
+            : false;
 
           const pipeId = `p_${ts}_${Math.random()}`;
           eng.pipes.push({
@@ -262,23 +304,28 @@ export default function NeonFlappyGame({ onBackToHub, onScoreUpdate, isPaused = 
             x: arenaWidth,
             topH: initialTop,
             baseTopH: initialTop,
+            gapHeight: currentGap,
             isMoving,
-            moveSpeed: 1.2 + Math.random() * 1.5,
+            moveAmp,
+            moveSpeed: 1.2 + Math.random() * 1.4,
             moveOffset: Math.random() * Math.PI * 2,
             isLaserBarrier,
             passed: false,
           });
 
           // Chance to spawn floating energy shard or power-up in gap
-          if (Math.random() < 0.55) {
-            const isPowerup = Math.random() < 0.35;
+          const pickupChance = pipesCleared < 6 ? 0.70 : 0.50;
+          if (Math.random() < pickupChance) {
+            const isPowerup = pipesCleared < 6 ? (Math.random() < 0.50) : (Math.random() < 0.35);
             const pTypes = [POWERUP_SHIELD, POWERUP_BLASTER, POWERUP_SLOWMO];
-            const pType = pTypes[Math.floor(Math.random() * pTypes.length)];
+            const pType = (pipesCleared < 6 && Math.random() < 0.6)
+              ? POWERUP_SHIELD
+              : pTypes[Math.floor(Math.random() * pTypes.length)];
 
             eng.pickups.push({
               id: `pick_${ts}`,
               x: arenaWidth + pipeWidth / 2 - 8,
-              y: initialTop + baseGapHeight / 2 - 8,
+              y: initialTop + currentGap / 2 - 8,
               type: isPowerup ? pType : 'SHARD',
               color: isPowerup ? (pType === POWERUP_SHIELD ? '#00F5FF' : pType === POWERUP_BLASTER ? '#FF0055' : '#FFE600') : '#00F5D4',
               icon: isPowerup ? (pType === POWERUP_SHIELD ? '🛡️' : pType === POWERUP_BLASTER ? '⚡' : '⏱️') : '💎',
@@ -287,22 +334,26 @@ export default function NeonFlappyGame({ onBackToHub, onScoreUpdate, isPaused = 
           }
         }
 
-        // 2. Enemy Patrol Drones Spawning
-        eng.enemySpawnTimer += dt;
-        if (eng.enemySpawnTimer >= 3.2) {
-          eng.enemySpawnTimer = 0;
-          const ey = 60 + Math.random() * (arenaHeight - 120);
-          eng.enemies.push({
-            id: `en_${ts}_${Math.random()}`,
-            x: arenaWidth + 20,
-            y: ey,
-            baseY: ey,
-            vx: 130 + Math.random() * 40,
-            bobSpeed: 2.2 + Math.random() * 1.5,
-            bobAmp: 25 + Math.random() * 20,
-            size: 20,
-            hp: 1,
-          });
+        // 2. Enemy Patrol Drones Spawning - ONLY once player has reached 8+ pipes
+        if (pipesCleared >= 8) {
+          eng.enemySpawnTimer += dt;
+          const enemyInterval = pipesCleared >= 20 ? 3.5 : 5.5;
+          if (eng.enemySpawnTimer >= enemyInterval) {
+            eng.enemySpawnTimer = 0;
+            const ey = 60 + Math.random() * (arenaHeight - 120);
+            const droneSpeed = pipesCleared >= 20 ? (120 + Math.random() * 40) : (90 + Math.random() * 25);
+            eng.enemies.push({
+              id: `en_${ts}_${Math.random()}`,
+              x: arenaWidth + 20,
+              y: ey,
+              baseY: ey,
+              vx: droneSpeed,
+              bobSpeed: 1.8 + Math.random() * 1.4,
+              bobAmp: pipesCleared >= 20 ? 25 : 15,
+              size: 20,
+              hp: 1,
+            });
+          }
         }
 
         // 3. Update Lasers
@@ -384,7 +435,7 @@ export default function NeonFlappyGame({ onBackToHub, onScoreUpdate, isPaused = 
         const nextPickups = [];
         for (let k = 0; k < eng.pickups.length; k++) {
           const pick = eng.pickups[k];
-          pick.x -= 160 * dt;
+          pick.x -= currentSpeed * dt;
 
           // Check collection by Player Drone
           const dist = Math.hypot(droneX + droneSize / 2 - (pick.x + pick.size / 2), eng.droneY + droneSize / 2 - (pick.y + pick.size / 2));
@@ -423,23 +474,24 @@ export default function NeonFlappyGame({ onBackToHub, onScoreUpdate, isPaused = 
         const nextPipes = [];
         for (let i = 0; i < eng.pipes.length; i += 1) {
           const p = eng.pipes[i];
-          const nx = p.x - 160 * dt;
+          const nx = p.x - currentSpeed * dt;
+          const pipeGap = p.gapHeight || baseGapHeight;
 
           // Oscillating pipes
           if (p.isMoving) {
-            p.topH = p.baseTopH + Math.sin(eng.gameTime * p.moveSpeed + p.moveOffset) * 26;
+            p.topH = p.baseTopH + Math.sin(eng.gameTime * p.moveSpeed + p.moveOffset) * (p.moveAmp || 20);
           }
 
           // Check collision with player
           const inX = droneX + droneSize > nx && droneX < nx + pipeWidth;
           const hitTop = eng.droneY < p.topH;
-          const hitBottom = eng.droneY + droneSize > p.topH + baseGapHeight;
+          const hitBottom = eng.droneY + droneSize > p.topH + pipeGap;
 
           if (inX && (hitTop || hitBottom)) {
             if (eng.shield) {
               eng.shield = false;
               setHasShield(false);
-              eng.droneY = p.topH + baseGapHeight / 2 - droneSize / 2;
+              eng.droneY = p.topH + pipeGap / 2 - droneSize / 2;
               eng.vy = 0;
               triggerMediumHaptic();
               playSpeedUpSound();
@@ -459,6 +511,7 @@ export default function NeonFlappyGame({ onBackToHub, onScoreUpdate, isPaused = 
 
           if (!p.passed && nx + pipeWidth < droneX) {
             p.passed = true;
+            eng.pipesCleared = (eng.pipesCleared || 0) + 1;
             eng.score += 25;
             setScore(eng.score);
             persistBest(eng.score);
@@ -506,7 +559,7 @@ export default function NeonFlappyGame({ onBackToHub, onScoreUpdate, isPaused = 
 
         <MiniGameHeader
           title="NEON FLAPPY"
-          floorLabel="FLOOR 12 // CYBER DRONE"
+          floorLabel="FLOOR 08 // CYBER DRONE"
           score={score}
           bestScore={bestScore}
           accentColor={COLORS.cyan}
@@ -531,41 +584,45 @@ export default function NeonFlappyGame({ onBackToHub, onScoreUpdate, isPaused = 
             )}
 
             {/* Laser Gate Pillars */}
-            {frame.pipes.map((p) => (
-              <React.Fragment key={p.id}>
-                {/* Top Pipe */}
-                <View
-                  style={[
-                    localStyles.pipe,
-                    {
-                      left: p.x,
-                      top: 0,
-                      width: pipeWidth,
-                      height: p.topH,
-                      borderColor: p.isMoving ? '#00F5FF' : COLORS.magenta,
-                    },
-                  ]}
-                >
-                  <View style={[localStyles.pipeCap, { bottom: 0, backgroundColor: p.isMoving ? '#00F5FF' : COLORS.magenta }]} />
-                </View>
+            {frame.pipes.map((p) => {
+              const pipeGap = p.gapHeight || baseGapHeight;
+              const pipeColor = p.isLaserBarrier ? '#FF0055' : p.isMoving ? '#00F5FF' : COLORS.magenta;
+              return (
+                <React.Fragment key={p.id}>
+                  {/* Top Pipe */}
+                  <View
+                    style={[
+                      localStyles.pipe,
+                      {
+                        left: p.x,
+                        top: 0,
+                        width: pipeWidth,
+                        height: p.topH,
+                        borderColor: pipeColor,
+                      },
+                    ]}
+                  >
+                    <View style={[localStyles.pipeCap, { bottom: 0, backgroundColor: pipeColor }]} />
+                  </View>
 
-                {/* Bottom Pipe */}
-                <View
-                  style={[
-                    localStyles.pipe,
-                    {
-                      left: p.x,
-                      top: p.topH + baseGapHeight,
-                      width: pipeWidth,
-                      height: Math.max(0, arenaHeight - (p.topH + baseGapHeight)),
-                      borderColor: p.isMoving ? '#00F5FF' : COLORS.magenta,
-                    },
-                  ]}
-                >
-                  <View style={[localStyles.pipeCap, { top: 0, backgroundColor: p.isMoving ? '#00F5FF' : COLORS.magenta }]} />
-                </View>
-              </React.Fragment>
-            ))}
+                  {/* Bottom Pipe */}
+                  <View
+                    style={[
+                      localStyles.pipe,
+                      {
+                        left: p.x,
+                        top: p.topH + pipeGap,
+                        width: pipeWidth,
+                        height: Math.max(0, arenaHeight - (p.topH + pipeGap)),
+                        borderColor: pipeColor,
+                      },
+                    ]}
+                  >
+                    <View style={[localStyles.pipeCap, { top: 0, backgroundColor: pipeColor }]} />
+                  </View>
+                </React.Fragment>
+              );
+            })}
 
             {/* Floating Pickups (Power-ups & Shards) */}
             {frame.pickups.map((pick) => (
