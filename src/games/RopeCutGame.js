@@ -367,10 +367,6 @@ export default function RopeCutGame({ onBackToHub, onScoreUpdate, isPaused = fal
 
       setLasers(cfg.lasers);
       lasersRef.current = cfg.lasers;
-
-      if (juiceRef.current) {
-        juiceRef.current.flash('#00F5FF');
-      }
     },
     [arenaWidth, arenaHeight]
   );

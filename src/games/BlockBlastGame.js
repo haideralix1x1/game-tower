@@ -272,7 +272,6 @@ export default function BlockBlastGame({
     setIsGameOver(false);
     setDraggingPiece(null);
     setHoverCell(null);
-    if (juiceRef.current) juiceRef.current.flash(COLORS.cyan);
   }, []);
 
   const canPieceFitAnywhere = (g, piece) => {

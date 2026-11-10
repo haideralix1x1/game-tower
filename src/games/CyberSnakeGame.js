@@ -138,7 +138,6 @@ export default function CyberSnakeGame({ onBackToHub, onScoreUpdate, isPaused = 
     setScore(0);
     setStatus(forceSpeedSelect ? 'SPEED_SELECT' : 'PLAYING');
     setRenderState({ snake: startSnake, food: startFood });
-    if (juiceRef.current) juiceRef.current.flash(activeSpeed.accent);
   }, [activeSpeed]);
 
   const changeDirection = useCallback((dr, dc) => {
@@ -392,7 +391,6 @@ export default function CyberSnakeGame({ onBackToHub, onScoreUpdate, isPaused = 
                       playTapSound();
                       setStatus('PLAYING');
                       engineRef.current.running = true;
-                      if (juiceRef.current) juiceRef.current.flash(activeSpeed.accent);
                     }}
                     style={[localStyles.launchBtn, { backgroundColor: activeSpeed.accent }]}
                   >

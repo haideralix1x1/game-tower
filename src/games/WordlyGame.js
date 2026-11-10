@@ -163,9 +163,6 @@ export default function WordlyGame({ onBackToHub, onScoreUpdate }) {
       setScore(0);
       setStreak(0);
     }
-    if (juiceRef.current) {
-      juiceRef.current.flash(COLORS.matrixMint);
-    }
   }, []);
 
   // Compute key states: pre-grayed absent keys, guess results, and hinted keys

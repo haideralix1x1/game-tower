@@ -534,21 +534,13 @@ export default function GameTowerHub({ initialGameId = null, isSplashActive = fa
     loadAllHighScores();
   }, [loadAllHighScores, activeGameId]);
 
-  const handleSelectGame = useCallback((gameId, accent = COLORS.cyan) => {
-    triggerSliceHaptic();
+  const handleSelectGame = useCallback((gameId) => {
+    triggerLightHaptic();
     playTapSound();
 
-    if (juiceRef.current) {
-      juiceRef.current.shake(10, 6);
-      juiceRef.current.flash(accent);
-      juiceRef.current.burst(width / 2, 280, accent, 18);
-    }
-
     lastPlayedGameId.current = gameId;
-    setTimeout(() => {
-      setActiveGameId(gameId);
-    }, 120);
-  }, [width]);
+    setActiveGameId(gameId);
+  }, []);
 
   const [showExitConfirm, setShowExitConfirm] = useState(false);
 

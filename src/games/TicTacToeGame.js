@@ -180,7 +180,6 @@ export default function TicTacToeGame({ onBackToHub, onScoreUpdate }) {
     setCells(Array(9).fill(null));
     setTurn('X');
     setResult(null);
-    if (juiceRef.current) juiceRef.current.flash(activeMode.accent);
   }, [activeMode]);
 
   const handleCellTap = useCallback(

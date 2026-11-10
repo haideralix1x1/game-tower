@@ -121,7 +121,6 @@ export default function NumberHuntGame({ onBackToHub, onScoreUpdate, isPaused = 
     setNumbers(shuffleNumbers(m.count));
     setTarget(1);
     setIsGameOver(false);
-    if (juiceRef.current) juiceRef.current.flash(m.accent);
   }, [activeMode]);
 
   const switchMode = useCallback((newModeKey) => {

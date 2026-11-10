@@ -324,10 +324,6 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
 
     setExitDoor(cfg.exitDoor);
     exitDoorRef.current = cfg.exitDoor;
-
-    if (juiceRef.current) {
-      juiceRef.current.flash('#00F5FF');
-    }
   }, []);
 
   useEffect(() => {

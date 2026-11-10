@@ -600,10 +600,6 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
         hasLaser: false,
         hasMagnet: false,
       });
-
-      if (juiceRef.current) {
-        juiceRef.current.flash(chosenMode === 'HARD_SPHERE_DUEL' ? '#FF0055' : '#00F5FF');
-      }
     },
     [arenaWidth, basePaddleW, paddleY, aiPaddleY, createBricksForLevel, mode]
   );
