@@ -517,19 +517,16 @@ export default function Game2048({ onBackToHub, onScoreUpdate, isPaused = false 
       },
       onPanResponderRelease: (evt, gestureState) => {
         if (isPausedRef.current || isGameOver || isLockingRef.current) return;
-        const { dx, dy } = gestureState;
+        const { dx } = gestureState;
         if (Math.abs(dx) > 20) {
           const dir = dx > 0 ? 1 : -1;
           moveHorizontal(fallingColRef.current + dir);
-        } else if (dy > 30) {
-          // Downward swipe: direct drop into current column
-          dropToColumn(fallingColRef.current);
         } else {
-          // Tap on column: direct drop snap on that column!
+          // Touching or tapping the grid only steers column aim (never drops)
           const { pageX } = evt.nativeEvent;
           const relX = pageX - (boardPosRef.current.pageX || 0);
           const tappedCol = Math.max(0, Math.min(COLS - 1, Math.floor((relX - 8) / cellWidth)));
-          dropToColumn(tappedCol);
+          moveHorizontal(tappedCol);
         }
       },
     })
@@ -818,7 +815,7 @@ export default function Game2048({ onBackToHub, onScoreUpdate, isPaused = false 
 
             <View style={localStyles.tacticalStatusBar}>
               <Text style={localStyles.tacticalStatusText}>
-                TAP COLUMN TO DIRECT DROP // SWIPE TO AIM
+                TAP BUTTON TO DIRECT DROP // TOUCH GRID TO AIM
               </Text>
             </View>
           </View>
