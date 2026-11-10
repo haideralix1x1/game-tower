@@ -37,9 +37,9 @@ const monoFont = Platform.select({
 const STORAGE_HIGH_SCORE_KEY = '@game_tower:best_climber_v2';
 
 const PLAYER_SIZE = 26;
-const GRAVITY = 0.52;
-const NORMAL_JUMP = -11.8;
-const HIGH_JUMP = -14.2;
+const GRAVITY = 0.50;
+const NORMAL_JUMP = -12.4;
+const HIGH_JUMP = -14.6;
 const PLAT_HEIGHT = 14;
 
 export default function IcyTowerClimberGame({ onBackToHub, onScoreUpdate, isPaused = false }) {
@@ -107,6 +107,7 @@ export default function IcyTowerClimberGame({ onBackToHub, onScoreUpdate, isPaus
 
   const nextPlatIndexRef = useRef(1);
   const highestGenYRef = useRef(arenaHeight - 40);
+  const lastPlatXRef = useRef(arenaWidth * 0.5 - 60);
   const animFrameRef = useRef(null);
   const tickCountRef = useRef(0);
 
@@ -125,12 +126,13 @@ export default function IcyTowerClimberGame({ onBackToHub, onScoreUpdate, isPaus
 
   /**
    * Procedural Endless Platform Spawner.
-   * Generates platforms upwards to infinity, scaling difficulty GRADUALLY:
-   * - Floors 0-15: Simple & relaxing! Wide platforms (135px), Normal & Bounce only, frequent Shield & Spring pickups, NO lethal hazards.
-   * - Floors 16-30: Gentle Movement & Crumbling platforms, extra Shields.
-   * - Floors 31-50: Introduction of Lava platforms (generous 1.5s grace) and rare narrow Spikes.
-   * - Floors 51-70: Wall Turrets (every 10 floors) and Sweeping Security Lasers (every 12 floors).
-   * - Floors 71+: Rare Sentry Bombs on high-tier platforms.
+   * - Platforms are 100% REACHABLE: horizontally bounded from the previous platform!
+   * - Difficulty scales GRADUALLY:
+   *   - Floors 0-30: Purely safe! Wide platforms (135px), Normal & Bounce only, Shield & Spring pickups.
+   *   - Floors 31-65: Gentle Moving & Crumble platforms (generous 50 frame grace). Zero spikes/lava.
+   *   - Floors 66-100: Lava platforms (generous 100 frame grace) and rare narrow Spikes (46px).
+   *   - Floors 101-140: Wall Turrets with clear telegraphing.
+   *   - Floors 141+: Sweeping security lasers and sentry bots for high altitude runners.
    */
   const spawnAhead = useCallback((targetMinY) => {
     let curY = highestGenYRef.current;
@@ -146,7 +148,7 @@ export default function IcyTowerClimberGame({ onBackToHub, onScoreUpdate, isPaus
       const floor = idx;
 
       // Platform width scales down gently
-      const platW = floor <= 15 ? 135 : floor <= 30 ? 120 : floor <= 50 ? 105 : floor <= 75 ? 95 : 85;
+      const platW = floor <= 30 ? 135 : floor <= 65 ? 120 : floor <= 100 ? 105 : floor <= 140 ? 95 : 85;
 
       // Platform Type Distribution based on altitude / gradual difficulty
       let type = 'NORMAL';
@@ -154,58 +156,70 @@ export default function IcyTowerClimberGame({ onBackToHub, onScoreUpdate, isPaus
       const prevWasSpike =
         newPlats.length > 0 && newPlats[newPlats.length - 1].type === 'SPIKE';
 
-      if (floor <= 15) {
-        // Floors 0-15: Simple & Gentle! Only Normal & Super Bounce platforms!
+      if (floor <= 30) {
+        // Floors 0-30: Simple & Gentle! Only Normal & Super Bounce platforms!
         if (rand < 0.22) {
           type = 'BOUNCE';
         }
-      } else if (floor <= 30) {
-        // Floors 16-30: Gentle Movement & Crumble
-        if (rand < 0.25) {
+      } else if (floor <= 65) {
+        // Floors 31-65: Gentle Movement & Crumble (Zero lethal hazards!)
+        if (rand < 0.22) {
           type = 'MOVING';
-        } else if (rand < 0.40) {
+        } else if (rand < 0.38) {
           type = 'CRUMBLE';
-        } else if (rand < 0.58) {
+        } else if (rand < 0.52) {
           type = 'BOUNCE';
         }
-      } else if (floor <= 50) {
-        // Floors 31-50: Environmental Hazards Intro
-        if (!prevWasSpike && rand < 0.12) {
+      } else if (floor <= 100) {
+        // Floors 66-100: Lava & rare narrow Spikes
+        if (!prevWasSpike && rand < 0.09) {
           type = 'SPIKE';
-        } else if (rand < 0.26) {
+        } else if (rand < 0.22) {
           type = 'FIRE';
-        } else if (rand < 0.48) {
+        } else if (rand < 0.44) {
           type = 'MOVING';
-        } else if (rand < 0.62) {
+        } else if (rand < 0.58) {
           type = 'CRUMBLE';
-        } else if (rand < 0.76) {
+        } else if (rand < 0.72) {
           type = 'BOUNCE';
         }
       } else {
-        // Floors 51+: High-tier Apex Spire
-        if (!prevWasSpike && rand < 0.16) {
+        // Floors 101+: High-tier Apex Spire
+        if (!prevWasSpike && rand < 0.12) {
           type = 'SPIKE';
-        } else if (rand < 0.32) {
+        } else if (rand < 0.28) {
           type = 'FIRE';
-        } else if (rand < 0.52) {
+        } else if (rand < 0.48) {
           type = 'MOVING';
-        } else if (rand < 0.68) {
+        } else if (rand < 0.64) {
           type = 'CRUMBLE';
-        } else if (rand < 0.82) {
+        } else if (rand < 0.78) {
           type = 'BOUNCE';
         }
       }
 
-      // Spiked platforms are narrower so player can maneuver around them
-      const actualW = type === 'SPIKE' ? Math.min(platW, 68) : platW;
-      const platX = Math.random() * (arenaWidth - actualW - 30) + 15;
+      // Spiked platforms are narrow so player can easily maneuver around them
+      const actualW = type === 'SPIKE' ? Math.min(platW, 46) : platW;
+
+      // GUARANTEED REACHABILITY: Plat X is strictly bounded from previous platform
+      const maxDeltaX = Math.min(arenaWidth * 0.40, 140);
+      const prevX = lastPlatXRef.current;
+      const minX = Math.max(16, prevX - maxDeltaX);
+      const maxX = Math.min(arenaWidth - actualW - 16, prevX + maxDeltaX);
+      let platX;
+      if (maxX > minX) {
+        platX = minX + Math.random() * (maxX - minX);
+      } else {
+        platX = Math.max(16, Math.min(arenaWidth - actualW - 16, prevX));
+      }
+      lastPlatXRef.current = platX;
 
       // Powerups on platforms: Shields and Super Springs!
       let powerup = null;
       if (type === 'NORMAL' || type === 'MOVING') {
-        if (floor % 7 === 0 || (floor < 30 && floor % 5 === 0)) {
+        if (floor % 6 === 0 || (floor < 30 && floor % 5 === 0)) {
           powerup = 'SHIELD';
-        } else if (floor % 11 === 4) {
+        } else if (floor % 10 === 4) {
           powerup = 'SPRING';
         }
       }
@@ -221,23 +235,23 @@ export default function IcyTowerClimberGame({ onBackToHub, onScoreUpdate, isPaus
         powerup,
         broken: false,
         crumbleTimer: 0,
-        heatTimer: 0, // Heat frames while player is standing on lava platform
-        maxHeat: 90, // Generous 1.5 seconds grace period on lava!
-        vx: type === 'MOVING' ? (Math.random() > 0.5 ? 1.0 : -1.0) * (1 + Math.min(0.8, floor / 60)) : 0,
+        heatTimer: 0,
+        maxHeat: 100, // Generous 1.7 seconds grace period on lava!
+        vx: type === 'MOVING' ? (Math.random() > 0.5 ? 0.9 : -0.9) * (1 + Math.min(0.6, floor / 80)) : 0,
         minX: 10,
         maxX: arenaWidth - actualW - 10,
       };
       newPlats.push(platObj);
 
-      // Defense Turrets: Mounted on spire walls (Gradual: only floor 50+)
-      if (floor >= 50 && floor % 10 === 0) {
+      // Defense Turrets: Mounted on spire walls (Gradual: only floor 100+)
+      if (floor >= 100 && floor % 12 === 0) {
         const wall = Math.random() > 0.5 ? 'LEFT' : 'RIGHT';
         newTurrets.push({
           id: `turret_${floor}`,
           wall,
           x: wall === 'LEFT' ? 0 : arenaWidth - 22,
           y: curY + 14,
-          cooldown: 90 + Math.floor(Math.random() * 50),
+          cooldown: 110 + Math.floor(Math.random() * 50),
           aimAngle: wall === 'LEFT' ? 0 : 180,
           isAiming: false,
           targetX: 0,
@@ -245,8 +259,8 @@ export default function IcyTowerClimberGame({ onBackToHub, onScoreUpdate, isPaus
         });
       }
 
-      // Scanning Security Lasers: Sweeping deadly beams (Gradual: only floor 55+)
-      if (floor >= 55 && floor % 12 === 3) {
+      // Scanning Security Lasers: Sweeping deadly beams (Gradual: only floor 130+)
+      if (floor >= 130 && floor % 14 === 3) {
         const laserType = Math.random() > 0.5 ? 'SWEEP' : 'BARRIER';
         const wall = Math.random() > 0.5 ? 'LEFT' : 'RIGHT';
         newLasers.push({
@@ -261,8 +275,8 @@ export default function IcyTowerClimberGame({ onBackToHub, onScoreUpdate, isPaus
         });
       }
 
-      // Red Enemy Sentry Box: Only floor 65+
-      if (floor >= 65 && type === 'NORMAL' && Math.random() < 0.20) {
+      // Red Enemy Sentry Box: Only floor 150+
+      if (floor >= 150 && type === 'NORMAL' && Math.random() < 0.20) {
         newBombs.push({
           id: `bomb_${idx}`,
           platId,
@@ -275,7 +289,7 @@ export default function IcyTowerClimberGame({ onBackToHub, onScoreUpdate, isPaus
           patrolDir: Math.random() > 0.5 ? 1 : -1,
           state: 'IDLE',
           alertTimer: 0,
-          speed: 0.65 + Math.min(0.35, floor / 100),
+          speed: 0.60 + Math.min(0.30, floor / 120),
           fuse: 100,
           color: '#FF0055',
         });
@@ -310,7 +324,8 @@ export default function IcyTowerClimberGame({ onBackToHub, onScoreUpdate, isPaus
     scoreRef.current = 0;
     highestFloorRef.current = 0;
     cameraYRef.current = 0;
-    laserFloorYRef.current = arenaHeight + 80;
+    laserFloorYRef.current = arenaHeight + 120;
+    lastPlatXRef.current = arenaWidth * 0.5 - 60;
     tickCountRef.current = 0;
     nextPlatIndexRef.current = 1;
     highestGenYRef.current = arenaHeight - 40;
@@ -388,11 +403,11 @@ export default function IcyTowerClimberGame({ onBackToHub, onScoreUpdate, isPaus
     const p = playerRef.current;
 
     if (!p.isGrounded) {
-      // In mid-air: allow subtle air drift steering
+      // In mid-air: allow responsive air drift steering
       if (direction === 'LEFT') {
-        p.vx = Math.max(-5.5, p.vx - 3.2);
+        p.vx = Math.max(-6.6, p.vx - 2.8);
       } else if (direction === 'RIGHT') {
-        p.vx = Math.min(5.5, p.vx + 3.2);
+        p.vx = Math.min(6.6, p.vx + 2.8);
       }
       return;
     }
@@ -405,9 +420,9 @@ export default function IcyTowerClimberGame({ onBackToHub, onScoreUpdate, isPaus
     p.vy = jumpPower;
 
     if (direction === 'LEFT') {
-      p.vx = -5.8;
+      p.vx = -6.6;
     } else if (direction === 'RIGHT') {
-      p.vx = 5.8;
+      p.vx = 6.6;
     } else {
       p.vx = 0;
     }
@@ -460,10 +475,10 @@ export default function IcyTowerClimberGame({ onBackToHub, onScoreUpdate, isPaus
       const p = playerRef.current;
       let camY = cameraYRef.current;
 
-      // 1. Update Laser Floor (rises continuously, gentle start on early floors)
+      // 1. Update Rising Toxic Acid Pool (starts gentle, accelerates steadily)
       const currentHighest = highestFloorRef.current;
-      const laserSpeed = currentHighest < 15 ? 0.28 : currentHighest < 35 ? 0.44 : 0.62 + Math.min(0.8, currentHighest / 80);
-      laserFloorYRef.current -= laserSpeed;
+      const acidSpeed = currentHighest < 30 ? 0.20 : currentHighest < 65 ? 0.32 : currentHighest < 100 ? 0.44 : 0.56;
+      laserFloorYRef.current -= acidSpeed;
 
       // Shield Absorption Helper
       const absorbHitWithShield = () => {
@@ -759,8 +774,8 @@ export default function IcyTowerClimberGame({ onBackToHub, onScoreUpdate, isPaus
         }
       }
 
-      // 9. Player Physics & Gravity
-      let vx = p.vx * 0.90;
+      // 9. Player Physics & Gravity (Smooth air glide & wall bounce)
+      let vx = p.vx * 0.98;
       let vy = p.vy;
 
       if (!p.isGrounded) {
@@ -773,10 +788,10 @@ export default function IcyTowerClimberGame({ onBackToHub, onScoreUpdate, isPaus
       // Screen boundary bounce
       if (nextX < 4) {
         nextX = 4;
-        vx = -vx * 0.65;
+        vx = Math.abs(vx) * 0.85;
       } else if (nextX > arenaWidth - PLAYER_SIZE - 4) {
         nextX = arenaWidth - PLAYER_SIZE - 4;
-        vx = -vx * 0.65;
+        vx = -Math.abs(vx) * 0.85;
       }
 
       // 10. Check collision with deadly Spike Platforms
@@ -861,7 +876,7 @@ export default function IcyTowerClimberGame({ onBackToHub, onScoreUpdate, isPaus
               }
 
               if (plat.type === 'CRUMBLE' && plat.crumbleTimer === 0) {
-                plat.crumbleTimer = 22;
+                plat.crumbleTimer = 50;
               }
             }
 
@@ -912,9 +927,9 @@ export default function IcyTowerClimberGame({ onBackToHub, onScoreUpdate, isPaus
         setScanLasers(scanLasersRef.current);
       }
 
-      // 14. Check Fall into Abyss or Laser Overload Floor
-      if (nextY + camY > arenaHeight + 40 || nextY >= laserFloorYRef.current) {
-        handleGameOver('CONSUMED BY RISING OVERLOAD!');
+      // 14. Check Fall into Abyss or Rising Toxic Acid Pool
+      if (nextY + camY > arenaHeight + 40 || nextY + PLAYER_SIZE >= laserFloorYRef.current) {
+        handleGameOver('DISSOLVED IN TOXIC ACID!');
         return;
       }
 
@@ -1074,11 +1089,16 @@ export default function IcyTowerClimberGame({ onBackToHub, onScoreUpdate, isPaus
               <Stop offset="100%" stopColor="#FFE600" stopOpacity="1" />
             </LinearGradient>
 
-            {/* Rising Laser Floor Gradient */}
-            <LinearGradient id="laserFloorGrad" x1="0" y1="0" x2="0" y2="1">
-              <Stop offset="0%" stopColor="#FF0055" stopOpacity="0.9" />
-              <Stop offset="40%" stopColor="#7928CA" stopOpacity="0.6" />
-              <Stop offset="100%" stopColor="#050114" stopOpacity="0.95" />
+            {/* Rising Toxic Acid Pool Gradient */}
+            <LinearGradient id="toxicAcidGrad" x1="0" y1="0" x2="0" y2="1">
+              <Stop offset="0%" stopColor="#39FF14" stopOpacity="0.95" />
+              <Stop offset="18%" stopColor="#00FF66" stopOpacity="0.85" />
+              <Stop offset="55%" stopColor="#0D5C2E" stopOpacity="0.92" />
+              <Stop offset="100%" stopColor="#021A0C" stopOpacity="0.98" />
+            </LinearGradient>
+            <LinearGradient id="acidMistGrad" x1="0" y1="1" x2="0" y2="0">
+              <Stop offset="0%" stopColor="#39FF14" stopOpacity="0.4" />
+              <Stop offset="100%" stopColor="#39FF14" stopOpacity="0" />
             </LinearGradient>
           </Defs>
 
@@ -1682,35 +1702,63 @@ export default function IcyTowerClimberGame({ onBackToHub, onScoreUpdate, isPaus
             )}
           </G>
 
-          {/* RISING LASER OVERLOAD FLOOR */}
-          {laserDrawY < arenaHeight + 100 && (
+          {/* RISING TOXIC BIO-ACID POOL */}
+          {laserDrawY < arenaHeight + 120 && (
             <G>
+              {/* Glowing green vapor mist rising above acid */}
+              <Rect
+                x={0}
+                y={laserDrawY - 36}
+                width={arenaWidth}
+                height={36}
+                fill="url(#acidMistGrad)"
+              />
+              {/* Deep Acid Liquid Body */}
               <Rect
                 x={0}
                 y={laserDrawY}
                 width={arenaWidth}
-                height={arenaHeight - laserDrawY + 50}
-                fill="url(#laserFloorGrad)"
+                height={Math.max(60, arenaHeight - laserDrawY + 80)}
+                fill="url(#toxicAcidGrad)"
               />
+              {/* Bubbling acid surface line */}
               <Line
                 x1={0}
                 y1={laserDrawY}
                 x2={arenaWidth}
                 y2={laserDrawY}
-                stroke="#FF0055"
-                strokeWidth={3}
+                stroke="#39FF14"
+                strokeWidth={4}
               />
+              {/* Glowing Toxic Acid Bubbles */}
+              <Circle cx={arenaWidth * 0.15} cy={laserDrawY - 4} r={5} fill="#39FF14" opacity={0.8} />
+              <Circle cx={arenaWidth * 0.35} cy={laserDrawY - 6} r={7} fill="#00FF66" opacity={0.7} />
+              <Circle cx={arenaWidth * 0.60} cy={laserDrawY - 3} r={4} fill="#39FF14" opacity={0.85} />
+              <Circle cx={arenaWidth * 0.82} cy={laserDrawY - 5} r={6} fill="#00FF66" opacity={0.75} />
+              {/* Warning labels */}
               <SvgText
                 x={arenaWidth / 2}
                 y={laserDrawY + 22}
                 textAnchor="middle"
-                fill="#FFFFFF"
-                fontSize={10}
+                fill="#052E16"
+                fontSize={11}
                 fontWeight="900"
                 fontFamily={monoFont}
                 letterSpacing={2}
               >
-                ⚠ OVERLOAD PURGE RISING ⚠
+                ☣ ☠ TOXIC ACID RISING ☠ ☣
+              </SvgText>
+              <SvgText
+                x={arenaWidth / 2}
+                y={laserDrawY + 37}
+                textAnchor="middle"
+                fill="#39FF14"
+                fontSize={9}
+                fontWeight="800"
+                fontFamily={monoFont}
+                letterSpacing={1.5}
+              >
+                LETHAL CORROSION // ESCAPE UP!
               </SvgText>
             </G>
           )}
@@ -1721,7 +1769,7 @@ export default function IcyTowerClimberGame({ onBackToHub, onScoreUpdate, isPaus
           <View style={styles.promptOverlay} pointerEvents="none">
             <Text style={styles.promptText}>SWIPE UP TO ASCEND</Text>
             <Text style={styles.promptSub}>
-              NO AIR JUMPS • LAVA GRACE: 1s • DODGE TURRETS & SCAN LASERS
+              OUTRUN THE RISING TOXIC ACID • SMOOTH AIR DRIFT & WALL BOUNCE
             </Text>
           </View>
         )}

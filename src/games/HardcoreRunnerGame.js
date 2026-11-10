@@ -39,20 +39,20 @@ const monoFont = Platform.select({
 
 const STORAGE_HIGH_SCORE_KEY = '@game_tower:best_dash_v1';
 
-// Cube and physics parameters (Fast & snappy arcade feel)
+// Cube and physics parameters (Smooth & responsive arcade feel)
 const CUBE_SIZE = 22;
-const BASE_SPEED = 10.5;
-const GRAVITY = 0.82;
-const JUMP_VELOCITY = -11.4;
+const BASE_SPEED = 6.8;
+const GRAVITY = 0.58;
+const JUMP_VELOCITY = -8.8;
 const CORRIDOR_HEIGHT = 118;
 
 // Phase Thresholds in Distance (Endless Mode Progression)
 const PHASE_THRESHOLDS = [
   { phase: 1, name: 'CUBE PROTOCOL', desc: 'BASIC HURDLE RUN', startDist: 0, color: '#FFE600' },
-  { phase: 2, name: 'SPIKE MATRIX', desc: 'SHARP GROUND SPIKES', startDist: 1000, color: '#FF0055' },
-  { phase: 3, name: 'AERO-DROP HAZARDS', desc: 'ARROW SPIKES SLAMMING DOWN', startDist: 2400, color: '#FF6D00' },
-  { phase: 4, name: 'PLASMA TURRET BARRAGE', desc: 'CEILING MOUNTED HOMING CANNONS', startDist: 4000, color: '#00F5FF' },
-  { phase: 5, name: 'VOID CHASMS', desc: 'BOTTOM LINE GAPS // ABYSS', startDist: 5800, color: '#9D4EDD' },
+  { phase: 2, name: 'SPIKE MATRIX', desc: 'SHARP GROUND SPIKES', startDist: 1200, color: '#FF0055' },
+  { phase: 3, name: 'AERO-DROP HAZARDS', desc: 'ARROW SPIKES SLAMMING DOWN', startDist: 2800, color: '#FF6D00' },
+  { phase: 4, name: 'PLASMA TURRET BARRAGE', desc: 'CEILING MOUNTED HOMING CANNONS', startDist: 4500, color: '#00F5FF' },
+  { phase: 5, name: 'VOID CHASMS', desc: 'BOTTOM LINE GAPS // ABYSS', startDist: 6500, color: '#9D4EDD' },
 ];
 
 function getPhaseForDistance(dist) {
@@ -195,11 +195,12 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
 
   /**
    * Procedural Endless World Spawner.
-   * Path alternates continuously between:
-   * - STRAIGHT (flat baseline; ONLY place where static cubes, spikes & void gaps spawn)
-   * - SMOOTH (continuous sine wave roller coaster; both lines curve up and down)
-   * - SHARP (angular cyber ridges & valleys; both lines angle up and down)
-   * - RAMP (high elevated highway plateau; both lines climb up and down)
+   * Progression is gated strictly in phases by curX (world position):
+   * - Phase 1 (0..1200): Straight flat path, ONLY single static cube blocks (learn jumps)
+   * - Phase 2 (1200..2800): Ground spikes introduced (single & double spikes) + gentle smooth curves
+   * - Phase 3 (2800..4500): Aero-drop spikes slam down from ceiling + sharp cyber ridges
+   * - Phase 4 (4500..6500): Ceiling plasma turrets aim & fire + launch ramps
+   * - Phase 5 (6500+): Void chasms (bottom line gaps) + all hazards combined
    */
   const spawnAhead = useCallback((targetWorldX) => {
     let curX = spawnCursorXRef.current;
@@ -208,10 +209,24 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
     const newTurrets = [];
     const newGaps = [];
 
-    const terrainTypes = ['STRAIGHT', 'SMOOTH', 'STRAIGHT', 'SHARP', 'STRAIGHT', 'RAMP'];
-
     while (curX < targetWorldX) {
-      const terrainType = terrainTypes[Math.floor(Math.random() * terrainTypes.length)];
+      // Gate available terrain types by distance
+      let terrainType = 'STRAIGHT';
+      if (curX >= 6500) {
+        const pool = ['STRAIGHT', 'SMOOTH', 'STRAIGHT', 'SHARP', 'RAMP'];
+        terrainType = pool[Math.floor(Math.random() * pool.length)];
+      } else if (curX >= 4500) {
+        const pool = ['STRAIGHT', 'STRAIGHT', 'SMOOTH', 'SHARP', 'RAMP'];
+        terrainType = pool[Math.floor(Math.random() * pool.length)];
+      } else if (curX >= 2800) {
+        const pool = ['STRAIGHT', 'STRAIGHT', 'SMOOTH', 'SHARP'];
+        terrainType = pool[Math.floor(Math.random() * pool.length)];
+      } else if (curX >= 1200) {
+        const pool = ['STRAIGHT', 'STRAIGHT', 'STRAIGHT', 'SMOOTH'];
+        terrainType = pool[Math.floor(Math.random() * pool.length)];
+      } else {
+        terrainType = 'STRAIGHT';
+      }
 
       if (terrainType === 'STRAIGHT') {
         const segW = 460 + Math.floor(Math.random() * 140);
@@ -222,71 +237,190 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
           w: segW,
         });
 
-        // ONLY on STRAIGHT path sections: spawn static cubes, ground spikes, or void gaps!
-        const randChoice = Math.random();
-        if (randChoice < 0.32) {
-          // Static cube block
-          newObs.push({
-            id: `blk_${curX}`,
-            type: 'BLOCK',
-            x: curX + 140 + Math.random() * (segW - 240),
-            w: 24,
-            h: 22,
-          });
-        } else if (randChoice < 0.62) {
-          // Ground spikes (single or double)
-          const isDouble = Math.random() > 0.5;
-          const spX = curX + 130 + Math.random() * (segW - 240);
-          newObs.push({
-            id: `sp_1_${spX}`,
-            type: 'SPIKE_BOTTOM',
-            x: spX,
-            w: 22,
-            h: 22,
-          });
-          if (isDouble) {
+        // Obstacle spawning strictly phased by curX
+        if (curX < 1200) {
+          // Phase 1: ONLY single static cube blocks with generous spacing
+          if (Math.random() < 0.65) {
             newObs.push({
-              id: `sp_2_${spX}`,
+              id: `blk_${curX}`,
+              type: 'BLOCK',
+              x: curX + 160 + Math.random() * (segW - 280),
+              w: 24,
+              h: 22,
+            });
+          }
+        } else if (curX < 2800) {
+          // Phase 2: Ground spikes & blocks only. NO drop spikes, NO turrets, NO gaps.
+          const rand = Math.random();
+          if (rand < 0.35) {
+            newObs.push({
+              id: `blk_${curX}`,
+              type: 'BLOCK',
+              x: curX + 140 + Math.random() * (segW - 260),
+              w: 24,
+              h: 22,
+            });
+          } else if (rand < 0.85) {
+            const isDouble = Math.random() > 0.65;
+            const spX = curX + 140 + Math.random() * (segW - 260);
+            newObs.push({
+              id: `sp_1_${spX}`,
               type: 'SPIKE_BOTTOM',
-              x: spX + 22,
+              x: spX,
+              w: 22,
+              h: 22,
+            });
+            if (isDouble) {
+              newObs.push({
+                id: `sp_2_${spX}`,
+                type: 'SPIKE_BOTTOM',
+                x: spX + 22,
+                w: 22,
+                h: 22,
+              });
+            }
+          }
+        } else if (curX < 4500) {
+          // Phase 3: Introduce aero-drop spikes from ceiling + ground obstacles. NO turrets, NO gaps.
+          const rand = Math.random();
+          if (rand < 0.30) {
+            newObs.push({
+              id: `blk_${curX}`,
+              type: 'BLOCK',
+              x: curX + 130 + Math.random() * (segW - 240),
+              w: 24,
+              h: 22,
+            });
+          } else if (rand < 0.70) {
+            const spX = curX + 130 + Math.random() * (segW - 240);
+            newObs.push({
+              id: `sp_1_${spX}`,
+              type: 'SPIKE_BOTTOM',
+              x: spX,
               w: 22,
               h: 22,
             });
           }
-        } else if (randChoice < 0.82) {
-          // Void gap (well-centered with generous runway before and after)
-          const gapW = 82;
-          const gapX = curX + 140 + Math.random() * (segW - gapW - 180);
-          newGaps.push({
-            id: `gap_${gapX}`,
-            x: gapX,
-            w: gapW,
-          });
-        }
 
-        // Ceiling Turret chance
-        if (Math.random() < 0.45) {
-          newTurrets.push({
-            id: `turret_${curX}`,
-            x: curX + segW * 0.5,
-            fired: false,
-          });
-        }
+          // Aero-Drop Spike chance
+          if (Math.random() < 0.35) {
+            newObs.push({
+              id: `sp_drop_${curX}`,
+              type: 'SPIKE_DROP',
+              x: curX + segW * 0.72,
+              w: 22,
+              h: 24,
+            });
+          }
+        } else if (curX < 6500) {
+          // Phase 4: Introduce ceiling plasma turrets. NO void gaps yet.
+          const rand = Math.random();
+          if (rand < 0.30) {
+            newObs.push({
+              id: `blk_${curX}`,
+              type: 'BLOCK',
+              x: curX + 130 + Math.random() * (segW - 240),
+              w: 24,
+              h: 22,
+            });
+          } else if (rand < 0.70) {
+            const isDouble = Math.random() > 0.45;
+            const spX = curX + 130 + Math.random() * (segW - 240);
+            newObs.push({
+              id: `sp_1_${spX}`,
+              type: 'SPIKE_BOTTOM',
+              x: spX,
+              w: 22,
+              h: 22,
+            });
+            if (isDouble) {
+              newObs.push({
+                id: `sp_2_${spX}`,
+                type: 'SPIKE_BOTTOM',
+                x: spX + 22,
+                w: 22,
+                h: 22,
+              });
+            }
+          }
 
-        // Aero-Drop Spike chance
-        if (Math.random() < 0.35) {
-          newObs.push({
-            id: `sp_drop_${curX}`,
-            type: 'SPIKE_DROP',
-            x: curX + segW * 0.72,
-            w: 22,
-            h: 24,
-          });
+          if (Math.random() < 0.35) {
+            newTurrets.push({
+              id: `turret_${curX}`,
+              x: curX + segW * 0.5,
+              fired: false,
+            });
+          }
+          if (Math.random() < 0.30) {
+            newObs.push({
+              id: `sp_drop_${curX}`,
+              type: 'SPIKE_DROP',
+              x: curX + segW * 0.72,
+              w: 22,
+              h: 24,
+            });
+          }
+        } else {
+          // Phase 5: Everything enabled, including Void Chasms!
+          const randChoice = Math.random();
+          if (randChoice < 0.28) {
+            newObs.push({
+              id: `blk_${curX}`,
+              type: 'BLOCK',
+              x: curX + 140 + Math.random() * (segW - 240),
+              w: 24,
+              h: 22,
+            });
+          } else if (randChoice < 0.58) {
+            const isDouble = Math.random() > 0.5;
+            const spX = curX + 130 + Math.random() * (segW - 240);
+            newObs.push({
+              id: `sp_1_${spX}`,
+              type: 'SPIKE_BOTTOM',
+              x: spX,
+              w: 22,
+              h: 22,
+            });
+            if (isDouble) {
+              newObs.push({
+                id: `sp_2_${spX}`,
+                type: 'SPIKE_BOTTOM',
+                x: spX + 22,
+                w: 22,
+                h: 22,
+              });
+            }
+          } else if (randChoice < 0.82) {
+            const gapW = 82;
+            const gapX = curX + 140 + Math.random() * (segW - gapW - 180);
+            newGaps.push({
+              id: `gap_${gapX}`,
+              x: gapX,
+              w: gapW,
+            });
+          }
+
+          if (Math.random() < 0.40) {
+            newTurrets.push({
+              id: `turret_${curX}`,
+              x: curX + segW * 0.5,
+              fired: false,
+            });
+          }
+
+          if (Math.random() < 0.30) {
+            newObs.push({
+              id: `sp_drop_${curX}`,
+              type: 'SPIKE_DROP',
+              x: curX + segW * 0.72,
+              w: 22,
+              h: 24,
+            });
+          }
         }
 
         curX += segW;
       } else if (terrainType === 'SMOOTH') {
-        // Continuous sine wave cycle (goes up to +amp, down to -amp, ends at 0)
         const segW = 380 + Math.floor(Math.random() * 80);
         const amp = 28 + Math.floor(Math.random() * 8);
         newSegments.push({
@@ -297,8 +431,8 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
           amp,
         });
 
-        // Turret mounted on upper ceiling line
-        if (Math.random() < 0.45) {
+        // Turrets only appear on curves in phase 4+ (curX >= 4500)
+        if (curX >= 4500 && Math.random() < 0.35) {
           newTurrets.push({
             id: `turret_${curX}`,
             x: curX + segW * 0.5,
@@ -308,7 +442,6 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
 
         curX += segW;
       } else if (terrainType === 'SHARP') {
-        // Angular cyber peaks and valleys (sharp up, sharp down, ends at 0)
         const segW = 360 + Math.floor(Math.random() * 80);
         const h = 26 + Math.floor(Math.random() * 6);
         newSegments.push({
@@ -319,8 +452,7 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
           h,
         });
 
-        // Turret mounted on upper ceiling line
-        if (Math.random() < 0.45) {
+        if (curX >= 4500 && Math.random() < 0.35) {
           newTurrets.push({
             id: `turret_${curX}`,
             x: curX + segW * 0.5,
@@ -330,7 +462,6 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
 
         curX += segW;
       } else if (terrainType === 'RAMP') {
-        // Elevated launch ramp to highway plateau
         const segW = 420 + Math.floor(Math.random() * 80);
         const h = 34 + Math.floor(Math.random() * 8);
         newSegments.push({
@@ -341,8 +472,7 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
           h,
         });
 
-        // Turret mounted on upper ceiling line
-        if (Math.random() < 0.45) {
+        if (curX >= 4500 && Math.random() < 0.35) {
           newTurrets.push({
             id: `turret_${curX}`,
             x: curX + segW * 0.5,
@@ -493,8 +623,8 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
       }
       tickCountRef.current += 1;
 
-      // Dynamic speed progression: fast base speed that intensifies as distance grows
-      const currentSpeed = BASE_SPEED + Math.min(1.8, distanceRef.current / 4000);
+      // Dynamic speed progression: normal base speed that intensifies smoothly as distance grows
+      const currentSpeed = BASE_SPEED + Math.min(4.2, (distanceRef.current / 5000) * 4.2);
       const nextDist = distanceRef.current + currentSpeed;
       distanceRef.current = nextDist;
 

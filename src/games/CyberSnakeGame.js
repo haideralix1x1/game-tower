@@ -29,10 +29,10 @@ const STORAGE_KEY = '@game_tower:best_snake_v1';
 const GRID_COUNT = 15;
 
 export const SNAKE_SPEEDS = [
-  { id: 'SLOW', label: '1.0× CHILL', ms: 155, accent: '#00F5D4' },
-  { id: 'NORMAL', label: '1.5× CLASSIC', ms: 110, accent: '#00F5FF' },
-  { id: 'FAST', label: '2.0× TURBO', ms: 75, accent: '#FFE600' },
-  { id: 'HYPER', label: '2.5× HYPER', ms: 52, accent: '#FF0055' },
+  { id: 'SLOW', label: '1.0× CHILL', ms: 220, accent: '#00F5D4' },
+  { id: 'NORMAL', label: '1.5× CLASSIC', ms: 175, accent: '#00F5FF' },
+  { id: 'FAST', label: '2.0× TURBO', ms: 140, accent: '#FFE600' },
+  { id: 'HYPER', label: '2.5× HYPER', ms: 110, accent: '#FF0055' },
 ];
 
 const monoFont = Platform.select({
@@ -275,6 +275,18 @@ export default function CyberSnakeGame({ onBackToHub, onScoreUpdate, isPaused = 
           accentColor={activeSpeed.accent}
           onBack={onBackToHub}
           onReset={() => resetGame(true)}
+          rightExtra={
+            <Pressable
+              onPress={() => resetGame(true)}
+              style={({ pressed }) => [
+                localStyles.headerSpeedBtn,
+                { borderColor: `${activeSpeed.accent}88` },
+                pressed && { opacity: 0.7 },
+              ]}
+            >
+              <Text style={[localStyles.headerSpeedBtnText, { color: activeSpeed.accent }]}>SPEED</Text>
+            </Pressable>
+          }
         />
 
         <View style={localStyles.body}>
@@ -410,7 +422,7 @@ export default function CyberSnakeGame({ onBackToHub, onScoreUpdate, isPaused = 
             bestScore={bestScore}
             accentColor={activeSpeed.accent}
             onRetry={() => resetGame(true)}
-            retryLabel="CHANGE SPEED / RETRY"
+            retryLabel="SPEED"
             onBackToHub={onBackToHub}
           />
 
@@ -567,6 +579,22 @@ const localStyles = StyleSheet.create({
     fontSize: 22,
     color: COLORS.matrixMint,
     fontWeight: '900',
+  },
+  headerSpeedBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 6,
+  },
+  headerSpeedBtnText: {
+    fontFamily: monoFont,
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 1,
   },
   speedOverlay: {
     ...StyleSheet.absoluteFillObject,

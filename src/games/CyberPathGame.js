@@ -6,6 +6,7 @@ import {
   StyleSheet,
   Platform,
   useWindowDimensions,
+  PanResponder,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Svg, {
@@ -48,32 +49,33 @@ const STORAGE_BEST_KEY = '@game_tower:best_chamber_v1';
 const GAME_W = 360;
 const GAME_H = 340;
 
-const GRAVITY = 0.58;
-const MOVE_SPEED = 3.6;
-const JUMP_FORCE = -8.8;
+const GRAVITY = 0.52;
+const MOVE_SPEED = 2.4;
+const JUMP_FORCE = -8.6;
 
 const PLAYER_W = 20;
 const PLAYER_H = 28;
 const CRATE_SIZE = 26;
 
 /**
- * 8 Progressive Puzzle Escape Rooms
+ * 8 Interactive Unexpected Puzzle Escape Chambers
  */
 function getRoomConfig(lvl) {
   const roomIndex = (lvl - 1) % 8;
 
   // Defaults
   let title = 'TUTORIAL VAULT';
+  let hint = 'FIND THE ESCAPE SOLUTION';
   let playerStart = { x: 30, y: 260 };
-  let exitDoor = { x: 310, y: 254, w: 28, h: 42, locked: true };
+  let exitDoor = { x: 310, y: 254, w: 28, h: 42, locked: true, isDraggable: false };
   let platforms = [
     // Floor
-    { x: 0, y: 300, w: 360, h: 40 },
+    { id: 'floor', x: 0, y: 300, w: 360, h: 40 },
     // Outer walls
-    { x: 0, y: 0, w: 12, h: 300 },
-    { x: 348, y: 0, w: 12, h: 300 },
+    { id: 'w_left', x: 0, y: 0, w: 12, h: 300 },
+    { id: 'w_right', x: 348, y: 0, w: 12, h: 300 },
     // Ceiling
-    { x: 0, y: 0, w: 360, h: 12 },
+    { id: 'ceiling', x: 0, y: 0, w: 360, h: 12 },
   ];
   let crates = [];
   let switches = [];
@@ -81,101 +83,81 @@ function getRoomConfig(lvl) {
   let plates = [];
   let hazards = [];
   let barriers = [];
+  let plug = null;
+  let padlock = null;
 
   if (roomIndex === 0) {
-    // Room 1: High Ledge Key (Basic Jump & Key unlock)
-    title = 'CHAMBER 01: KEYCARD RETRIEVAL';
-    platforms.push(
-      { x: 120, y: 230, w: 80, h: 14 },
-      { x: 220, y: 170, w: 80, h: 14 }
-    );
-    keys.push({ id: 'k1', x: 250, y: 145, taken: false, color: '#FFD166' });
+    // Room 1: Unreachable Floating Key -> Drag it down!
+    title = 'CHAMBER 01: UNREACHABLE KEY';
+    hint = 'CANNOT JUMP TO KEY? DRAG IT DOWN WITH YOUR FINGER!';
+    // No platforms under the key! High floating key
+    keys.push({ id: 'k1', x: 190, y: 110, taken: false, color: '#FFD166', isDraggable: true });
   } else if (roomIndex === 1) {
-    // Room 2: The Laser Barrier & Switch
-    title = 'CHAMBER 02: CIRCUIT OVERRIDE';
+    // Room 2: Movable Metal Slab blocks Laser
+    title = 'CHAMBER 02: LASER INTERCEPT';
+    hint = 'DRAG THE FLOATING METAL SLAB TO BLOCK THE LASER!';
     platforms.push(
-      { x: 40, y: 210, w: 75, h: 14 },
-      { x: 140, y: 160, w: 80, h: 14 }
+      { id: 'mov_p1', x: 140, y: 120, w: 55, h: 16, isDraggable: true, color: '#FFE600' }
     );
-    switches.push({ id: 'sw1', x: 175, y: 140, active: false });
-    barriers.push({ id: 'b1', x: 270, y: 200, w: 8, h: 100, active: true, color: '#FF0055' });
+    barriers.push({ id: 'b1', x: 230, y: 190, w: 8, h: 110, active: true, color: '#FF0055' });
+    switches.push({ id: 'sw1', x: 280, y: 270, active: false });
   } else if (roomIndex === 2) {
-    // Room 3: Pushable Crate to reach high wall
+    // Room 3: Draggable Crates to climb high wall
     title = 'CHAMBER 03: CRATE ELEVATION';
-    // High ledge separating room
+    hint = 'DRAG & DROP THE CRATES TO BUILD ESCAPE STAIRS!';
     platforms.push(
-      { x: 180, y: 200, w: 180, h: 100 }
+      { id: 'plateau', x: 200, y: 190, w: 160, h: 110 }
     );
-    exitDoor = { x: 305, y: 158, w: 28, h: 42, locked: true };
-    crates.push({ id: 'c1', x: 110, y: 270, vx: 0, vy: 0 });
-    keys.push({ id: 'k1', x: 240, y: 165, taken: false, color: '#00F5FF' });
+    exitDoor = { x: 310, y: 148, w: 28, h: 42, locked: true, isDraggable: false };
+    crates.push(
+      { id: 'c1', x: 50, y: 270, vx: 0, vy: 0, isDraggable: true },
+      { id: 'c2', x: 100, y: 270, vx: 0, vy: 0, isDraggable: true }
+    );
+    keys.push({ id: 'k1', x: 250, y: 155, taken: false, color: '#00F5FF', isDraggable: true });
   } else if (roomIndex === 3) {
-    // Room 4: Pressure Plate holding Exit Door open
-    title = 'CHAMBER 04: WEIGHT SENSOR';
-    crates.push({ id: 'c1', x: 90, y: 270, vx: 0, vy: 0 });
-    plates.push({ id: 'p1', x: 190, y: 295, w: 38, h: 6, pressed: false });
-    // Exit door stays unlocked ONLY when plate is pressed!
-    exitDoor = { x: 310, y: 254, w: 28, h: 42, locked: true, requiresPlate: true };
+    // Room 4: The Movable Exit Door!
+    title = 'CHAMBER 04: THE MOVABLE EXIT';
+    hint = 'DOOR IS TOO HIGH? GRAB AND DRAG THE DOOR DOWN!';
+    // Door is stranded near ceiling
+    exitDoor = { x: 310, y: 55, w: 28, h: 42, locked: true, isDraggable: true };
+    keys.push({ id: 'k1', x: 160, y: 275, taken: false, color: '#FFD166', isDraggable: true });
   } else if (roomIndex === 4) {
-    // Room 5: Spike Pit & Dual Ledges
-    title = 'CHAMBER 05: SPIKE LEAP';
-    // Platforms across a central spike pit
-    platforms.push(
-      { x: 110, y: 235, w: 55, h: 14 },
-      { x: 195, y: 190, w: 55, h: 14 }
+    // Room 5: Two-Finger Pressure Plate Override
+    title = 'CHAMBER 05: TWO-FINGER OVERRIDE';
+    hint = 'WALK ONTO PLATE A — HOLD YOUR FINGER ON PLATE B!';
+    plates.push(
+      { id: 'p1', x: 70, y: 295, w: 38, h: 6, pressed: false, pressedByFinger: false },
+      { id: 'p2', x: 220, y: 295, w: 38, h: 6, pressed: false, pressedByFinger: false }
     );
-    hazards.push({ x: 95, y: 286, w: 170, h: 14, type: 'SPIKES' });
-    keys.push({ id: 'k1', x: 215, y: 165, taken: false, color: '#FFD166' });
+    exitDoor = { x: 310, y: 254, w: 28, h: 42, locked: true, requiresDualPlates: true };
   } else if (roomIndex === 5) {
-    // Room 6: Energy Bridge & Laser Sentry
-    title = 'CHAMBER 06: ENERGY BRIDGES';
+    // Room 6: Spike Bridge Builder
+    title = 'CHAMBER 06: SPIKE BRIDGE BUILDER';
+    hint = 'DRAG THE MAGNETIC SLABS OVER THE SPIKE CHASM!';
+    hazards.push({ x: 90, y: 286, w: 160, h: 14, type: 'SPIKES' });
     platforms.push(
-      { x: 40, y: 200, w: 70, h: 14 },
-      { x: 240, y: 180, w: 100, h: 14 }
+      { id: 'bridge_a', x: 70, y: 140, w: 65, h: 14, isDraggable: true, color: '#00F5D4' },
+      { id: 'bridge_b', x: 180, y: 140, w: 65, h: 14, isDraggable: true, color: '#00F5D4' }
     );
-    exitDoor = { x: 300, y: 138, w: 28, h: 42, locked: true };
-    switches.push({ id: 'sw1', x: 70, y: 180, active: false });
-    // Bridge appears when switch active
-    barriers.push({
-      id: 'bridge1',
-      x: 130,
-      y: 200,
-      w: 95,
-      h: 12,
-      active: true,
-      isBridge: true,
-      color: '#00F5D4',
-    });
-    keys.push({ id: 'k1', x: 270, y: 155, taken: false, color: '#39FF14' });
+    keys.push({ id: 'k1', x: 290, y: 275, taken: false, color: '#39FF14', isDraggable: true });
   } else if (roomIndex === 6) {
-    // Room 7: Two-Story Puzzle (Crate Drop from 2nd floor onto plate)
-    title = 'CHAMBER 07: MEZZANINE DROP';
-    platforms.push(
-      { x: 40, y: 200, w: 120, h: 14 },
-      { x: 200, y: 230, w: 140, h: 14 }
-    );
-    crates.push({ id: 'c1', x: 70, y: 170, vx: 0, vy: 0 });
-    plates.push({ id: 'p1', x: 250, y: 225, w: 36, h: 6, pressed: false });
-    barriers.push({ id: 'b1', x: 295, y: 244, w: 8, h: 56, active: true, color: '#FF0055' });
-    keys.push({ id: 'k1', x: 100, y: 175, taken: false, color: '#FFD166' });
+    // Room 7: Pull the Power Plug!
+    title = 'CHAMBER 07: PULL THE PLUG';
+    hint = 'GATE LOCKED? DRAG & YANK THE POWER PLUG FROM WALL!';
+    barriers.push({ id: 'b1', x: 240, y: 200, w: 10, h: 100, active: true, color: '#FF0055' });
+    plug = { id: 'plug1', x: 65, y: 180, plugged: true };
+    exitDoor = { x: 310, y: 254, w: 28, h: 42, locked: false };
   } else {
-    // Room 8: Master Cyber Vault
-    title = 'CHAMBER 08: THE GRAND LOCKOUT';
-    platforms.push(
-      { x: 40, y: 220, w: 60, h: 14 },
-      { x: 130, y: 170, w: 90, h: 14 },
-      { x: 250, y: 210, w: 70, h: 14 }
-    );
-    crates.push({ id: 'c1', x: 160, y: 140, vx: 0, vy: 0 });
-    plates.push({ id: 'p1', x: 70, y: 295, w: 36, h: 6, pressed: false });
-    switches.push({ id: 'sw1', x: 280, y: 190, active: false });
-    hazards.push({ x: 140, y: 286, w: 100, h: 14, type: 'SPIKES' });
-    keys.push({ id: 'k1', x: 175, y: 145, taken: false, color: '#FFD166' });
-    barriers.push({ id: 'b1', x: 295, y: 244, w: 8, h: 56, active: true, color: '#FF0055' });
+    // Room 8: Rip the Padlock Off!
+    title = 'CHAMBER 08: RIP THE PADLOCK';
+    hint = 'NO KEYCARD FOUND? TOUCH & RIP PADLOCK OFF THE DOOR!';
+    exitDoor = { x: 310, y: 254, w: 28, h: 42, locked: true };
+    padlock = { id: 'pad1', x: 316, y: 268, onDoor: true };
   }
 
   return {
     title,
+    hint,
     playerStart,
     exitDoor,
     platforms,
@@ -185,6 +167,8 @@ function getRoomConfig(lvl) {
     plates,
     hazards,
     barriers,
+    plug,
+    padlock,
   };
 }
 
@@ -198,6 +182,7 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
   const juiceRef = useRef(null);
   const [level, setLevel] = useState(1);
   const [roomTitle, setRoomTitle] = useState('TUTORIAL VAULT');
+  const [roomHint, setRoomHint] = useState('FIND THE ESCAPE SOLUTION');
   const [score, setScore] = useState(0);
   const [bestScore, setBestScore] = useState(0);
 
@@ -218,6 +203,8 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
   const [hazards, setHazards] = useState([]);
   const [barriers, setBarriers] = useState([]);
   const [exitDoor, setExitDoor] = useState({ x: 310, y: 254, w: 28, h: 42, locked: true });
+  const [plug, setPlug] = useState(null);
+  const [padlock, setPadlock] = useState(null);
 
   const [modalVisible, setModalVisible] = useState(false);
   const [modalType, setModalType] = useState('VICTORY');
@@ -228,6 +215,7 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
   const inputRightRef = useRef(false);
   const animFrameRef = useRef(null);
   const isPlayingRef = useRef(true);
+  const draggedEntityRef = useRef(null);
 
   // Sync refs for 60 FPS physics
   const playerRef = useRef(player);
@@ -248,6 +236,10 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
   barriersRef.current = barriers;
   const exitDoorRef = useRef(exitDoor);
   exitDoorRef.current = exitDoor;
+  const plugRef = useRef(plug);
+  plugRef.current = plug;
+  const padlockRef = useRef(padlock);
+  padlockRef.current = padlock;
 
   // Load level & best score
   useEffect(() => {
@@ -286,9 +278,11 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
     setModalVisible(false);
     inputLeftRef.current = false;
     inputRightRef.current = false;
+    draggedEntityRef.current = null;
 
     const cfg = getRoomConfig(lvl);
     setRoomTitle(cfg.title);
+    setRoomHint(cfg.hint || '');
 
     const initP = {
       x: cfg.playerStart.x,
@@ -324,11 +318,222 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
 
     setExitDoor(cfg.exitDoor);
     exitDoorRef.current = cfg.exitDoor;
+
+    setPlug(cfg.plug || null);
+    plugRef.current = cfg.plug || null;
+
+    setPadlock(cfg.padlock || null);
+    padlockRef.current = cfg.padlock || null;
   }, []);
 
   useEffect(() => {
     initRoom(level);
   }, [level, initRoom]);
+
+  // Interactive Drag & Touch Puzzle Solver PanResponder
+  const arenaPanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => isPlayingRef.current && !isPausedRef.current,
+      onMoveShouldSetPanResponder: () => isPlayingRef.current && !isPausedRef.current,
+      onPanResponderGrant: (evt) => {
+        const { locationX, locationY } = evt.nativeEvent;
+        const tx = Math.max(0, Math.min(GAME_W, locationX / arenaScale));
+        const ty = Math.max(0, Math.min(GAME_H, locationY / arenaScale));
+
+        // 1. Check Padlock (Room 8)
+        const curPadlock = padlockRef.current;
+        if (curPadlock && curPadlock.onDoor) {
+          if (Math.hypot(tx - curPadlock.x, ty - curPadlock.y) < 32) {
+            draggedEntityRef.current = { type: 'PADLOCK', startX: curPadlock.x, startY: curPadlock.y };
+            triggerLightHaptic();
+            return;
+          }
+        }
+
+        // 2. Check Power Plug (Room 7)
+        const curPlug = plugRef.current;
+        if (curPlug && curPlug.plugged) {
+          if (Math.hypot(tx - curPlug.x, ty - curPlug.y) < 34) {
+            draggedEntityRef.current = { type: 'PLUG', startX: curPlug.x, startY: curPlug.y };
+            triggerLightHaptic();
+            return;
+          }
+        }
+
+        // 3. Check Keys
+        const curKeys = keysRef.current;
+        for (let i = 0; i < curKeys.length; i++) {
+          const k = curKeys[i];
+          if (!k.taken && Math.hypot(tx - k.x, ty - k.y) < 36) {
+            draggedEntityRef.current = { type: 'KEY', id: k.id, offsetX: k.x - tx, offsetY: k.y - ty };
+            triggerLightHaptic();
+            return;
+          }
+        }
+
+        // 4. Check Exit Door (if draggable)
+        const curDoor = exitDoorRef.current;
+        if (curDoor && curDoor.isDraggable) {
+          if (
+            tx >= curDoor.x - 10 &&
+            tx <= curDoor.x + curDoor.w + 10 &&
+            ty >= curDoor.y - 10 &&
+            ty <= curDoor.y + curDoor.h + 10
+          ) {
+            draggedEntityRef.current = { type: 'DOOR', offsetX: curDoor.x - tx, offsetY: curDoor.y - ty };
+            triggerLightHaptic();
+            return;
+          }
+        }
+
+        // 5. Check Draggable Platforms
+        const curPlatforms = platformsRef.current;
+        for (let i = 0; i < curPlatforms.length; i++) {
+          const p = curPlatforms[i];
+          if (p.isDraggable) {
+            if (tx >= p.x - 8 && tx <= p.x + p.w + 8 && ty >= p.y - 8 && ty <= p.y + p.h + 8) {
+              draggedEntityRef.current = { type: 'PLATFORM', id: p.id, offsetX: p.x - tx, offsetY: p.y - ty };
+              triggerLightHaptic();
+              return;
+            }
+          }
+        }
+
+        // 6. Check Crates
+        const curCrates = cratesRef.current;
+        for (let i = 0; i < curCrates.length; i++) {
+          const c = curCrates[i];
+          if (tx >= c.x - 8 && tx <= c.x + CRATE_SIZE + 8 && ty >= c.y - 8 && ty <= c.y + CRATE_SIZE + 8) {
+            draggedEntityRef.current = { type: 'CRATE', id: c.id, offsetX: c.x - tx, offsetY: c.y - ty };
+            triggerLightHaptic();
+            return;
+          }
+        }
+
+        // 7. Check Pressure Plates (Finger-Press)
+        const curPlates = platesRef.current;
+        let platePressed = false;
+        for (let i = 0; i < curPlates.length; i++) {
+          const pl = curPlates[i];
+          if (tx >= pl.x - 12 && tx <= pl.x + pl.w + 12 && ty >= pl.y - 14 && ty <= pl.y + pl.h + 14) {
+            pl.pressedByFinger = true;
+            platePressed = true;
+          }
+        }
+        if (platePressed) {
+          setPlates([...curPlates]);
+          playTapSound();
+          triggerLightHaptic();
+        }
+      },
+      onPanResponderMove: (evt) => {
+        const { locationX, locationY } = evt.nativeEvent;
+        const tx = Math.max(0, Math.min(GAME_W, locationX / arenaScale));
+        const ty = Math.max(0, Math.min(GAME_H, locationY / arenaScale));
+        const dragged = draggedEntityRef.current;
+        if (!dragged) return;
+
+        if (dragged.type === 'KEY') {
+          const curKeys = keysRef.current;
+          const k = curKeys.find((item) => item.id === dragged.id);
+          if (k && !k.taken) {
+            k.x = tx + (dragged.offsetX || 0);
+            k.y = ty + (dragged.offsetY || 0);
+            setKeys([...curKeys]);
+
+            // Dropped onto player check!
+            const curPlayer = playerRef.current;
+            const distToPlayer = Math.hypot(k.x - (curPlayer.x + PLAYER_W / 2), k.y - (curPlayer.y + PLAYER_H / 2));
+            const curDoor = exitDoorRef.current;
+            const distToDoor = Math.hypot(k.x - (curDoor.x + curDoor.w / 2), k.y - (curDoor.y + curDoor.h / 2));
+
+            if (distToPlayer < 30 || distToDoor < 34) {
+              k.taken = true;
+              exitDoorRef.current.locked = false;
+              setExitDoor({ ...exitDoorRef.current });
+              setKeys([...curKeys]);
+              playPerfectSound(4);
+              triggerPerfectHaptic(2);
+              juiceRef.current?.burst(k.x, k.y, k.color || '#FFD166', 18);
+              draggedEntityRef.current = null;
+            }
+          }
+        } else if (dragged.type === 'CRATE') {
+          const curCrates = cratesRef.current;
+          const c = curCrates.find((item) => item.id === dragged.id);
+          if (c) {
+            c.x = Math.max(14, Math.min(GAME_W - CRATE_SIZE - 14, tx + (dragged.offsetX || 0)));
+            c.y = Math.max(14, Math.min(GAME_H - CRATE_SIZE - 42, ty + (dragged.offsetY || 0)));
+            c.vx = 0;
+            c.vy = 0;
+            setCrates([...curCrates]);
+          }
+        } else if (dragged.type === 'PLATFORM') {
+          const curPlatforms = platformsRef.current;
+          const p = curPlatforms.find((item) => item.id === dragged.id);
+          if (p) {
+            p.x = Math.max(12, Math.min(GAME_W - p.w - 12, tx + (dragged.offsetX || 0)));
+            p.y = Math.max(12, Math.min(286, ty + (dragged.offsetY || 0)));
+            setPlatforms([...curPlatforms]);
+          }
+        } else if (dragged.type === 'DOOR') {
+          const curDoor = exitDoorRef.current;
+          curDoor.x = Math.max(14, Math.min(GAME_W - curDoor.w - 14, tx + (dragged.offsetX || 0)));
+          curDoor.y = Math.max(40, Math.min(258, ty + (dragged.offsetY || 0)));
+          setExitDoor({ ...curDoor });
+        } else if (dragged.type === 'PLUG') {
+          const curPlug = plugRef.current;
+          if (curPlug && curPlug.plugged) {
+            curPlug.x = tx;
+            curPlug.y = ty;
+            setPlug({ ...curPlug });
+            if (Math.abs(tx - dragged.startX) > 35 || Math.abs(ty - dragged.startY) > 25) {
+              curPlug.plugged = false;
+              setPlug({ ...curPlug });
+              const curBarriers = barriersRef.current;
+              curBarriers.forEach((b) => (b.active = false));
+              setBarriers([...curBarriers]);
+              playSliceSound();
+              triggerMediumHaptic();
+              juiceRef.current?.burst(tx, ty, '#00F5D4', 16);
+              draggedEntityRef.current = null;
+            }
+          }
+        } else if (dragged.type === 'PADLOCK') {
+          const curPad = padlockRef.current;
+          if (curPad && curPad.onDoor) {
+            curPad.x = tx;
+            curPad.y = ty;
+            setPadlock({ ...curPad });
+            if (Math.hypot(tx - dragged.startX, ty - dragged.startY) > 40) {
+              curPad.onDoor = false;
+              setPadlock({ ...curPad });
+              exitDoorRef.current.locked = false;
+              setExitDoor({ ...exitDoorRef.current });
+              playPerfectSound(5);
+              triggerPerfectHaptic(3);
+              juiceRef.current?.burst(tx, ty, '#FFD166', 22);
+              draggedEntityRef.current = null;
+            }
+          }
+        }
+      },
+      onPanResponderRelease: () => {
+        draggedEntityRef.current = null;
+        const curPlates = platesRef.current;
+        let changed = false;
+        for (let i = 0; i < curPlates.length; i++) {
+          if (curPlates[i].pressedByFinger) {
+            curPlates[i].pressedByFinger = false;
+            changed = true;
+          }
+        }
+        if (changed) {
+          setPlates([...curPlates]);
+        }
+      },
+    })
+  ).current;
 
   // Jump handler
   const handleJump = useCallback(() => {
@@ -581,7 +786,7 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
             c.y + CRATE_SIZE <= pl.y + 12
         );
 
-        const pressed = isPlayerOn || isCrateOn;
+        const pressed = isPlayerOn || isCrateOn || Boolean(pl.pressedByFinger);
         if (pressed !== pl.pressed) {
           pl.pressed = pressed;
           platesUpdated = true;
@@ -594,7 +799,7 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
       }
       if (platesUpdated) {
         platesRef.current = curPlates;
-        setPlates(curPlates);
+        setPlates([...curPlates]);
       }
 
       // 5. Switches Interaction (Touched by player)
@@ -643,8 +848,10 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
       const allKeysCollected = curKeys.every((k) => k.taken);
       const allPlatesPressed = curPlates.length === 0 || curPlates.every((pl) => pl.pressed);
       const allSwitchesActive = curSwitches.length === 0 || curSwitches.every((sw) => sw.active);
+      const curPad = padlockRef.current;
+      const padlockCleared = !curPad || !curPad.onDoor;
 
-      const isUnlocked = allKeysCollected && allPlatesPressed && allSwitchesActive;
+      const isUnlocked = allKeysCollected && allPlatesPressed && allSwitchesActive && padlockCleared;
       if (isUnlocked !== !curDoor.locked) {
         curDoor.locked = !isUnlocked;
         exitDoorRef.current = curDoor;
@@ -730,39 +937,48 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
         />
 
         {/* Level & Objective HUD */}
-        <View style={styles.topHud}>
-          <View style={styles.stageBox}>
-            <Text style={styles.stageNum}>ROOM {level}</Text>
-            <Text style={styles.stageTitle}>{roomTitle}</Text>
-          </View>
+        <View style={styles.topHudWrapper}>
+          <View style={styles.topHudRow}>
+            <View style={styles.stageBox}>
+              <Text style={styles.stageNum}>ROOM {level}</Text>
+              <Text style={styles.stageTitle}>{roomTitle}</Text>
+            </View>
 
-          <View style={styles.statusRow}>
-            {keys.length > 0 && (
-              <View style={styles.hudBadge}>
-                <Text style={styles.hudBadgeText}>
-                  🔑 {keys.filter((k) => k.taken).length}/{keys.length}
-                </Text>
-              </View>
-            )}
-            <View
-              style={[
-                styles.hudBadge,
-                { borderColor: exitDoor.locked ? '#FF3366' : '#00F5D4' },
-              ]}
-            >
-              <Text
+            <View style={styles.statusRow}>
+              {keys.length > 0 && (
+                <View style={styles.hudBadge}>
+                  <Text style={styles.hudBadgeText}>
+                    🔑 {keys.filter((k) => k.taken).length}/{keys.length}
+                  </Text>
+                </View>
+              )}
+              <View
                 style={[
-                  styles.hudBadgeText,
-                  { color: exitDoor.locked ? '#FF3366' : '#00F5D4' },
+                  styles.hudBadge,
+                  { borderColor: exitDoor.locked ? '#FF3366' : '#00F5D4' },
                 ]}
               >
-                {exitDoor.locked ? '🔒 LOCKED' : '🔓 ESCAPE!'}
-              </Text>
+                <Text
+                  style={[
+                    styles.hudBadgeText,
+                    { color: exitDoor.locked ? '#FF3366' : '#00F5D4' },
+                  ]}
+                >
+                  {exitDoor.locked ? '🔒 LOCKED' : '🔓 ESCAPE!'}
+                </Text>
+              </View>
             </View>
           </View>
+
+          {/* Puzzle Hint Banner */}
+          {roomHint ? (
+            <View style={styles.hintBanner}>
+              <Text style={styles.hintBannerText}>💡 {roomHint}</Text>
+            </View>
+          ) : null}
         </View>
 
-        {/* Room Arena */}
+        {/* Room Arena with Interactive Touch/Drag */}
         <View style={styles.arenaWrapper}>
           <View
             style={[
@@ -773,6 +989,7 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
                 transform: [{ scale: arenaScale }],
               },
             ]}
+            {...arenaPanResponder.panHandlers}
           >
             <Svg width={GAME_W} height={GAME_H} style={StyleSheet.absoluteFill}>
               <Defs>
@@ -908,11 +1125,14 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
                 </G>
               ))}
 
-              {/* Golden Keys */}
+              {/* Golden Keys (Draggable by finger!) */}
               {keys.map((k) => {
                 if (k.taken) return null;
                 return (
                   <G key={k.id} transform={`translate(${k.x}, ${k.y})`}>
+                    {k.isDraggable && (
+                      <Circle cx={0} cy={2} r={16} stroke={k.color} strokeWidth={1.5} strokeDasharray="3 2" opacity={0.75} />
+                    )}
                     <Circle cx={0} cy={-5} r={5} stroke={k.color} strokeWidth={2} fill="none" />
                     <Line x1={0} y1={0} x2={0} y2={10} stroke={k.color} strokeWidth={2.5} />
                     <Line x1={0} y1={4} x2={4} y2={4} stroke={k.color} strokeWidth={2} />
@@ -921,7 +1141,7 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
                 );
               })}
 
-              {/* Pushable Crates */}
+              {/* Pushable / Draggable Crates */}
               {crates.map((c) => (
                 <G key={c.id}>
                   <Rect
@@ -937,8 +1157,26 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
                   {/* Cross braces on crate */}
                   <Line x1={c.x + 3} y1={c.y + 3} x2={c.x + CRATE_SIZE - 3} y2={c.y + CRATE_SIZE - 3} stroke="#FCD34D" strokeWidth={1.5} />
                   <Line x1={c.x + CRATE_SIZE - 3} y1={c.y + 3} x2={c.x + 3} y2={c.y + CRATE_SIZE - 3} stroke="#FCD34D" strokeWidth={1.5} />
+                  {/* Draggable center handle dot */}
+                  <Circle cx={c.x + CRATE_SIZE / 2} cy={c.y + CRATE_SIZE / 2} r={3.5} fill="#FFFFFF" opacity={0.8} />
                 </G>
               ))}
+
+              {/* Interactive Power Plug (Room 7) */}
+              {plug && (
+                <G>
+                  <Rect x={48} y={168} width={14} height={20} fill="#141E28" stroke="#00F5FF" strokeWidth={1.5} rx={3} />
+                  <Path
+                    d={`M${plug.x},${plug.y} Q${(plug.x + 240) / 2},${plug.y + 35} 240,240`}
+                    stroke={plug.plugged ? '#00F5FF' : '#556677'}
+                    strokeWidth={2.5}
+                    fill="none"
+                    strokeDasharray={plug.plugged ? undefined : '4 3'}
+                  />
+                  <Rect x={plug.x - 9} y={plug.y - 9} width={18} height={18} fill="#FFE600" stroke="#FFFFFF" strokeWidth={1.5} rx={4} />
+                  <Circle cx={plug.x} cy={plug.y} r={3.5} fill="#000000" />
+                </G>
+              )}
 
               {/* Exit Door */}
               <G transform={`translate(${exitDoor.x}, ${exitDoor.y})`}>
@@ -959,7 +1197,24 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
                   r={exitDoor.locked ? 4 : 7}
                   fill={exitDoor.locked ? '#FF0055' : '#00F5D4'}
                 />
+                {exitDoor.isDraggable && (
+                  <Circle cx={exitDoor.w / 2} cy={8} r={3} fill="#FFE600" />
+                )}
               </G>
+
+              {/* Giant Padlock on Door (Room 8) */}
+              {padlock && (
+                <G transform={`translate(${padlock.x}, ${padlock.y})`}>
+                  <Path
+                    d="M-5,-4 C-5,-14 5,-14 5,-4"
+                    stroke={padlock.onDoor ? '#FFE600' : '#8899AA'}
+                    strokeWidth={3}
+                    fill="none"
+                  />
+                  <Rect x={-8} y={-4} width={16} height={14} fill="#F59E0B" stroke="#FFFFFF" strokeWidth={1.5} rx={3} />
+                  <Circle cx={0} cy={3} r={2} fill="#000000" />
+                </G>
+              )}
 
               {/* Player Character */}
               <G transform={`translate(${player.x}, ${player.y})`}>
@@ -1056,15 +1311,34 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#04060C',
   },
-  topHud: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  topHudWrapper: {
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingVertical: 6,
     backgroundColor: 'rgba(8, 12, 22, 0.85)',
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(0, 245, 255, 0.2)',
+  },
+  topHudRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  hintBanner: {
+    marginTop: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    backgroundColor: 'rgba(255, 230, 0, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 230, 0, 0.35)',
+    alignSelf: 'flex-start',
+  },
+  hintBannerText: {
+    fontFamily: monoFont,
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: '#FFE600',
+    letterSpacing: 0.5,
   },
   stageBox: {
     flexDirection: 'column',

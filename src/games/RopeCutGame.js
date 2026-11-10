@@ -61,6 +61,32 @@ function checkLineIntersection(x1, y1, x2, y2, x3, y3, x4, y4) {
   return null;
 }
 
+function distToSegment(px, py, x1, y1, x2, y2) {
+  const l2 = (x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1);
+  if (l2 === 0) return Math.hypot(px - x1, py - y1);
+  let t = ((px - x1) * (x2 - x1) + (py - y1) * (y2 - y1)) / l2;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(px - (x1 + t * (x2 - x1)), py - (y1 + t * (y2 - y1)));
+}
+
+function doesSwipeCutRope(p1, p2, ax, ay, sx, sy) {
+  if (checkLineIntersection(p1.x, p1.y, p2.x, p2.y, ax, ay, sx, sy)) {
+    return true;
+  }
+  if (distToSegment(p2.x, p2.y, ax, ay, sx, sy) < 18) {
+    return true;
+  }
+  if (distToSegment(p1.x, p1.y, ax, ay, sx, sy) < 18) {
+    return true;
+  }
+  const midX = (p1.x + p2.x) * 0.5;
+  const midY = (p1.y + p2.y) * 0.5;
+  if (distToSegment(midX, midY, ax, ay, sx, sy) < 18) {
+    return true;
+  }
+  return false;
+}
+
 /**
  * Generate Spider Rope Levels
  */
@@ -222,11 +248,21 @@ function createSpiderLevel(lvl, arenaW, arenaH) {
     nest = { x: arenaW * 0.5, y: arenaH - 75, radius: 44, isMoving: true, baseX: arenaW * 0.5 };
   }
 
+  // Extract ceiling anchor hooks and guarantee versatile swing anchors across arena
+  const hooks = ropes.map((r) => ({ id: `hook_${r.id}`, x: r.ax, y: r.ay, color: r.color }));
+  const hasLeft = hooks.some((h) => h.x < arenaW * 0.32);
+  const hasRight = hooks.some((h) => h.x > arenaW * 0.68);
+  const hasMid = hooks.some((h) => h.x >= arenaW * 0.32 && h.x <= arenaW * 0.68);
+  if (!hasLeft) hooks.push({ id: 'hook_extra_left', x: arenaW * 0.18, y: 60, color: '#00F5FF' });
+  if (!hasMid) hooks.push({ id: 'hook_extra_mid', x: arenaW * 0.50, y: 45, color: '#39FF14' });
+  if (!hasRight) hooks.push({ id: 'hook_extra_right', x: arenaW * 0.82, y: 60, color: '#FF007F' });
+
   return {
     title,
     spiderX,
     spiderY,
     ropes,
+    hooks,
     nest,
     stars,
     bouncers,
@@ -259,6 +295,8 @@ export default function RopeCutGame({ onBackToHub, onScoreUpdate, isPaused = fal
   });
 
   const [ropes, setRopes] = useState([]);
+  const [hooks, setHooks] = useState([]);
+  const [webAim, setWebAim] = useState(null);
   const [nest, setNest] = useState({
     x: arenaWidth * 0.5,
     y: arenaHeight - 75,
@@ -279,6 +317,10 @@ export default function RopeCutGame({ onBackToHub, onScoreUpdate, isPaused = fal
   spiderRef.current = spider;
   const ropesRef = useRef(ropes);
   ropesRef.current = ropes;
+  const hooksRef = useRef(hooks);
+  hooksRef.current = hooks;
+  const webAimRef = useRef(webAim);
+  webAimRef.current = webAim;
   const nestRef = useRef(nest);
   nestRef.current = nest;
   const starsRef = useRef(stars);
@@ -289,6 +331,9 @@ export default function RopeCutGame({ onBackToHub, onScoreUpdate, isPaused = fal
   portalsRef.current = portals;
   const lasersRef = useRef(lasers);
   lasersRef.current = lasers;
+
+  const dragModeRef = useRef('NONE');
+  const touchLastPosRef = useRef(null);
 
   const tickCountRef = useRef(0);
   const portalCooldownRef = useRef(0);
@@ -327,6 +372,52 @@ export default function RopeCutGame({ onBackToHub, onScoreUpdate, isPaused = fal
     [bestScore, onScoreUpdate]
   );
 
+  // Web-Shooting and Synchronous Rope Slicing
+  const shootWebToHook = useCallback((hook) => {
+    const curSpider = spiderRef.current;
+    const dist = Math.hypot(curSpider.x - hook.x, curSpider.y - hook.y);
+    const newRope = {
+      id: `rope_shoot_${Date.now()}_${Math.random()}`,
+      ax: hook.x,
+      ay: hook.y,
+      len: Math.max(70, dist * 0.96),
+      color: hook.color || '#39FF14',
+      intact: true,
+    };
+    ropesRef.current.push(newRope);
+    setRopes([...ropesRef.current]);
+    playTapSound();
+    triggerPerfectHaptic(2);
+    if (juiceRef.current) {
+      juiceRef.current.burst(hook.x, hook.y, '#39FF14', 16);
+    }
+  }, []);
+
+  const cutRopesAtPoint = useCallback((p1, p2) => {
+    const curSpider = spiderRef.current;
+    let cutOccurred = false;
+    const currentRopes = ropesRef.current;
+
+    for (let i = 0; i < currentRopes.length; i++) {
+      const r = currentRopes[i];
+      if (!r.intact) continue;
+
+      if (doesSwipeCutRope(p1, p2, r.ax, r.ay, curSpider.x, curSpider.y)) {
+        r.intact = false;
+        cutOccurred = true;
+        playSliceSound();
+        triggerSliceHaptic();
+        if (juiceRef.current) {
+          juiceRef.current.burst(p2.x, p2.y, r.color, 14);
+        }
+      }
+    }
+
+    if (cutOccurred) {
+      setRopes([...currentRopes]);
+    }
+  }, []);
+
   // Initialize level
   const initLevel = useCallback(
     (lvl) => {
@@ -334,6 +425,10 @@ export default function RopeCutGame({ onBackToHub, onScoreUpdate, isPaused = fal
       setStarsCollected(0);
       setModalVisible(false);
       setCutTrail(null);
+      setWebAim(null);
+      webAimRef.current = null;
+      dragModeRef.current = 'NONE';
+      touchLastPosRef.current = null;
       tickCountRef.current = 0;
       portalCooldownRef.current = 0;
 
@@ -352,6 +447,9 @@ export default function RopeCutGame({ onBackToHub, onScoreUpdate, isPaused = fal
 
       setRopes(cfg.ropes);
       ropesRef.current = cfg.ropes;
+
+      setHooks(cfg.hooks || []);
+      hooksRef.current = cfg.hooks || [];
 
       setNest(cfg.nest);
       nestRef.current = cfg.nest;
@@ -375,53 +473,92 @@ export default function RopeCutGame({ onBackToHub, onScoreUpdate, isPaused = fal
     initLevel(level);
   }, [level, initLevel]);
 
-  // PanResponder to slice ropes
+  // PanResponder to slice ropes or shoot webs
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => !isPausedRef.current && isPlayingRef.current,
       onMoveShouldSetPanResponder: () => !isPausedRef.current && isPlayingRef.current,
       onPanResponderGrant: (evt) => {
         const { locationX, locationY } = evt.nativeEvent;
+        touchLastPosRef.current = { x: locationX, y: locationY };
+
+        // 1. Direct Tap on Hook: Shoot web immediately!
+        const currentHooks = hooksRef.current;
+        const tappedHook = currentHooks.find((h) => Math.hypot(locationX - h.x, locationY - h.y) < 32);
+        if (tappedHook) {
+          shootWebToHook(tappedHook);
+          dragModeRef.current = 'NONE';
+          return;
+        }
+
+        // 2. Spider Drag: Aim web towards any hook!
+        const curSpider = spiderRef.current;
+        const distToSpider = Math.hypot(locationX - curSpider.x, locationY - curSpider.y);
+        if (distToSpider < 44) {
+          dragModeRef.current = 'WEB';
+          const aimObj = {
+            fromX: curSpider.x,
+            fromY: curSpider.y,
+            toX: locationX,
+            toY: locationY,
+            targetHook: null,
+          };
+          webAimRef.current = aimObj;
+          setWebAim(aimObj);
+          triggerLightHaptic();
+          return;
+        }
+
+        // 3. Otherwise: Swipe to slice/cut ropes
+        dragModeRef.current = 'CUT';
         setCutTrail({ x1: locationX, y1: locationY, x2: locationX, y2: locationY });
+        cutRopesAtPoint({ x: locationX, y: locationY }, { x: locationX, y: locationY });
       },
       onPanResponderMove: (evt) => {
         const { locationX, locationY } = evt.nativeEvent;
-        setCutTrail((prev) => {
-          if (!prev) return { x1: locationX, y1: locationY, x2: locationX, y2: locationY };
-          const p1 = { x: prev.x2, y: prev.y2 };
-          const p2 = { x: locationX, y: locationY };
+        const p1 = touchLastPosRef.current || { x: locationX, y: locationY };
+        const p2 = { x: locationX, y: locationY };
+        touchLastPosRef.current = p2;
 
+        if (dragModeRef.current === 'WEB') {
           const curSpider = spiderRef.current;
-          setRopes((currentRopes) => {
-            let cutOccurred = false;
-            const updated = currentRopes.map((r) => {
-              if (!r.intact) return r;
-
-              // Rope line segment from anchor to spider
-              const hit = checkLineIntersection(p1.x, p1.y, p2.x, p2.y, r.ax, r.ay, curSpider.x, curSpider.y);
-              if (hit) {
-                cutOccurred = true;
-                playSliceSound();
-                triggerSliceHaptic();
-                if (juiceRef.current) {
-                  juiceRef.current.burst(hit.x, hit.y, r.color, 12);
-                }
-                return { ...r, intact: false };
-              }
-              return r;
-            });
-
-            if (cutOccurred) {
-              ropesRef.current = updated;
+          const currentHooks = hooksRef.current;
+          let bestHook = null;
+          let minDist = 75;
+          for (let i = 0; i < currentHooks.length; i++) {
+            const h = currentHooks[i];
+            const d = Math.hypot(p2.x - h.x, p2.y - h.y);
+            if (d < minDist) {
+              minDist = d;
+              bestHook = h;
             }
-            return updated;
-          });
-
-          return { x1: prev.x1, y1: prev.y1, x2: locationX, y2: locationY };
-        });
+          }
+          const aimObj = {
+            fromX: curSpider.x,
+            fromY: curSpider.y,
+            toX: p2.x,
+            toY: p2.y,
+            targetHook: bestHook,
+          };
+          webAimRef.current = aimObj;
+          setWebAim(aimObj);
+        } else if (dragModeRef.current === 'CUT') {
+          setCutTrail({ x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y });
+          cutRopesAtPoint(p1, p2);
+        }
       },
       onPanResponderRelease: () => {
+        if (dragModeRef.current === 'WEB') {
+          const aim = webAimRef.current;
+          if (aim && aim.targetHook) {
+            shootWebToHook(aim.targetHook);
+          }
+        }
+        dragModeRef.current = 'NONE';
+        touchLastPosRef.current = null;
         setCutTrail(null);
+        setWebAim(null);
+        webAimRef.current = null;
       },
     })
   ).current;
@@ -694,7 +831,7 @@ export default function RopeCutGame({ onBackToHub, onScoreUpdate, isPaused = fal
           </View>
 
           <View style={styles.hudBadge}>
-            <Text style={styles.hudHint}>SWIPE TO CUT WEBS</Text>
+            <Text style={styles.hudHint}>SWIPE TO CUT • DRAG SPIDER TO SHOOT WEB</Text>
           </View>
         </View>
 
@@ -750,16 +887,64 @@ export default function RopeCutGame({ onBackToHub, onScoreUpdate, isPaused = fal
               <Line x1={-nest.radius * 0.7} y1={nest.radius * 0.7} x2={nest.radius * 0.7} y2={-nest.radius * 0.7} stroke="#00F5D4" strokeWidth={1.5} opacity={0.65} />
             </G>
 
-            {/* Web Ropes Attached to Spider */}
+            {/* Ceiling Anchor Hooks (Always visible, even after rope is cut) */}
+            {hooks.map((h) => {
+              const isTargeted = webAim?.targetHook?.id === h.id;
+              return (
+                <G key={h.id}>
+                  {isTargeted && (
+                    <Circle
+                      cx={h.x}
+                      cy={h.y}
+                      r={18}
+                      stroke="#39FF14"
+                      strokeWidth={2.5}
+                      strokeDasharray="4 3"
+                    />
+                  )}
+                  <Circle cx={h.x} cy={h.y} r={9} fill="#050B14" stroke={h.color || '#00F5FF'} strokeWidth={2.5} />
+                  <Circle cx={h.x} cy={h.y} r={4} fill={isTargeted ? '#39FF14' : h.color || '#00F5FF'} />
+                  {/* Anchor Crosshair */}
+                  <Line x1={h.x - 12} y1={h.y} x2={h.x + 12} y2={h.y} stroke={h.color || '#00F5FF'} strokeWidth={1} opacity={0.6} />
+                  <Line x1={h.x} y1={h.y - 12} x2={h.x} y2={h.y + 12} stroke={h.color || '#00F5FF'} strokeWidth={1} opacity={0.6} />
+                </G>
+              );
+            })}
+
+            {/* Web Aiming Beam when dragging from Spider */}
+            {webAim && (
+              <G>
+                {/* Aiming strand */}
+                <Line
+                  x1={webAim.fromX}
+                  y1={webAim.fromY}
+                  x2={webAim.toX}
+                  y2={webAim.toY}
+                  stroke="#39FF14"
+                  strokeWidth={2}
+                  strokeDasharray="5 3"
+                  opacity={0.8}
+                />
+                <Circle cx={webAim.toX} cy={webAim.toY} r={10} stroke="#39FF14" strokeWidth={2} fill="rgba(57, 255, 20, 0.25)" />
+                {webAim.targetHook && (
+                  <Line
+                    x1={spider.x}
+                    y1={spider.y}
+                    x2={webAim.targetHook.x}
+                    y2={webAim.targetHook.y}
+                    stroke="#39FF14"
+                    strokeWidth={3}
+                  />
+                )}
+              </G>
+            )}
+
+            {/* Active Web Strands Attached to Spider */}
             {ropes.map((r) => {
               if (!r.intact) return null;
 
               return (
                 <G key={r.id}>
-                  {/* Ceiling Anchor */}
-                  <Circle cx={r.ax} cy={r.ay} r={7} fill="#FFFFFF" stroke={r.color} strokeWidth={2} />
-                  <Circle cx={r.ax} cy={r.ay} r={3} fill={r.color} />
-
                   {/* Glowing Silk Web Strand */}
                   <Line
                     x1={r.ax}
