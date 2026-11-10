@@ -28,6 +28,13 @@ import {
 const STORAGE_KEY = '@game_tower:best_snake_v1';
 const GRID_COUNT = 15;
 
+export const SNAKE_SPEEDS = [
+  { id: 'SLOW', label: '1.0× CHILL', ms: 155, accent: '#00F5D4' },
+  { id: 'NORMAL', label: '1.5× CLASSIC', ms: 110, accent: '#00F5FF' },
+  { id: 'FAST', label: '2.0× TURBO', ms: 75, accent: '#FFE600' },
+  { id: 'HYPER', label: '2.5× HYPER', ms: 52, accent: '#FF0055' },
+];
+
 const monoFont = Platform.select({
   ios: 'Menlo',
   android: 'monospace',
@@ -55,7 +62,10 @@ export default function CyberSnakeGame({ onBackToHub, onScoreUpdate, isPaused = 
 
   const [score, setScore] = useState(0);
   const [bestScore, setBestScore] = useState(0);
-  const [status, setStatus] = useState('PLAYING');
+  const [selectedSpeedKey, setSelectedSpeedKey] = useState('NORMAL');
+  const [status, setStatus] = useState('SPEED_SELECT');
+  const activeSpeed = SNAKE_SPEEDS.find((s) => s.id === selectedSpeedKey) || SNAKE_SPEEDS[1];
+
   const [renderState, setRenderState] = useState(() => {
     const initialSnake = [
       { r: 7, c: 7 },
@@ -79,7 +89,7 @@ export default function CyberSnakeGame({ onBackToHub, onScoreUpdate, isPaused = 
     food: { r: 4, c: 10, isGold: false },
     score: 0,
     best: 0,
-    running: true,
+    running: false,
   });
 
   useEffect(() => {
@@ -109,7 +119,7 @@ export default function CyberSnakeGame({ onBackToHub, onScoreUpdate, isPaused = 
     [onScoreUpdate]
   );
 
-  const resetGame = useCallback(() => {
+  const resetGame = useCallback((forceSpeedSelect = false) => {
     const startSnake = [
       { r: 7, c: 7 },
       { r: 7, c: 6 },
@@ -123,13 +133,13 @@ export default function CyberSnakeGame({ onBackToHub, onScoreUpdate, isPaused = 
       nextDir: { dr: 0, dc: 1 },
       food: startFood,
       score: 0,
-      running: true,
+      running: !forceSpeedSelect,
     };
     setScore(0);
-    setStatus('PLAYING');
+    setStatus(forceSpeedSelect ? 'SPEED_SELECT' : 'PLAYING');
     setRenderState({ snake: startSnake, food: startFood });
-    if (juiceRef.current) juiceRef.current.flash(COLORS.matrixMint);
-  }, []);
+    if (juiceRef.current) juiceRef.current.flash(activeSpeed.accent);
+  }, [activeSpeed]);
 
   const changeDirection = useCallback((dr, dc) => {
     if (isPausedRef.current) return;
@@ -170,6 +180,8 @@ export default function CyberSnakeGame({ onBackToHub, onScoreUpdate, isPaused = 
   }, []);
 
   useEffect(() => {
+    if (status !== 'PLAYING') return;
+
     const timer = setInterval(() => {
       if (isPausedRef.current) return;
       const eng = engineRef.current;
@@ -232,10 +244,10 @@ export default function CyberSnakeGame({ onBackToHub, onScoreUpdate, isPaused = 
         snake: [...nextSnake],
         food: { ...eng.food },
       });
-    }, 125);
+    }, activeSpeed.ms);
 
     return () => clearInterval(timer);
-  }, [persistBest]);
+  }, [status, activeSpeed.ms, persistBest]);
 
   const panGesture = Gesture.Pan()
     .runOnJS(true)
@@ -258,12 +270,12 @@ export default function CyberSnakeGame({ onBackToHub, onScoreUpdate, isPaused = 
 
         <MiniGameHeader
           title="SNAKE"
-          floorLabel="FLOOR 11 // NEON SERPENT"
+          floorLabel={status === 'SPEED_SELECT' ? 'FLOOR 11 // SPEED SELECT' : `FLOOR 11 // ${activeSpeed.label}`}
           score={score}
           bestScore={bestScore}
-          accentColor={COLORS.matrixMint}
+          accentColor={activeSpeed.accent}
           onBack={onBackToHub}
-          onReset={resetGame}
+          onReset={() => resetGame(true)}
         />
 
         <View style={localStyles.body}>
@@ -274,6 +286,7 @@ export default function CyberSnakeGame({ onBackToHub, onScoreUpdate, isPaused = 
                 {
                   width: cellSize * GRID_COUNT + 16,
                   height: cellSize * GRID_COUNT + 16,
+                  borderColor: `${activeSpeed.accent}77`,
                 },
               ]}
             >
@@ -320,12 +333,73 @@ export default function CyberSnakeGame({ onBackToHub, onScoreUpdate, isPaused = 
                       width: cellSize - 2,
                       height: cellSize - 2,
                       backgroundColor:
-                        idx === 0 ? '#FFFFFF' : COLORS.matrixMint,
+                        idx === 0 ? '#FFFFFF' : activeSpeed.accent,
                       opacity: Math.max(0.45, 1 - idx * 0.025),
                     },
                   ]}
                 />
               ))}
+
+              {/* Speed Selection Overlay Before Game Starts */}
+              {status === 'SPEED_SELECT' && (
+                <View style={localStyles.speedOverlay}>
+                  <Text style={localStyles.speedTitle}>SELECT SPEED</Text>
+                  <Text style={localStyles.speedSub}>CHOOSE SERPENT VELOCITY</Text>
+
+                  <View style={localStyles.speedPillsContainer}>
+                    {SNAKE_SPEEDS.map((sp) => {
+                      const isSel = sp.id === selectedSpeedKey;
+                      return (
+                        <Pressable
+                          key={sp.id}
+                          onPress={() => {
+                            setSelectedSpeedKey(sp.id);
+                            triggerLightHaptic();
+                            playTapSound();
+                          }}
+                          style={[
+                            localStyles.speedPill,
+                            isSel && {
+                              borderColor: sp.accent,
+                              backgroundColor: `${sp.accent}2A`,
+                            },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              localStyles.speedPillText,
+                              { color: isSel ? sp.accent : '#8E9AA8' },
+                            ]}
+                          >
+                            {sp.label}
+                          </Text>
+                          <Text
+                            style={[
+                              localStyles.speedPillMs,
+                              { color: isSel ? '#FFFFFF' : '#5E6773' },
+                            ]}
+                          >
+                            {sp.ms}ms / step
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+
+                  <Pressable
+                    onPress={() => {
+                      triggerPerfectHaptic(2);
+                      playTapSound();
+                      setStatus('PLAYING');
+                      engineRef.current.running = true;
+                      if (juiceRef.current) juiceRef.current.flash(activeSpeed.accent);
+                    }}
+                    style={[localStyles.launchBtn, { backgroundColor: activeSpeed.accent }]}
+                  >
+                    <Text style={localStyles.launchBtnText}>▶ START SERPENT</Text>
+                  </Pressable>
+                </View>
+              )}
             </View>
           </GestureDetector>
 
@@ -333,12 +407,12 @@ export default function CyberSnakeGame({ onBackToHub, onScoreUpdate, isPaused = 
             visible={status === 'GAME_OVER'}
             type="GAME_OVER"
             title="SERPENT CRASHED!"
-            subtitle={`NEON TAIL LENGTH: ${renderState.snake.length} BLOCKS`}
+            subtitle={`SPEED: ${activeSpeed.label} // TAIL: ${renderState.snake.length} BLOCKS`}
             score={score}
             bestScore={bestScore}
-            accentColor={COLORS.matrixMint}
-            onRetry={resetGame}
-            retryLabel="PLAY AGAIN"
+            accentColor={activeSpeed.accent}
+            onRetry={() => resetGame(true)}
+            retryLabel="CHANGE SPEED / RETRY"
             onBackToHub={onBackToHub}
           />
 
@@ -495,5 +569,75 @@ const localStyles = StyleSheet.create({
     fontSize: 22,
     color: COLORS.matrixMint,
     fontWeight: '900',
+  },
+  speedOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(4, 7, 16, 0.94)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 18,
+    zIndex: 20,
+  },
+  speedTitle: {
+    fontSize: 16,
+    fontFamily: monoFont,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    letterSpacing: 1.2,
+  },
+  speedSub: {
+    fontSize: 9.5,
+    fontFamily: monoFont,
+    fontWeight: '800',
+    color: '#6A7684',
+    letterSpacing: 0.8,
+    marginTop: 2,
+    marginBottom: 16,
+  },
+  speedPillsContainer: {
+    width: '100%',
+    gap: 8,
+    marginBottom: 18,
+  },
+  speedPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+  },
+  speedPillText: {
+    fontFamily: monoFont,
+    fontSize: 12.5,
+    fontWeight: '900',
+    letterSpacing: 0.8,
+  },
+  speedPillMs: {
+    fontFamily: monoFont,
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  launchBtn: {
+    width: '100%',
+    paddingVertical: 13,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#00F5D4',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.5,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  launchBtnText: {
+    fontSize: 13.5,
+    fontFamily: monoFont,
+    fontWeight: '900',
+    color: '#030308',
+    letterSpacing: 1,
   },
 });

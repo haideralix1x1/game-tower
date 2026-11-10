@@ -8,6 +8,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import Svg, { Path, Polygon, Circle, Rect, G, Ellipse, Line } from 'react-native-svg';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS } from '../../styles';
 import MiniGameHeader from '../components/MiniGameHeader';
@@ -643,23 +644,43 @@ export default function NeonFlappyGame({ onBackToHub, onScoreUpdate, isPaused = 
               </View>
             ))}
 
-            {/* Enemy Patrol Drones */}
-            {frame.enemies.map((en) => (
-              <View
-                key={en.id}
-                style={[
-                  localStyles.enemyDrone,
-                  {
-                    left: en.x,
-                    top: en.y,
-                    width: en.size,
-                    height: en.size,
-                  },
-                ]}
-              >
-                <View style={localStyles.enemyCore} />
-              </View>
-            ))}
+            {/* Enemy Patrol Alien UFOs */}
+            {frame.enemies.map((en) => {
+              const ufoW = (en.size || 22) * 1.5;
+              const ufoH = (en.size || 22) * 1.1;
+              return (
+                <View
+                  key={en.id}
+                  style={{
+                    position: 'absolute',
+                    left: en.x - (ufoW - en.size) / 2,
+                    top: en.y - (ufoH - en.size) / 2,
+                    width: ufoW,
+                    height: ufoH,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Svg width={ufoW} height={ufoH} viewBox="0 0 34 26">
+                    {/* UFO Saucer Disc */}
+                    <Ellipse cx={17} cy={15} rx={16} ry={6.5} fill="#1C0614" stroke="#FF0055" strokeWidth={1.8} />
+                    {/* Glowing Saucer Dome */}
+                    <Ellipse cx={17} cy={9.5} rx={8.5} ry={6} fill="#0A0208" stroke="#FF0055" strokeWidth={1.5} />
+                    {/* Alien Cockpit Visor / Eye */}
+                    <Ellipse cx={17} cy={9.5} rx={4.5} ry={2.8} fill="#FF0055" />
+                    <Circle cx={18} cy={9} r={1.2} fill="#FFFFFF" />
+                    {/* Rotating Saucer Lights */}
+                    <Circle cx={4} cy={15} r={1.6} fill="#FFE600" />
+                    <Circle cx={10} cy={17} r={1.6} fill="#FF0055" />
+                    <Circle cx={17} cy={18} r={2} fill="#FFE600" />
+                    <Circle cx={24} cy={17} r={1.6} fill="#FF0055" />
+                    <Circle cx={30} cy={15} r={1.6} fill="#FFE600" />
+                    {/* Underbelly Anti-Gravity Glow */}
+                    <Line x1={12} y1={20} x2={22} y2={20} stroke="#FF007F" strokeWidth={1.8} strokeLinecap="round" />
+                  </Svg>
+                </View>
+              );
+            })}
 
             {/* Blaster Lasers in Flight */}
             {frame.lasers.map((lz) => (
@@ -675,23 +696,50 @@ export default function NeonFlappyGame({ onBackToHub, onScoreUpdate, isPaused = 
               />
             ))}
 
-            {/* Player Cyber Drone */}
+            {/* Player Cyber Drone / Jet Plane */}
             <View
-              style={[
-                localStyles.drone,
-                {
-                  left: droneX,
-                  top: frame.droneY,
-                  width: droneSize,
-                  height: droneSize,
-                  borderColor: frame.hasShield ? '#39FF14' : '#FFFFFF',
-                },
-              ]}
+              style={{
+                position: 'absolute',
+                left: droneX - 5,
+                top: frame.droneY - 2,
+                width: 38,
+                height: 30,
+              }}
             >
-              {/* Drone Eye Visor */}
-              <View style={localStyles.droneVisor} />
-              {/* Shield Bubble */}
-              {frame.hasShield && <View style={localStyles.shieldBubble} />}
+              <Svg width={38} height={30} viewBox="0 0 38 30">
+                {/* Plasma Jet Flame */}
+                <Polygon points="5,15 -2,12 -8,15 -2,18" fill="#00F5FF" opacity={0.85} />
+                <Polygon points="5,15 1,13 -3,15 1,17" fill="#FFFFFF" />
+                {/* Swept Drone/Plane Wings */}
+                <Polygon points="14,15 4,3 15,9 26,15" fill="#0A2540" stroke="#00F5FF" strokeWidth={1.4} />
+                <Polygon points="14,15 4,27 15,21 26,15" fill="#0A2540" stroke="#00F5FF" strokeWidth={1.4} />
+                {/* Wingtip Lights */}
+                <Circle cx={4} cy={3} r={1.8} fill="#39FF14" />
+                <Circle cx={4} cy={27} r={1.8} fill="#39FF14" />
+                {/* Main Cyber Jet Fuselage */}
+                <Polygon points="35,15 18,9 8,11 6,15 8,19 18,21" fill="#0D1B2A" stroke="#00F5FF" strokeWidth={1.6} />
+                {/* Jet Cockpit Canopy */}
+                <Polygon points="28,15 20,11.5 13,12.5 19,15" fill="#00F5FF" stroke="#FFFFFF" strokeWidth={0.8} />
+                {/* Center Core Reactor */}
+                <Circle cx={16} cy={15} r={2.5} fill="#FFFFFF" />
+              </Svg>
+
+              {/* Shield Bubble if active */}
+              {frame.hasShield && (
+                <View
+                  style={{
+                    position: 'absolute',
+                    left: -3,
+                    top: -7,
+                    width: 44,
+                    height: 44,
+                    borderRadius: 22,
+                    borderWidth: 2,
+                    borderColor: '#39FF14',
+                    backgroundColor: 'rgba(57, 255, 20, 0.15)',
+                  }}
+                />
+              )}
             </View>
 
             {status === 'READY' && (
