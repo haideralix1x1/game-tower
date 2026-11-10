@@ -371,12 +371,17 @@ export default function Game2048({ onBackToHub, onScoreUpdate, isPaused = false 
 
   // Lock falling tile in target position and start auto-merge cascade
   const lockFallingTile = useCallback(
-    (targetRow, targetCol) => {
+    (targetRow, targetCol, isDirectDrop = false) => {
       if (isLockingRef.current || isGameOver) return;
       isLockingRef.current = true;
 
-      triggerLightHaptic();
-      playTapSound();
+      if (isDirectDrop) {
+        triggerSliceHaptic();
+        playSliceSound();
+      } else {
+        triggerLightHaptic();
+        playTapSound();
+      }
 
       // Place block at target position
       const val = currentValRef.current;
@@ -391,6 +396,34 @@ export default function Game2048({ onBackToHub, onScoreUpdate, isPaused = false 
       }, 70);
     },
     [isGameOver, runMergeCascade]
+  );
+
+  // Direct drop & snap falling tile into target column
+  const dropToColumn = useCallback(
+    (col) => {
+      if (isPausedRef.current || isGameOver || isLockingRef.current) return;
+      const targetCol = Math.max(0, Math.min(COLS - 1, col));
+      const targetRow = getLowestEmptyRow(gridRef.current, targetCol);
+
+      if (targetRow === -1) {
+        // Column is completely full
+        triggerGameOverHaptic();
+        playGameOverSound();
+        juiceRef.current?.shake(10, 8);
+        juiceRef.current?.popup('COLUMN FULL!', 'PICK ANOTHER COLUMN', COLORS.danger);
+        return;
+      }
+
+      // Snap falling tile to target column and lowest open row
+      fallingColRef.current = targetCol;
+      setFallingCol(targetCol);
+      fallingRowRef.current = targetRow;
+      setFallingRow(targetRow);
+
+      // Lock tile at landing spot and start merge cascade with direct drop sound
+      lockFallingTile(targetRow, targetCol, true);
+    },
+    [isGameOver, lockFallingTile]
   );
 
   // Horizontally steer the falling tile to target column without snapping
@@ -462,7 +495,7 @@ export default function Game2048({ onBackToHub, onScoreUpdate, isPaused = false 
     return () => clearInterval(timer);
   }, [isGameOver, score, stepDown]);
 
-  // PanResponder: touch and swipe horizontally to steer columns (NEVER SNAPS ON CLICK)
+  // PanResponder: touch and swipe horizontally to steer columns or tap to direct drop
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
@@ -477,7 +510,6 @@ export default function Game2048({ onBackToHub, onScoreUpdate, isPaused = false 
       },
       onPanResponderMove: (evt) => {
         if (isPausedRef.current || isGameOver || isLockingRef.current) return;
-        // Horizontal finger tracking across columns (NO FAST SNAP)
         const { pageX } = evt.nativeEvent;
         const relX = pageX - (boardPosRef.current.pageX || 0);
         const targetCol = Math.max(0, Math.min(COLS - 1, Math.floor((relX - 8) / cellWidth)));
@@ -485,16 +517,19 @@ export default function Game2048({ onBackToHub, onScoreUpdate, isPaused = false 
       },
       onPanResponderRelease: (evt, gestureState) => {
         if (isPausedRef.current || isGameOver || isLockingRef.current) return;
-        const { dx } = gestureState;
-        if (Math.abs(dx) > 24) {
+        const { dx, dy } = gestureState;
+        if (Math.abs(dx) > 20) {
           const dir = dx > 0 ? 1 : -1;
           moveHorizontal(fallingColRef.current + dir);
+        } else if (dy > 30) {
+          // Downward swipe: direct drop into current column
+          dropToColumn(fallingColRef.current);
         } else {
-          // On click/tap: steer column gently without snapping down fast
+          // Tap on column: direct drop snap on that column!
           const { pageX } = evt.nativeEvent;
           const relX = pageX - (boardPosRef.current.pageX || 0);
           const tappedCol = Math.max(0, Math.min(COLS - 1, Math.floor((relX - 8) / cellWidth)));
-          moveHorizontal(tappedCol);
+          dropToColumn(tappedCol);
         }
       },
     })
@@ -513,7 +548,7 @@ export default function Game2048({ onBackToHub, onScoreUpdate, isPaused = false 
 
         <MiniGameHeader
           title="DROP 2048 NEO"
-          floorLabel="FLOOR 02 // VERTICAL MERGE"
+          floorLabel="FLOOR 01 // VERTICAL MERGE"
           score={score}
           bestScore={bestScore}
           accentColor={COLORS.cyan}
@@ -607,7 +642,7 @@ export default function Game2048({ onBackToHub, onScoreUpdate, isPaused = false 
               <View key={`row_${rIdx}`} style={localStyles.row}>
                 {row.map((val, cIdx) => {
                   const isFalling =
-                    !isGameOver && rIdx === fallingRow && cIdx === fallingCol;
+                    !isGameOver && !isLockingRef.current && rIdx === fallingRow && cIdx === fallingCol;
                   const isGhostTarget =
                     !isGameOver &&
                     !isFalling &&
@@ -746,7 +781,7 @@ export default function Game2048({ onBackToHub, onScoreUpdate, isPaused = false 
             onBackToHub={onBackToHub}
           />
 
-          {/* Tactical Column Steering Bar (Numbers fall auto slowly - no snapping) */}
+          {/* Tactical Column Steering & Direct Drop Bar */}
           <View style={[localStyles.bottomControls, { width: boardWidth }]}>
             <View style={localStyles.columnSelectorRow}>
               {[0, 1, 2, 3, 4].map((c) => {
@@ -755,8 +790,8 @@ export default function Game2048({ onBackToHub, onScoreUpdate, isPaused = false 
                 return (
                   <Pressable
                     key={`col_btn_${c}`}
-                    onPress={() => moveHorizontal(c)}
-                    style={[
+                    onPress={() => dropToColumn(c)}
+                    style={({ pressed }) => [
                       localStyles.colBtn,
                       { width: cellWidth - 4 },
                       isSelected && localStyles.colBtnActive,
@@ -764,6 +799,7 @@ export default function Game2048({ onBackToHub, onScoreUpdate, isPaused = false 
                         borderColor: '#FF0055',
                         backgroundColor: 'rgba(255, 0, 85, 0.22)',
                       },
+                      pressed && { opacity: 0.75, transform: [{ scale: 0.94 }] },
                     ]}
                   >
                     <Text
@@ -773,7 +809,7 @@ export default function Game2048({ onBackToHub, onScoreUpdate, isPaused = false 
                         isFull && { color: '#FF0055', fontWeight: '900' },
                       ]}
                     >
-                      {isFull ? 'FULL' : `COL ${c + 1}`}
+                      {isFull ? 'FULL' : `▼ COL ${c + 1}`}
                     </Text>
                   </Pressable>
                 );
@@ -782,7 +818,7 @@ export default function Game2048({ onBackToHub, onScoreUpdate, isPaused = false 
 
             <View style={localStyles.tacticalStatusBar}>
               <Text style={localStyles.tacticalStatusText}>
-                STEER COLUMNS ◄ ► (AUTO-DROPS SLOWLY)
+                TAP COLUMN TO DIRECT DROP // SWIPE TO AIM
               </Text>
             </View>
           </View>
@@ -914,11 +950,12 @@ const localStyles = StyleSheet.create({
   colBtn: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 6,
+    paddingVertical: 8,
+    minHeight: 34,
     backgroundColor: 'rgba(10, 16, 36, 0.85)',
     borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
+    borderWidth: 1.2,
+    borderColor: 'rgba(0, 245, 255, 0.25)',
   },
   colBtnActive: {
     borderColor: COLORS.cyan,
