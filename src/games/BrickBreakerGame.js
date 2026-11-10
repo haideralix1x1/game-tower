@@ -1358,9 +1358,13 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
                 const hitOffset = (nextX - (eng.aiPaddleX + eng.aiPaddleW / 2)) / (eng.aiPaddleW / 2);
                 const maxAngle = Math.PI * 0.38;
                 const angle = hitOffset * maxAngle;
-                const spd = Math.hypot(b.vx, b.vy);
+                let spd = Math.hypot(b.vx, b.vy);
+                if (eng.slowTimer <= 0) {
+                  spd = Math.max(330, spd);
+                }
                 b.vx = spd * Math.sin(angle);
                 b.vy = Math.abs(spd * Math.cos(angle));
+                b.speed = spd;
                 b.lastHitter = 'AI';
 
                 if (b.isHeavy) {
@@ -1488,12 +1492,13 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
               const maxAngle = Math.PI * 0.40;
               const angle = hitOffset * maxAngle;
               let spd = Math.hypot(b.vx, b.vy);
-              // Ensure minimum speed floor in Solo Bricks (310 px/s)
-              if (eng.mode === 'SINGLE_BRICKS' && eng.slowTimer <= 0) {
-                spd = Math.max(310, spd);
+              // Ensure balls NEVER slow down on paddle hits (minimum 330 px/s)
+              if (eng.slowTimer <= 0) {
+                spd = Math.max(330, spd);
               }
               b.vx = spd * Math.sin(angle);
               b.vy = -Math.abs(spd * Math.cos(angle));
+              b.speed = spd;
               b.lastHitter = 'PLAYER';
 
               if (b.isHeavy) {
@@ -1565,6 +1570,15 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
 
                   safeSound(playTapSound);
                   safeHaptic(triggerLightHaptic);
+
+                  // Guarantee ball speed never drops below baseline on brick collision
+                  const currentBallSpd = Math.hypot(b.vx, b.vy);
+                  if (eng.slowTimer <= 0 && currentBallSpd < 330 && currentBallSpd > 0.001) {
+                    const boost = 330 / currentBallSpd;
+                    b.vx *= boost;
+                    b.vy *= boost;
+                    b.speed = 330;
+                  }
 
                   // Unbreakable brick bounces ball without taking damage
                   if (brk.type === 'UNBREAKABLE') {
@@ -1779,42 +1793,54 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
 
                   // Exchange momentum if moving towards each other
                   if (p > 0) {
+                    // Record speeds BEFORE collision to ensure balls NEVER slow down
+                    const spd1Before = Math.hypot(b1.vx, b1.vy);
+                    const spd2Before = Math.hypot(b2.vx, b2.vy);
+
                     const impulse = (2 * p) / (m1 + m2);
                     b1.vx -= impulse * m2 * nx;
                     b1.vy -= impulse * m2 * ny;
                     b2.vx += impulse * m1 * nx;
                     b2.vy += impulse * m1 * ny;
 
+                    // Ball speed rule: Balls NEVER go slow on collision; they ALWAYS accelerate!
+                    const MIN_SPEED_FLOOR = 330;
+                    const MAX_SPEED_CAP = 640;
+                    const boostMultiplier = eng.mode === 'HARD_SPHERE_DUEL' ? 1.22 : 1.15;
+                    const minBoostAdd = eng.mode === 'HARD_SPHERE_DUEL' ? 40 : 25;
+
+                    const newSpd1 = Math.min(
+                      MAX_SPEED_CAP,
+                      Math.max(spd1Before * boostMultiplier, spd1Before + minBoostAdd, MIN_SPEED_FLOOR)
+                    );
+                    const newSpd2 = Math.min(
+                      MAX_SPEED_CAP,
+                      Math.max(spd2Before * boostMultiplier, spd2Before + minBoostAdd, MIN_SPEED_FLOOR)
+                    );
+
+                    const postSpd1 = Math.hypot(b1.vx, b1.vy);
+                    const postSpd2 = Math.hypot(b2.vx, b2.vy);
+
+                    if (postSpd1 > 0.001) {
+                      b1.vx = (b1.vx / postSpd1) * newSpd1;
+                      b1.vy = (b1.vy / postSpd1) * newSpd1;
+                    } else {
+                      b1.vx = -nx * newSpd1;
+                      b1.vy = -ny * newSpd1;
+                    }
+
+                    if (postSpd2 > 0.001) {
+                      b2.vx = (b2.vx / postSpd2) * newSpd2;
+                      b2.vy = (b2.vy / postSpd2) * newSpd2;
+                    } else {
+                      b2.vx = nx * newSpd2;
+                      b2.vy = ny * newSpd2;
+                    }
+
+                    b1.speed = newSpd1;
+                    b2.speed = newSpd2;
+
                     if (eng.mode === 'HARD_SPHERE_DUEL') {
-                      // Physics kinetic energy increase on collision in Hard AI Duel!
-                      const MAX_DUEL_BALL_SPEED = 620;
-                      const SPEED_BOOST_MULTIPLIER = 1.22;
-                      const MIN_SPEED_ADD = 35;
-
-                      const spd1 = Math.hypot(b1.vx, b1.vy);
-                      const spd2 = Math.hypot(b2.vx, b2.vy);
-
-                      const newSpd1 = Math.min(
-                        MAX_DUEL_BALL_SPEED,
-                        Math.max(spd1 * SPEED_BOOST_MULTIPLIER, spd1 + MIN_SPEED_ADD)
-                      );
-                      const newSpd2 = Math.min(
-                        MAX_DUEL_BALL_SPEED,
-                        Math.max(spd2 * SPEED_BOOST_MULTIPLIER, spd2 + MIN_SPEED_ADD)
-                      );
-
-                      if (spd1 > 0.001) {
-                        b1.vx = (b1.vx / spd1) * newSpd1;
-                        b1.vy = (b1.vy / spd1) * newSpd1;
-                      }
-                      if (spd2 > 0.001) {
-                        b2.vx = (b2.vx / spd2) * newSpd2;
-                        b2.vy = (b2.vy / spd2) * newSpd2;
-                      }
-
-                      b1.speed = newSpd1;
-                      b2.speed = newSpd2;
-
                       safeSound(playSpeedUpSound);
                       safeHaptic(triggerSliceHaptic);
                       if (juiceRef.current) {
@@ -1828,17 +1854,13 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
                         );
                       }
                     } else if (b1.isHeavy || b2.isHeavy) {
-                      b1.speed = Math.hypot(b1.vx, b1.vy);
-                      b2.speed = Math.hypot(b2.vx, b2.vy);
                       safeSound(playSliceSound);
                       safeHaptic(triggerMediumHaptic);
-                      if (juiceRef.current) juiceRef.current.pulse(1.08);
+                      if (juiceRef.current) juiceRef.current.pulse(1.10);
                     } else {
-                      b1.speed = Math.hypot(b1.vx, b1.vy);
-                      b2.speed = Math.hypot(b2.vx, b2.vy);
-                      safeSound(playTapSound);
+                      safeSound(playSpeedUpSound);
                       safeHaptic(triggerLightHaptic);
-                      if (juiceRef.current) juiceRef.current.pulse(1.04);
+                      if (juiceRef.current) juiceRef.current.pulse(1.08);
                     }
                   }
                 }
