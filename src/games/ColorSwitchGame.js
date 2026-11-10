@@ -24,8 +24,8 @@ const monoFont = Platform.select({
 const STORAGE_BEST_KEY = '@game_tower:best_switch_v1';
 
 const BALL_RADIUS = 12;
-const GRAVITY = 0.22;
-const JUMP_FORCE = -4.6;
+const GRAVITY = 0.26;
+const JUMP_FORCE = -3.4;
 
 const SWITCH_COLORS = [
   '#00F5FF', // Cyan

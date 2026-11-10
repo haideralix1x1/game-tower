@@ -17,10 +17,12 @@ import {
   triggerLightHaptic,
   triggerSliceHaptic,
   triggerPerfectHaptic,
+  triggerGameOverHaptic,
 } from '../utils/haptics';
 import {
   playTapSound,
   playPerfectSound,
+  playGameOverSound,
 } from '../utils/sound';
 
 const STORAGE_KEY = '@game_tower:best_numhunt_v1';
@@ -82,6 +84,8 @@ export default function NumberHuntGame({ onBackToHub, onScoreUpdate, isPaused = 
   const [target, setTarget] = useState(1);
   const [score, setScore] = useState(0);
   const [bestScore, setBestScore] = useState(0);
+  const [isGameOver, setIsGameOver] = useState(false);
+  const [mistakeInfo, setMistakeInfo] = useState({ tapped: null, expected: null });
 
   const cols = activeMode.cols;
   const count = activeMode.count;
@@ -116,6 +120,7 @@ export default function NumberHuntGame({ onBackToHub, onScoreUpdate, isPaused = 
     const m = overrideMode ? NUMBER_HUNT_MODES[overrideMode] : activeMode;
     setNumbers(shuffleNumbers(m.count));
     setTarget(1);
+    setIsGameOver(false);
     if (juiceRef.current) juiceRef.current.flash(m.accent);
   }, [activeMode]);
 
@@ -129,10 +134,16 @@ export default function NumberHuntGame({ onBackToHub, onScoreUpdate, isPaused = 
 
   const handleTapNum = useCallback(
     (num) => {
-      if (isPausedRef.current) return;
+      if (isPausedRef.current || isGameOver) return;
       if (num !== target) {
-        triggerSliceHaptic();
-        if (juiceRef.current) juiceRef.current.shake(5, 3);
+        triggerGameOverHaptic();
+        playGameOverSound();
+        if (juiceRef.current) {
+          juiceRef.current.shake(14, 8);
+          juiceRef.current.flash('#FF3366');
+        }
+        setMistakeInfo({ tapped: num, expected: target });
+        setIsGameOver(true);
         return;
       }
 
@@ -279,6 +290,22 @@ export default function NumberHuntGame({ onBackToHub, onScoreUpdate, isPaused = 
             accentColor={activeMode.accent}
             onRetry={() => resetBoard()}
             retryLabel={`NEXT ${count}-MATRIX`}
+            onBackToHub={onBackToHub}
+          />
+
+          <GameResultModal
+            visible={isGameOver}
+            type="GAMEOVER"
+            title="SEQUENCE CORRUPTED!"
+            subtitle={`MISSTEP DETECTED // TAPPED #${mistakeInfo.tapped || '?'}, EXPECTED #${mistakeInfo.expected || target}`}
+            score={score}
+            bestScore={bestScore}
+            accentColor="#FF3366"
+            onRetry={() => {
+              setScore(0);
+              resetBoard();
+            }}
+            retryLabel="RESTART MATRIX"
             onBackToHub={onBackToHub}
           />
         </View>

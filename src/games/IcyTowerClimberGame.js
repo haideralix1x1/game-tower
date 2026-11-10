@@ -55,6 +55,11 @@ export default function IcyTowerClimberGame({ onBackToHub, onScoreUpdate, isPaus
   const [modalVisible, setModalVisible] = useState(false);
   const [crashCause, setCrashCause] = useState('FALL');
 
+  // Player Abilities: Shields (absorbs lethal hits)
+  const [shields, setShields] = useState(1);
+  const shieldsRef = useRef(1);
+  const invulnerableUntilRef = useRef(0);
+
   // Single consolidated frame state for 60 FPS butter-smooth rendering
   const [frameData, setFrameData] = useState({
     playerX: arenaWidth * 0.5 - PLAYER_SIZE / 2,
@@ -120,8 +125,12 @@ export default function IcyTowerClimberGame({ onBackToHub, onScoreUpdate, isPaus
 
   /**
    * Procedural Endless Platform Spawner.
-   * Generates platforms upwards to infinity, scaling difficulty with floor level.
-   * Spawns tracking turrets, sweeping scanning lasers, sentry bombs, and lava platforms.
+   * Generates platforms upwards to infinity, scaling difficulty GRADUALLY:
+   * - Floors 0-15: Simple & relaxing! Wide platforms (135px), Normal & Bounce only, frequent Shield & Spring pickups, NO lethal hazards.
+   * - Floors 16-30: Gentle Movement & Crumbling platforms, extra Shields.
+   * - Floors 31-50: Introduction of Lava platforms (generous 1.5s grace) and rare narrow Spikes.
+   * - Floors 51-70: Wall Turrets (every 10 floors) and Sweeping Security Lasers (every 12 floors).
+   * - Floors 71+: Rare Sentry Bombs on high-tier platforms.
    */
   const spawnAhead = useCallback((targetMinY) => {
     let curY = highestGenYRef.current;
@@ -136,35 +145,70 @@ export default function IcyTowerClimberGame({ onBackToHub, onScoreUpdate, isPaus
       curY -= 68; // Vertical gap between platform tiers
       const floor = idx;
 
-      // Platform width scales down slightly at higher floors
-      const platW = Math.max(65, 125 - Math.floor(floor / 15) * 8);
+      // Platform width scales down gently
+      const platW = floor <= 15 ? 135 : floor <= 30 ? 120 : floor <= 50 ? 105 : floor <= 75 ? 95 : 85;
 
-      // Platform Type Distribution based on altitude / difficulty
+      // Platform Type Distribution based on altitude / gradual difficulty
       let type = 'NORMAL';
       const rand = Math.random();
       const prevWasSpike =
         newPlats.length > 0 && newPlats[newPlats.length - 1].type === 'SPIKE';
 
-      if (!prevWasSpike && floor > 5 && rand < 0.18) {
-        // Spiked Hazard Platform (Sharp spikes protruding on top; lethal to land on!)
-        type = 'SPIKE';
-      } else if (floor > 6 && rand < 0.36) {
-        // Lava Hazard Platform (Allowed to jump on, but must leave within 1 second!)
-        type = 'FIRE';
-      } else if (floor > 10 && rand < 0.52) {
-        // Moving Mag-Rail Platform
-        type = 'MOVING';
-      } else if (rand < 0.66) {
-        // Super Bounce Pad
-        type = 'BOUNCE';
-      } else if (floor > 14 && rand < 0.78) {
-        // Crumbling Platform
-        type = 'CRUMBLE';
+      if (floor <= 15) {
+        // Floors 0-15: Simple & Gentle! Only Normal & Super Bounce platforms!
+        if (rand < 0.22) {
+          type = 'BOUNCE';
+        }
+      } else if (floor <= 30) {
+        // Floors 16-30: Gentle Movement & Crumble
+        if (rand < 0.25) {
+          type = 'MOVING';
+        } else if (rand < 0.40) {
+          type = 'CRUMBLE';
+        } else if (rand < 0.58) {
+          type = 'BOUNCE';
+        }
+      } else if (floor <= 50) {
+        // Floors 31-50: Environmental Hazards Intro
+        if (!prevWasSpike && rand < 0.12) {
+          type = 'SPIKE';
+        } else if (rand < 0.26) {
+          type = 'FIRE';
+        } else if (rand < 0.48) {
+          type = 'MOVING';
+        } else if (rand < 0.62) {
+          type = 'CRUMBLE';
+        } else if (rand < 0.76) {
+          type = 'BOUNCE';
+        }
+      } else {
+        // Floors 51+: High-tier Apex Spire
+        if (!prevWasSpike && rand < 0.16) {
+          type = 'SPIKE';
+        } else if (rand < 0.32) {
+          type = 'FIRE';
+        } else if (rand < 0.52) {
+          type = 'MOVING';
+        } else if (rand < 0.68) {
+          type = 'CRUMBLE';
+        } else if (rand < 0.82) {
+          type = 'BOUNCE';
+        }
       }
 
       // Spiked platforms are narrower so player can maneuver around them
-      const actualW = type === 'SPIKE' ? Math.min(platW, 75) : platW;
+      const actualW = type === 'SPIKE' ? Math.min(platW, 68) : platW;
       const platX = Math.random() * (arenaWidth - actualW - 30) + 15;
+
+      // Powerups on platforms: Shields and Super Springs!
+      let powerup = null;
+      if (type === 'NORMAL' || type === 'MOVING') {
+        if (floor % 7 === 0 || (floor < 30 && floor % 5 === 0)) {
+          powerup = 'SHIELD';
+        } else if (floor % 11 === 4) {
+          powerup = 'SPRING';
+        }
+      }
 
       const platId = `plat_${idx}`;
       const platObj = {
@@ -174,18 +218,51 @@ export default function IcyTowerClimberGame({ onBackToHub, onScoreUpdate, isPaus
         w: actualW,
         type,
         floor,
+        powerup,
         broken: false,
         crumbleTimer: 0,
         heatTimer: 0, // Heat frames while player is standing on lava platform
-        maxHeat: 60, // 60 frames = 1.0 second grace period!
-        vx: type === 'MOVING' ? (Math.random() > 0.5 ? 1.4 : -1.4) * (1 + Math.min(1.2, floor / 40)) : 0,
+        maxHeat: 90, // Generous 1.5 seconds grace period on lava!
+        vx: type === 'MOVING' ? (Math.random() > 0.5 ? 1.0 : -1.0) * (1 + Math.min(0.8, floor / 60)) : 0,
         minX: 10,
         maxX: arenaWidth - actualW - 10,
       };
       newPlats.push(platObj);
 
-      // Red Enemy Sentry Box (Kamikaze Bomb)
-      if (floor >= 12 && type !== 'FIRE' && type !== 'BOUNCE' && type !== 'SPIKE' && type !== 'MOVING' && Math.random() < 0.25) {
+      // Defense Turrets: Mounted on spire walls (Gradual: only floor 50+)
+      if (floor >= 50 && floor % 10 === 0) {
+        const wall = Math.random() > 0.5 ? 'LEFT' : 'RIGHT';
+        newTurrets.push({
+          id: `turret_${floor}`,
+          wall,
+          x: wall === 'LEFT' ? 0 : arenaWidth - 22,
+          y: curY + 14,
+          cooldown: 90 + Math.floor(Math.random() * 50),
+          aimAngle: wall === 'LEFT' ? 0 : 180,
+          isAiming: false,
+          targetX: 0,
+          targetY: 0,
+        });
+      }
+
+      // Scanning Security Lasers: Sweeping deadly beams (Gradual: only floor 55+)
+      if (floor >= 55 && floor % 12 === 3) {
+        const laserType = Math.random() > 0.5 ? 'SWEEP' : 'BARRIER';
+        const wall = Math.random() > 0.5 ? 'LEFT' : 'RIGHT';
+        newLasers.push({
+          id: `scan_laser_${floor}`,
+          y: curY + 34,
+          type: laserType,
+          wall,
+          phase: Math.floor(Math.random() * 160),
+          period: 160,
+          state: 'COOLDOWN',
+          sweepAngle: 0,
+        });
+      }
+
+      // Red Enemy Sentry Box: Only floor 65+
+      if (floor >= 65 && type === 'NORMAL' && Math.random() < 0.20) {
         newBombs.push({
           id: `bomb_${idx}`,
           platId,
@@ -198,41 +275,9 @@ export default function IcyTowerClimberGame({ onBackToHub, onScoreUpdate, isPaus
           patrolDir: Math.random() > 0.5 ? 1 : -1,
           state: 'IDLE',
           alertTimer: 0,
-          speed: 0.70 + Math.min(0.40, floor / 100), // Slowed down (~0.7 - 1.1 px/frame instead of 2.2 - 3.7) so player can react and jump to next platform
-          fuse: 90, // Generous fuse (1.5s instead of 0.75s)
+          speed: 0.65 + Math.min(0.35, floor / 100),
+          fuse: 100,
           color: '#FF0055',
-        });
-      }
-
-      // Defense Turrets: Mounted on spire walls, aiming and shooting towards player!
-      if (floor >= 10 && floor % 6 === 0) {
-        const wall = Math.random() > 0.5 ? 'LEFT' : 'RIGHT';
-        newTurrets.push({
-          id: `turret_${floor}`,
-          wall,
-          x: wall === 'LEFT' ? 0 : arenaWidth - 22,
-          y: curY + 14,
-          cooldown: 80 + Math.floor(Math.random() * 50),
-          aimAngle: wall === 'LEFT' ? 0 : 180,
-          isAiming: false,
-          targetX: 0,
-          targetY: 0,
-        });
-      }
-
-      // Scanning Security Lasers: Sweeping deadly beams between platform tiers
-      if (floor >= 8 && floor % 7 === 3) {
-        const laserType = Math.random() > 0.5 ? 'SWEEP' : 'BARRIER';
-        const wall = Math.random() > 0.5 ? 'LEFT' : 'RIGHT';
-        newLasers.push({
-          id: `scan_laser_${floor}`,
-          y: curY + 34,
-          type: laserType,
-          wall,
-          phase: Math.floor(Math.random() * 150),
-          period: 150,
-          state: 'COOLDOWN',
-          sweepAngle: 0,
         });
       }
 
@@ -310,6 +355,10 @@ export default function IcyTowerClimberGame({ onBackToHub, onScoreUpdate, isPaus
     setExplosions([]);
     setIsPlaying(false);
     setModalVisible(false);
+
+    shieldsRef.current = 1;
+    setShields(1);
+    invulnerableUntilRef.current = 0;
 
     setFrameData({
       playerX: startPlayer.x,
@@ -411,10 +460,25 @@ export default function IcyTowerClimberGame({ onBackToHub, onScoreUpdate, isPaus
       const p = playerRef.current;
       let camY = cameraYRef.current;
 
-      // 1. Update Laser Floor (rises continuously)
+      // 1. Update Laser Floor (rises continuously, gentle start on early floors)
       const currentHighest = highestFloorRef.current;
-      const laserSpeed = 0.65 + Math.min(0.9, currentHighest / 60);
+      const laserSpeed = currentHighest < 15 ? 0.28 : currentHighest < 35 ? 0.44 : 0.62 + Math.min(0.8, currentHighest / 80);
       laserFloorYRef.current -= laserSpeed;
+
+      // Shield Absorption Helper
+      const absorbHitWithShield = () => {
+        if (Date.now() < invulnerableUntilRef.current) return true;
+        if (shieldsRef.current > 0) {
+          shieldsRef.current -= 1;
+          setShields(shieldsRef.current);
+          invulnerableUntilRef.current = Date.now() + 1800;
+          triggerMediumHaptic();
+          playSliceSound();
+          p.vy = -12.5;
+          return true;
+        }
+        return false;
+      };
 
       // 2. Update Moving & Crumbling Platforms
       const plats = platformsRef.current;
@@ -458,10 +522,16 @@ export default function IcyTowerClimberGame({ onBackToHub, onScoreUpdate, isPaus
           playSliceSound();
         }
 
-        // If player stayed on lava platform for 60 frames (1 full second): MELTED!
+        // If player stayed on lava platform for 90 frames (1.5 seconds grace): MELTED!
         if (curStandingPlat.heatTimer >= curStandingPlat.maxHeat) {
-          handleGameOver('MELTED BY LAVA PLATFORM!');
-          return;
+          if (absorbHitWithShield()) {
+            curStandingPlat.heatTimer = 0;
+            p.isGrounded = false;
+            p.currentPlatId = null;
+          } else {
+            handleGameOver('MELTED BY LAVA PLATFORM!');
+            return;
+          }
         }
       } else {
         // Gradually cool down fire platforms when player jumps off
@@ -525,8 +595,10 @@ export default function IcyTowerClimberGame({ onBackToHub, onScoreUpdate, isPaus
             playSliceSound();
 
             if (distToPlayer < 30) {
-              handleGameOver('BLASTED BY SENTRY BOMB!');
-              return;
+              if (!absorbHitWithShield()) {
+                handleGameOver('BLASTED BY SENTRY BOMB!');
+                return;
+              }
             }
           }
         }
@@ -604,8 +676,10 @@ export default function IcyTowerClimberGame({ onBackToHub, onScoreUpdate, isPaus
           if (laser.type === 'BARRIER') {
             // Horizontal barrier across spire
             if (p.y + PLAYER_SIZE > laser.y - 4 && p.y < laser.y + 4) {
-              handleGameOver('VAPORIZED BY SCANNING LASER!');
-              return;
+              if (!absorbHitWithShield()) {
+                handleGameOver('VAPORIZED BY SCANNING LASER!');
+                return;
+              }
             }
           } else if (laser.type === 'SWEEP') {
             // Angled sweep beam from wall emitter
@@ -624,8 +698,10 @@ export default function IcyTowerClimberGame({ onBackToHub, onScoreUpdate, isPaus
             const distToBeam = Math.hypot(pMidX - closestX, pMidY - closestY);
 
             if (distToBeam < 15) {
-              handleGameOver('VAPORIZED BY SCANNING LASER!');
-              return;
+              if (!absorbHitWithShield()) {
+                handleGameOver('VAPORIZED BY SCANNING LASER!');
+                return;
+              }
             }
           }
         }
@@ -659,8 +735,12 @@ export default function IcyTowerClimberGame({ onBackToHub, onScoreUpdate, isPaus
             opacity: 1,
             color: '#00F5FF',
           });
-          handleGameOver('VAPORIZED BY TURRET PLASMA!');
-          return;
+          projs.splice(i, 1);
+          if (!absorbHitWithShield()) {
+            handleGameOver('VAPORIZED BY TURRET PLASMA!');
+            return;
+          }
+          continue;
         }
 
         if (pr.x < -40 || pr.x > arenaWidth + 40 || pr.y < -camY - 100 || pr.y > -camY + arenaHeight + 100) {
@@ -710,10 +790,12 @@ export default function IcyTowerClimberGame({ onBackToHub, onScoreUpdate, isPaus
             nextY + PLAYER_SIZE > spikeTop &&
             nextY < spikeBottom
           ) {
-            handleGameOver('IMPALED BY PLATFORM SPIKES!');
-            triggerGameOverHaptic();
-            playGameOverSound();
-            return;
+            if (!absorbHitWithShield()) {
+              handleGameOver('IMPALED BY PLATFORM SPIKES!');
+              triggerGameOverHaptic();
+              playGameOverSound();
+              return;
+            }
           }
         }
       }
@@ -731,12 +813,14 @@ export default function IcyTowerClimberGame({ onBackToHub, onScoreUpdate, isPaus
           ) {
             // SPIKE PLATFORM: LETHAL ON IMPACT!
             if (plat.type === 'SPIKE') {
-              handleGameOver('IMPALED BY PLATFORM SPIKES!');
-              triggerGameOverHaptic();
-              playGameOverSound();
-              return;
+              if (!absorbHitWithShield()) {
+                handleGameOver('IMPALED BY PLATFORM SPIKES!');
+                triggerGameOverHaptic();
+                playGameOverSound();
+                return;
+              }
             } else if (plat.type === 'FIRE') {
-              // LAVA PLATFORM: SAFE LANDING ALLOWED, STARTS 1-SECOND TIMER
+              // LAVA PLATFORM: SAFE LANDING ALLOWED, STARTS TIMER
               nextY = plat.y - PLAYER_SIZE;
               vy = 0;
               p.isGrounded = true;
@@ -759,6 +843,22 @@ export default function IcyTowerClimberGame({ onBackToHub, onScoreUpdate, isPaus
               p.isGrounded = true;
               p.currentPlatId = plat.id;
               playTapSound();
+
+              // Powerup pickups on platform!
+              if (plat.powerup === 'SHIELD') {
+                plat.powerup = null;
+                shieldsRef.current = Math.min(3, shieldsRef.current + 1);
+                setShields(shieldsRef.current);
+                triggerMediumHaptic();
+                playSliceSound();
+              } else if (plat.powerup === 'SPRING') {
+                plat.powerup = null;
+                vy = -20.5;
+                p.isGrounded = false;
+                p.currentPlatId = null;
+                triggerMediumHaptic();
+                playSliceSound();
+              }
 
               if (plat.type === 'CRUMBLE' && plat.crumbleTimer === 0) {
                 plat.crumbleTimer = 22;
@@ -937,7 +1037,10 @@ export default function IcyTowerClimberGame({ onBackToHub, onScoreUpdate, isPaus
               { color: isGrounded ? '#00F5FF' : '#FF6D00' },
             ]}
           >
-            {isGrounded ? '⚡ GROUNDED // READY' : '✈ IN-FLIGHT'}
+            {isGrounded ? '⚡ READY' : '✈ IN-FLIGHT'}
+          </Text>
+          <Text style={[styles.hudStatusText, { color: shields > 0 ? '#00F5FF' : '#718096', fontSize: 9.5, marginTop: 2 }]}>
+            {`🛡️ SHIELD: ${shields}/3`}
           </Text>
         </View>
 
@@ -1201,6 +1304,23 @@ export default function IcyTowerClimberGame({ onBackToHub, onScoreUpdate, isPaus
                   stroke="rgba(0, 245, 255, 0.4)"
                   strokeWidth={1}
                 />
+                {/* Floating Collectible Powerup Item */}
+                {plat.powerup === 'SHIELD' && (
+                  <G transform={`translate(${plat.x + plat.w / 2}, ${drawY - 14})`}>
+                    <Circle cx={0} cy={0} r={9} fill="rgba(0, 245, 255, 0.25)" stroke="#00F5FF" strokeWidth={1.8} />
+                    <SvgText x={0} y={4} fontSize={9} fill="#FFFFFF" fontWeight="900" textAnchor="middle">
+                      🛡️
+                    </SvgText>
+                  </G>
+                )}
+                {plat.powerup === 'SPRING' && (
+                  <G transform={`translate(${plat.x + plat.w / 2}, ${drawY - 14})`}>
+                    <Circle cx={0} cy={0} r={9} fill="rgba(255, 230, 0, 0.25)" stroke="#FFE600" strokeWidth={1.8} />
+                    <SvgText x={0} y={4} fontSize={9} fill="#FFFFFF" fontWeight="900" textAnchor="middle">
+                      ⚡
+                    </SvgText>
+                  </G>
+                )}
               </G>
             );
           })}
@@ -1547,6 +1667,19 @@ export default function IcyTowerClimberGame({ onBackToHub, onScoreUpdate, isPaus
               fill="#FFE600"
             />
             <Circle cx={PLAYER_SIZE / 2} cy={PLAYER_SIZE - 7} r={2.5} fill="#39FF14" />
+
+            {/* Glowing Active Shield Bubble */}
+            {shields > 0 && (
+              <Circle
+                cx={PLAYER_SIZE / 2}
+                cy={PLAYER_SIZE / 2}
+                r={PLAYER_SIZE * 0.94}
+                stroke="#00F5FF"
+                strokeWidth={2}
+                fill="rgba(0, 245, 255, 0.22)"
+                strokeDasharray="5 3"
+              />
+            )}
           </G>
 
           {/* RISING LASER OVERLOAD FLOOR */}

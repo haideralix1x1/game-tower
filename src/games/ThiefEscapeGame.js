@@ -690,9 +690,33 @@ export default function ThiefEscapeGame({
   const [bullets, setBullets] = useState([]);
   const [thrownBombs, setThrownBombs] = useState([]);
 
-  // Police Emergency Alert (5s countdown after gun shot / bomb / final treasure)
-  const [policeTimer, setPoliceTimer] = useState(0); // in frames (250 frames = 5.0s)
+  // Police Emergency Alert (10s countdown after gun shot / bomb / final treasure)
+  const [policeTimer, setPoliceTimer] = useState(0); // in frames (500 frames = 10.0s)
   const [policeActive, setPoliceActive] = useState(false);
+
+  // Police Car & Pursuing Officer Squad
+  const [policeSquad, setPoliceSquad] = useState(() => ({
+    active: false,
+    carX: -120,
+    carTargetX: 0,
+    carArrived: false,
+    officer: {
+      active: false,
+      x: 0,
+      floor: 0,
+      y: null,
+      isClimbing: false,
+      stairIdx: null,
+      climbDir: 0,
+      facing: -1,
+      speed: 2.7,
+    },
+    sirenBlink: false,
+  }));
+  const policeSquadRef = useRef(policeSquad);
+  useEffect(() => {
+    policeSquadRef.current = policeSquad;
+  }, [policeSquad]);
 
   // Key Stealing & Locked Case State
   const [hasKey, setHasKey] = useState(false);
@@ -915,6 +939,42 @@ export default function ThiefEscapeGame({
       policeTimerRef.current = 0;
       setPoliceActive(false);
       policeActiveRef.current = false;
+      setPoliceSquad({
+        active: false,
+        carX: -120,
+        carTargetX: 0,
+        carArrived: false,
+        officer: {
+          active: false,
+          x: 0,
+          floor: 0,
+          y: null,
+          isClimbing: false,
+          stairIdx: null,
+          climbDir: 0,
+          facing: -1,
+          speed: 2.7,
+        },
+        sirenBlink: false,
+      });
+      policeSquadRef.current = {
+        active: false,
+        carX: -120,
+        carTargetX: 0,
+        carArrived: false,
+        officer: {
+          active: false,
+          x: 0,
+          floor: 0,
+          y: null,
+          isClimbing: false,
+          stairIdx: null,
+          climbDir: 0,
+          facing: -1,
+          speed: 2.7,
+        },
+        sirenBlink: false,
+      };
 
       // Key & Locked Case
       setHasKey(false);
@@ -1037,19 +1097,19 @@ export default function ThiefEscapeGame({
     [arenaW, levelConfig]
   );
 
-  // Trigger Police 5-Second Emergency Dispatch
-  const triggerPoliceEmergency = useCallback((reason = 'GUNFIRE REPORTED!') => {
-    if (policeActiveRef.current) return;
+  // Trigger Police 10-Second Emergency Dispatch
+  const triggerPoliceEmergency = useCallback((reason = 'LOUD GUNFIRE DETECTED!') => {
+    if (policeActiveRef.current || policeSquadRef.current.active) return;
     policeActiveRef.current = true;
     setPoliceActive(true);
-    // 250 frames = exactly 5.0 seconds at 50 ticks/s (20ms interval)
-    policeTimerRef.current = 250;
-    setPoliceTimer(250);
+    // 500 frames = exactly 10.0 seconds at 50 ticks/s (20ms interval)
+    policeTimerRef.current = 500;
+    setPoliceTimer(500);
 
     triggerGameOverHaptic();
     playSpeedUpSound();
     juiceRef.current?.shake(10, 8);
-    juiceRef.current?.popup(`🚨 ${reason}`, 'POLICE DISPATCHED IN 5 SECONDS! ESCAPE NOW!', '#FF0055');
+    juiceRef.current?.popup(`🚨 ${reason}`, 'POLICE CAR ARRIVES IN 10.0s! GET TO YOUR CAR!', '#FF0055');
   }, []);
 
   // Throw Distractor Stone
@@ -1189,19 +1249,173 @@ export default function ThiefEscapeGame({
       const curRivals = rivalsRef.current.map((r) => ({ ...r }));
       const curCctvs = cctvsRef.current.map((c) => ({ ...c }));
 
-      // --- 1. Police 5-Second Emergency Countdown ---
+      // --- 1. Police 10-Second Emergency Countdown ---
       if (policeActiveRef.current) {
         policeTimerRef.current -= 1;
         setPoliceTimer(policeTimerRef.current);
         if (policeTimerRef.current <= 0) {
           policeActiveRef.current = false;
           setPoliceActive(false);
-          // If player hasn't escaped inside the car, police arrives & arrests player!
+
+          // If player hasn't escaped, Police car speeds in from the opposite side!
           if (!carStateRef.current.isEscaping && !carStateRef.current.thiefInside) {
-            handlePlayerBusted('POLICE CRIME SQUAD SURROUNDED BUILDING!');
-            return;
+            const getawayOnLeft = levelConfig.car.x < arenaW / 2;
+            const startX = getawayOnLeft ? arenaW + 80 : -80;
+            const targetX = getawayOnLeft ? arenaW - 65 : 65;
+
+            policeSquadRef.current = {
+              active: true,
+              carX: startX,
+              carTargetX: targetX,
+              carArrived: false,
+              officer: {
+                active: false,
+                x: targetX,
+                floor: 0,
+                y: null,
+                isClimbing: false,
+                stairIdx: null,
+                climbDir: 0,
+                facing: getawayOnLeft ? -1 : 1,
+                speed: 2.7,
+              },
+              sirenBlink: false,
+            };
+            setPoliceSquad({ ...policeSquadRef.current });
+            triggerGameOverHaptic();
+            playSpeedUpSound();
+            juiceRef.current?.shake(12, 10);
+            juiceRef.current?.popup('🚨 POLICE CAR ARRIVED!', 'COP IS PURSUING YOU! RUN TO GETAWAY CAR!', '#FF0055');
           }
         }
+      }
+
+      // --- 1.1 Update Police Car & Officer Pursuit ---
+      if (policeSquadRef.current.active && !carStateRef.current.isEscaping && !carStateRef.current.thiefInside) {
+        const sq = { ...policeSquadRef.current };
+        sq.sirenBlink = !sq.sirenBlink;
+
+        // A. Police car driving in
+        if (!sq.carArrived) {
+          const dir = sq.carTargetX > sq.carX ? 1 : -1;
+          sq.carX += dir * 4.8;
+          if ((dir === 1 && sq.carX >= sq.carTargetX) || (dir === -1 && sq.carX <= sq.carTargetX)) {
+            sq.carX = sq.carTargetX;
+            sq.carArrived = true;
+            sq.officer = {
+              ...sq.officer,
+              active: true,
+              x: sq.carTargetX,
+              floor: 0,
+              y: null,
+            };
+            playTapSound();
+            triggerMediumHaptic();
+            juiceRef.current?.popup('👮 POLICE OFFICER DEPLOYED!', 'He is pursuing you! Reach your car!', '#FF0055');
+          }
+        }
+        // B. Police officer actively pursuing player
+        else if (sq.officer.active) {
+          const cop = { ...sq.officer };
+          const curCopY = cop.isClimbing && cop.y != null ? cop.y : getFloorY(cop.floor);
+          const curPlyY = curPlayer.isClimbing && curPlayer.y != null ? curPlayer.y : getFloorY(curPlayer.floor);
+
+          // Caught by police officer!
+          const distX = Math.abs(cop.x - curPlayer.x);
+          const distY = Math.abs(curCopY - curPlyY);
+          if (distX < 20 && distY < 20) {
+            handlePlayerBusted('CAUGHT AND ARRESTED BY POLICE OFFICER!');
+            return;
+          }
+
+          // Ladder Climbing
+          if (cop.isClimbing && cop.stairIdx != null) {
+            const stair = levelConfig.stairs[cop.stairIdx];
+            const yBottom = getFloorY(stair.fromFloor);
+            const yTop = getFloorY(stair.toFloor);
+
+            cop.x = stair.x;
+            if (cop.y == null) cop.y = cop.climbDir === -1 ? yBottom - 4 : yTop + 4;
+            cop.y += cop.climbDir * (cop.speed * 0.9);
+
+            if (cop.climbDir === -1 && cop.y <= yTop) {
+              cop.y = null;
+              cop.floor = stair.toFloor;
+              cop.isClimbing = false;
+              cop.stairIdx = null;
+              cop.climbDir = 0;
+            } else if (cop.climbDir === 1 && cop.y >= yBottom) {
+              cop.y = null;
+              cop.floor = stair.fromFloor;
+              cop.isClimbing = false;
+              cop.stairIdx = null;
+              cop.climbDir = 0;
+            }
+          }
+          // Catwalk Navigation towards Player
+          else {
+            if (cop.floor < curPlayer.floor) {
+              const upStairs = levelConfig.stairs
+                .map((s, idx) => ({ ...s, idx }))
+                .filter((s) => s.fromFloor === cop.floor);
+              if (upStairs.length > 0) {
+                let chosen = upStairs[0];
+                let bestDist = Infinity;
+                for (const s of upStairs) {
+                  const d = Math.abs(cop.x - s.x) + Math.abs(s.x - curPlayer.x);
+                  if (d < bestDist) {
+                    bestDist = d;
+                    chosen = s;
+                  }
+                }
+                if (Math.abs(cop.x - chosen.x) < 8) {
+                  cop.isClimbing = true;
+                  cop.stairIdx = chosen.idx;
+                  cop.climbDir = -1;
+                  cop.x = chosen.x;
+                  cop.y = getFloorY(chosen.fromFloor) - 4;
+                } else {
+                  cop.facing = cop.x < chosen.x ? 1 : -1;
+                  cop.x += cop.facing * cop.speed;
+                }
+              }
+            } else if (cop.floor > curPlayer.floor) {
+              const downStairs = levelConfig.stairs
+                .map((s, idx) => ({ ...s, idx }))
+                .filter((s) => s.toFloor === cop.floor);
+              if (downStairs.length > 0) {
+                let chosen = downStairs[0];
+                let bestDist = Infinity;
+                for (const s of downStairs) {
+                  const d = Math.abs(cop.x - s.x) + Math.abs(s.x - curPlayer.x);
+                  if (d < bestDist) {
+                    bestDist = d;
+                    chosen = s;
+                  }
+                }
+                if (Math.abs(cop.x - chosen.x) < 8) {
+                  cop.isClimbing = true;
+                  cop.stairIdx = chosen.idx;
+                  cop.climbDir = 1;
+                  cop.x = chosen.x;
+                  cop.y = getFloorY(chosen.toFloor) + 4;
+                } else {
+                  cop.facing = cop.x < chosen.x ? 1 : -1;
+                  cop.x += cop.facing * cop.speed;
+                }
+              }
+            } else {
+              // Same floor as player: run at player!
+              cop.facing = curPlayer.x > cop.x ? 1 : -1;
+              cop.x += cop.facing * cop.speed;
+            }
+          }
+
+          sq.officer = cop;
+        }
+
+        policeSquadRef.current = sq;
+        setPoliceSquad(sq);
       }
 
       // --- 2. Update Player Movement (Catwalks, Ladders, Hiding) ---
@@ -2106,12 +2320,11 @@ export default function ThiefEscapeGame({
       // --- 11. Escape to Car on Ground Floor ---
       const isGround = curPlayer.floor === 0 || (curPlayer.y != null && curPlayer.y >= getFloorY(0) - 16);
       const isAtCar = Math.abs(curPlayer.x - carStateRef.current.x) <= 55;
-      const hasReqDiamond = curPlayer.hasDiamond || diamondTakenRef.current;
-      const hasReqExtraDiamond = !levelConfig.extraDiamond || extraDiamondTakenRef.current;
-      const hasReqPetrol = !levelConfig.requiresPetrol || curPlayer.hasPetrol || petrolTakenRef.current;
+      const hasReqDiamond = curPlayer.hasDiamond && (!levelConfig.extraDiamond || (curPlayer.diamondsHeld || 0) >= 2);
+      const hasReqPetrol = !levelConfig.requiresPetrol || curPlayer.hasPetrol;
 
       if (isGround && isAtCar && !carStateRef.current.isEscaping) {
-        if (hasReqDiamond && hasReqExtraDiamond && hasReqPetrol) {
+        if (hasReqDiamond && hasReqPetrol) {
           inputDirRef.current = 0;
           climbDirRef.current = 0;
           curPlayer.floor = 0;
@@ -2131,7 +2344,20 @@ export default function ThiefEscapeGame({
           triggerPerfectHaptic();
           playPerfectSound();
           juiceRef.current?.popup('🚗 GETAWAY VEHICLE!', 'Speeding away with the loot!', COLORS.matrixMint);
-        } else if (hasReqDiamond && !hasReqPetrol) {
+        } else if (!hasReqDiamond) {
+          if (!fuelWarningCooldownRef.current) {
+            fuelWarningCooldownRef.current = true;
+            setTimeout(() => {
+              fuelWarningCooldownRef.current = false;
+            }, 1800);
+            triggerMediumHaptic();
+            if (curRivals.some((r) => r.hasDiamond)) {
+              juiceRef.current?.popup('⚠️ RIVAL HAS THE DIAMOND!', 'Tackle rival thief to reclaim loot!', '#FF0055');
+            } else {
+              juiceRef.current?.popup('💎 DIAMOND REQUIRED!', 'Retrieve diamond before escaping!', '#FF0055');
+            }
+          }
+        } else if (!hasReqPetrol) {
           if (!fuelWarningCooldownRef.current) {
             fuelWarningCooldownRef.current = true;
             setTimeout(() => {
@@ -2295,11 +2521,20 @@ export default function ThiefEscapeGame({
       />
 
       <JuiceEngine ref={juiceRef}>
-        {/* Police 5-Second Warning Banner */}
+        {/* Police 10-Second Warning Banner */}
         {policeActive && (
           <View style={styles.policeBanner}>
             <Text style={styles.policeText}>
-              {`🚨 POLICE CAR DISPATCHED IN ${(policeTimer / 50).toFixed(1)}s! ESCAPE NOW!`}
+              {`🚨 POLICE CAR ARRIVING IN ${(policeTimer / 50).toFixed(1)}s! ESCAPE NOW!`}
+            </Text>
+          </View>
+        )}
+
+        {/* Police Squad On Scene Banner */}
+        {policeSquad.active && !carState.isEscaping && (
+          <View style={[styles.policeBanner, { backgroundColor: 'rgba(255, 0, 85, 0.92)' }]}>
+            <Text style={styles.policeText}>
+              🚨 POLICE ON SCENE! COP IS PURSUING YOU! RUN TO GETAWAY CAR!
             </Text>
           </View>
         )}
@@ -2596,6 +2831,63 @@ export default function ThiefEscapeGame({
                 />
               </G>
 
+              {/* Police Cruiser Car on Floor 0 */}
+              {policeSquad.active && (
+                <G>
+                  <Rect
+                    x={policeSquad.carX - 28}
+                    y={getFloorY(0) - 18}
+                    width={56}
+                    height={16}
+                    rx={4}
+                    fill="#0B132B"
+                    stroke="#3A86FF"
+                    strokeWidth={1.8}
+                  />
+                  <Rect
+                    x={policeSquad.carX - 12}
+                    y={getFloorY(0) - 16}
+                    width={24}
+                    height={12}
+                    fill="#FFFFFF"
+                    rx={2}
+                  />
+                  <SvgText
+                    x={policeSquad.carX}
+                    y={getFloorY(0) - 7}
+                    fontSize={6}
+                    fontWeight="900"
+                    fill="#0B132B"
+                    textAnchor="middle"
+                  >
+                    POLICE
+                  </SvgText>
+                  <Circle cx={policeSquad.carX - 18} cy={getFloorY(0) - 2} r={5} fill="#05060C" stroke="#718096" strokeWidth={1} />
+                  <Circle cx={policeSquad.carX + 18} cy={getFloorY(0) - 2} r={5} fill="#05060C" stroke="#718096" strokeWidth={1} />
+                  {/* Flashing Police Siren Lightbar on Roof */}
+                  <Rect
+                    x={policeSquad.carX - 8}
+                    y={getFloorY(0) - 23}
+                    width={16}
+                    height={5}
+                    rx={2}
+                    fill="#1A202C"
+                  />
+                  <Circle
+                    cx={policeSquad.carX - 4}
+                    cy={getFloorY(0) - 20.5}
+                    r={3}
+                    fill={policeSquad.sirenBlink ? '#FF0055' : '#880022'}
+                  />
+                  <Circle
+                    cx={policeSquad.carX + 4}
+                    cy={getFloorY(0) - 20.5}
+                    r={3}
+                    fill={!policeSquad.sirenBlink ? '#00F5FF' : '#004488'}
+                  />
+                </G>
+              )}
+
               {/* Fuel Canister (Levels 11-20) */}
               {levelConfig.requiresPetrol && !petrolTaken && levelConfig.petrol && (
                 <G>
@@ -2806,7 +3098,38 @@ export default function ThiefEscapeGame({
                 );
               })}
 
-              {/* Player Stealth Operative */}
+              {/* Pursuing Police Officer */}
+              {policeSquad.officer.active && (
+                <G
+                  transform={`translate(${policeSquad.officer.x}, ${
+                    policeSquad.officer.isClimbing && policeSquad.officer.y != null
+                      ? policeSquad.officer.y
+                      : getFloorY(policeSquad.officer.floor)
+                  })`}
+                >
+                  <SvgText
+                    x={0}
+                    y={-34}
+                    fontSize={8}
+                    fontWeight="bold"
+                    fill="#FF0055"
+                    textAnchor="middle"
+                  >
+                    🚨 COP
+                  </SvgText>
+                  {/* Police Cap */}
+                  <Polygon points="-7,-28 7,-28 5,-33 -5,-33" fill="#0A1128" stroke="#FFE600" strokeWidth={0.8} />
+                  {/* Head */}
+                  <Circle cx={0} cy={-24} r={5} fill="#FFD166" />
+                  {/* Body */}
+                  <Rect x={-6} y={-19} width={12} height={18} rx={2} fill="#1D3557" stroke="#3A86FF" strokeWidth={1} />
+                  {/* Gold Badge */}
+                  <Circle cx={-2} cy={-14} r={1.5} fill="#FFE600" />
+                  {/* Legs */}
+                  <Line x1={-3} y1={-1} x2={-3 + (policeSquad.officer.facing * 3)} y2={6} stroke="#0B132B" strokeWidth={2.4} strokeLinecap="round" />
+                  <Line x1={3} y1={-1} x2={3 - (policeSquad.officer.facing * 3)} y2={6} stroke="#0B132B" strokeWidth={2.4} strokeLinecap="round" />
+                </G>
+              )}
               {!player.isHiding && !carState.thiefInside && (() => {
                 const curThiefX = carState.isEscaping ? player.x + (carState.x - player.x) * carState.jumpPhase : player.x;
                 const curThiefY = carState.isEscaping ? activePlayerY - Math.sin(carState.jumpPhase * Math.PI) * 22 : activePlayerY;

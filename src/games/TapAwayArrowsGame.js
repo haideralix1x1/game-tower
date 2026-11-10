@@ -46,16 +46,17 @@ const STORAGE_LEVEL_KEY = '@game_tower:level_arrows_v1';
 const STORAGE_BEST_KEY = '@game_tower:best_arrows_v1';
 
 const PATTERN_TYPES = [
-  { name: 'PINWHEEL VORTEX', bias: 'vortex', minCount: 16, maxCount: 20 },
-  { name: 'CONCENTRIC FORTRESS', bias: 'fortress', minCount: 18, maxCount: 22 },
-  { name: 'TWIN HIGHWAYS', bias: 'highways', minCount: 18, maxCount: 24 },
-  { name: 'SPIRAL GALAXY', bias: 'spiral', minCount: 20, maxCount: 24 },
-  { name: 'CHEVRON MATRIX', bias: 'chevron', minCount: 20, maxCount: 26 },
-  { name: 'CYBER LABYRINTH', bias: 'labyrinth', minCount: 22, maxCount: 28 },
+  { name: 'PINWHEEL VORTEX', bias: 'vortex', minCount: 22, maxCount: 28 },
+  { name: 'CONCENTRIC FORTRESS', bias: 'fortress', minCount: 24, maxCount: 30 },
+  { name: 'TWIN HIGHWAYS', bias: 'highways', minCount: 24, maxCount: 32 },
+  { name: 'SPIRAL GALAXY', bias: 'spiral', minCount: 26, maxCount: 34 },
+  { name: 'CHEVRON MATRIX', bias: 'chevron', minCount: 26, maxCount: 34 },
+  { name: 'CYBER LABYRINTH', bias: 'labyrinth', minCount: 28, maxCount: 36 },
 ];
 
 /**
  * Reverse-generate guaranteed 100% solvable labyrinths according to architectural pattern templates
+ * Strictly packs arrows directly adjacent to each other in a dense, interlocking knot.
  */
 function generatePatternArrows(lvl = 1) {
   const patternIndex = (lvl - 1) % PATTERN_TYPES.length;
@@ -64,11 +65,55 @@ function generatePatternArrows(lvl = 1) {
 
   const grid = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
   const arrows = [];
+  const placedPoints = [];
 
   for (let id = 0; id < targetCount; id++) {
-    for (let attempt = 0; attempt < 220; attempt++) {
-      let hr = Math.floor(Math.random() * ROWS);
-      let hc = Math.floor(Math.random() * COLS);
+    let placed = false;
+
+    // Gather candidate cells: must be directly touching existing arrows (or center for first arrow)
+    const candidates = [];
+    if (placedPoints.length === 0) {
+      candidates.push(
+        { r: Math.floor(ROWS / 2), c: Math.floor(COLS / 2) },
+        { r: Math.floor(ROWS / 2) - 1, c: Math.floor(COLS / 2) },
+        { r: Math.floor(ROWS / 2) + 1, c: Math.floor(COLS / 2) }
+      );
+    } else {
+      for (let r = 1; r < ROWS - 1; r++) {
+        for (let c = 1; c < COLS - 1; c++) {
+          if (grid[r][c] === null) {
+            const isAdj = placedPoints.some(
+              (p) => Math.abs(p.r - r) + Math.abs(p.c - c) === 1
+            );
+            if (isAdj) candidates.push({ r, c });
+          }
+        }
+      }
+    }
+
+    if (candidates.length === 0) {
+      // Fallback: search radius 2
+      for (let r = 1; r < ROWS - 1; r++) {
+        for (let c = 1; c < COLS - 1; c++) {
+          if (grid[r][c] === null) {
+            const isNear = placedPoints.some(
+              (p) => Math.abs(p.r - r) + Math.abs(p.c - c) <= 2
+            );
+            if (isNear) candidates.push({ r, c });
+          }
+        }
+      }
+    }
+
+    // Try candidates in random order
+    for (let i = candidates.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
+    }
+
+    for (const cand of candidates) {
+      let hr = cand.r;
+      let hc = cand.c;
       let dIdx = Math.floor(Math.random() * 4);
 
       if (pattern.bias === 'fortress') {
@@ -130,7 +175,7 @@ function generatePatternArrows(lvl = 1) {
       let curR = step1R;
       let curC = step1C;
       let bodyDir = (dIdx + 2) % 4;
-      const len = 2 + Math.floor(Math.random() * 4);
+      const len = 2 + Math.floor(Math.random() * 3);
 
       for (let s = 2; s < len; s++) {
         const choices = [bodyDir, (bodyDir + 1) % 4, (bodyDir + 3) % 4];
@@ -170,11 +215,18 @@ function generatePatternArrows(lvl = 1) {
 
         for (const pt of arrow.path) {
           grid[pt.r][pt.c] = arrow.id;
+          placedPoints.push(pt);
         }
 
         arrows.push(arrow);
+        placed = true;
         break;
       }
+    }
+
+    if (!placed && arrows.length >= pattern.minCount) {
+      // Reached satisfactory dense puzzle
+      break;
     }
   }
 

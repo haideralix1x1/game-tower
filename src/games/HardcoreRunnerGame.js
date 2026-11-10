@@ -41,9 +41,9 @@ const STORAGE_HIGH_SCORE_KEY = '@game_tower:best_dash_v1';
 
 // Cube and physics parameters (Fast & snappy arcade feel)
 const CUBE_SIZE = 22;
-const BASE_SPEED = 7.6;
-const GRAVITY = 0.60;
-const JUMP_VELOCITY = -9.2;
+const BASE_SPEED = 10.5;
+const GRAVITY = 0.82;
+const JUMP_VELOCITY = -11.4;
 const CORRIDOR_HEIGHT = 118;
 
 // Phase Thresholds in Distance (Endless Mode Progression)
@@ -118,140 +118,6 @@ function getTrackSlope(worldX, segments) {
   return (y2 - y1) / (2 * delta);
 }
 
-// Generate static ambient background stars
-function createGalaxyStars(count = 20) {
-  const stars = [];
-  for (let i = 0; i < count; i++) {
-    stars.push({
-      id: `star_${i}`,
-      origX: Math.random() * 1200,
-      yRatio: Math.random(),
-      r: Math.random() > 0.7 ? 1.5 : 1.0,
-      parallax: 0.15 + (i % 3) * 0.08,
-      color: i % 3 === 0 ? '#00F5FF' : i % 3 === 1 ? '#FFE600' : '#FFFFFF',
-      opacity: 0.35 + (i % 4) * 0.15,
-    });
-  }
-  return stars;
-}
-
-// Standing static space ships strictly outside the main corridor (upper sky or bottom abyss)
-function createInitialNpcShips(arenaW = 400, arenaH = 650) {
-  return [
-    {
-      id: 'ship_ufo_1',
-      zone: 'SKY_TOP',
-      type: 'CUTE_UFO',
-      x: arenaW * 0.16,
-      y: 28,
-      speed: 0,
-      dir: 1,
-      scale: 1.05,
-    },
-    {
-      id: 'ship_kitty_1',
-      zone: 'SKY_TOP',
-      type: 'STAR_KITTY',
-      x: arenaW * 0.50,
-      y: 32,
-      speed: 0,
-      dir: -1,
-      scale: 1.0,
-    },
-    {
-      id: 'ship_fighter_1',
-      zone: 'SKY_TOP',
-      type: 'WARP_FIGHTER',
-      x: arenaW * 0.84,
-      y: 26,
-      speed: 0,
-      dir: 1,
-      scale: 0.95,
-    },
-    {
-      id: 'ship_rocket_1',
-      zone: 'SKY_BOTTOM',
-      type: 'CHIBI_ROCKET',
-      x: arenaW * 0.22,
-      y: arenaH - 34,
-      speed: 0,
-      dir: 1,
-      scale: 0.95,
-    },
-    {
-      id: 'ship_shuttle_1',
-      zone: 'SKY_BOTTOM',
-      type: 'CYBER_SHUTTLE',
-      x: arenaW * 0.74,
-      y: arenaH - 32,
-      speed: 0,
-      dir: -1,
-      scale: 1.0,
-    },
-  ];
-}
-
-// Fallen stars (shooting stars with luminous tails) strictly in sky or abyss flying completely outside the screen
-function createInitialFallingStars(arenaW = 400, arenaH = 650) {
-  return [
-    {
-      id: 'fs_top_0',
-      zone: 'SKY_TOP',
-      x: arenaW * 0.85,
-      y: 22,
-      vx: -7.2,
-      vy: 0.35,
-      len: 75,
-      color: '#00F5FF',
-      opacity: 0.95,
-    },
-    {
-      id: 'fs_top_1',
-      zone: 'SKY_TOP',
-      x: arenaW * 0.35,
-      y: 34,
-      vx: -7.8,
-      vy: 0.3,
-      len: 90,
-      color: '#FFE600',
-      opacity: 0.9,
-    },
-    {
-      id: 'fs_top_2',
-      zone: 'SKY_TOP',
-      x: arenaW * 1.3,
-      y: 18,
-      vx: -7.0,
-      vy: 0.45,
-      len: 70,
-      color: '#FF007F',
-      opacity: 0.85,
-    },
-    {
-      id: 'fs_bot_0',
-      zone: 'SKY_BOTTOM',
-      x: arenaW * 0.75,
-      y: arenaH - 38,
-      vx: -7.5,
-      vy: -0.3,
-      len: 80,
-      color: '#00F5FF',
-      opacity: 0.9,
-    },
-    {
-      id: 'fs_bot_1',
-      zone: 'SKY_BOTTOM',
-      x: arenaW * 1.25,
-      y: arenaH - 24,
-      vx: -8.0,
-      vy: -0.25,
-      len: 95,
-      color: '#39FF14',
-      opacity: 0.85,
-    },
-  ];
-}
-
 export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPaused = false }) {
   const isPausedRef = useRef(isPaused);
   useEffect(() => {
@@ -274,6 +140,9 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
   const [highScore, setHighScore] = useState(0);
   const [currentPhase, setCurrentPhase] = useState(PHASE_THRESHOLDS[0]);
   const [phaseBanner, setPhaseBanner] = useState(null);
+  const [lives, setLives] = useState(3);
+  const livesRef = useRef(3);
+  const invulnerableUntilRef = useRef(0);
 
   // Consolidated 60 FPS visual state
   const [frameState, setFrameState] = useState(() => ({
@@ -281,14 +150,13 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
     playerY: groundY,
     rotation: 0,
     score: 0,
+    lives: 3,
+    isInvulnerable: false,
     segments: [],
     obstacles: [],
     turrets: [],
     projectiles: [],
     gaps: [],
-    npcShips: createInitialNpcShips(arenaWidth, arenaHeight),
-    stars: createGalaxyStars(),
-    fallingStars: createInitialFallingStars(arenaWidth, arenaHeight),
   }));
 
   // Result modal
@@ -311,11 +179,6 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
   const animFrameRef = useRef(null);
   const tickCountRef = useRef(0);
   const lastGroundedTimeRef = useRef(0);
-
-  // Ambient galaxy refs
-  const starsRef = useRef(createGalaxyStars());
-  const npcShipsRef = useRef(createInitialNpcShips(arenaWidth, arenaHeight));
-  const fallingStarsRef = useRef(createInitialFallingStars(arenaWidth, arenaHeight));
 
   // Load high score
   useEffect(() => {
@@ -530,19 +393,22 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
     });
     spawnCursorXRef.current = 520;
 
+    livesRef.current = 3;
+    setLives(3);
+    invulnerableUntilRef.current = 0;
+
     setFrameState({
       distance: 0,
       playerY: groundY,
       rotation: 0,
       score: 0,
+      lives: 3,
+      isInvulnerable: false,
       segments: [...segmentsRef.current],
       obstacles: [],
       turrets: [],
       projectiles: [],
       gaps: [],
-      npcShips: [...npcShipsRef.current],
-      stars: starsRef.current,
-      fallingStars: [...fallingStarsRef.current],
     });
     setIsPlaying(false);
     setModalVisible(false);
@@ -661,30 +527,23 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
         projectilesRef.current = projectilesRef.current.filter((p) => p.x > nextDist - 300);
       }
 
-      // Space ships remain standing static in place (no positional update)
-
-      // Update falling stars (shooting stars with luminous tails): travel completely outside of the screen
-      const fStars = fallingStarsRef.current;
-      for (let i = 0; i < fStars.length; i++) {
-        const fs = fStars[i];
-        fs.x += fs.vx;
-        fs.y += fs.vy;
-
-        // When the falling star has flown COMPLETELY outside the screen borders:
-        if (fs.x < -120 || fs.y < -40 || fs.y > arenaHeight + 40) {
-          // Respawn outside the far right screen edge
-          fs.x = arenaWidth + 60 + Math.random() * 90;
-          if (fs.zone === 'SKY_TOP') {
-            fs.y = 14 + Math.random() * 26;
-            fs.vy = 0.3 + Math.random() * 0.3;
-          } else {
-            fs.y = arenaHeight - 44 + Math.random() * 24;
-            fs.vy = -0.3 - Math.random() * 0.3;
-          }
-          fs.vx = -7.0 - Math.random() * 1.5;
-          fs.opacity = 0.8 + Math.random() * 0.2;
+      // Take damage from obstacles or void
+      const takeHit = (cause) => {
+        if (Date.now() < invulnerableUntilRef.current) return false;
+        if (livesRef.current > 1) {
+          livesRef.current -= 1;
+          setLives(livesRef.current);
+          invulnerableUntilRef.current = Date.now() + 1800;
+          playSliceSound();
+          triggerMediumHaptic();
+          return false; // survived with remaining life
+        } else {
+          livesRef.current = 0;
+          setLives(0);
+          handleCrash(cause);
+          return true; // died
         }
-      }
+      };
 
       // Exact mathematical elevation at player's center of mass
       const playerCenterX = nextDist + playerScreenX + CUBE_SIZE * 0.5;
@@ -742,9 +601,11 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
           isGrounded = true;
           lastGroundedTimeRef.current = Date.now();
         } else if (playerYRef.current > targetGroundY + 4) {
-          // Cube fell below the floor level into the gap or hit the pit wall -> GAME OVER
-          handleCrash('VOID_FALL');
-          return;
+          // Cube fell below the floor level
+          if (takeHit('VOID_FALL')) return;
+          nextY = targetGroundY;
+          nextVy = 0;
+          distanceRef.current += 110;
         } else if (nextY <= curCeilSurface) {
           nextY = curCeilSurface;
           nextVy = 0;
@@ -755,10 +616,11 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
           nextY = curCeilSurface;
           nextVy = 0;
         }
-        // As soon as cube falls into the void gap below the floor line, trigger GAME OVER
         if (nextY > targetGroundY + 8) {
-          handleCrash('VOID_FALL');
-          return;
+          if (takeHit('VOID_FALL')) return;
+          nextY = targetGroundY;
+          nextVy = 0;
+          distanceRef.current += 110;
         }
       }
 
@@ -821,8 +683,9 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
         // Collision with player cube
         const distToCube = Math.hypot(projScreenX - pMidX, projScreenY - pMidY);
         if (distToCube < CUBE_SIZE * 0.68) {
-          handleCrash('PROJECTILE');
-          return;
+          projs.splice(i, 1);
+          if (takeHit('PROJECTILE')) return;
+          continue;
         }
 
         // Remove if offscreen or past floor
@@ -837,14 +700,13 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
         playerY: nextY,
         rotation: nextRot,
         score: nextScore,
+        lives: livesRef.current,
+        isInvulnerable: Date.now() < invulnerableUntilRef.current,
         segments: segmentsRef.current,
         obstacles: obstaclesRef.current,
         turrets: turretsRef.current,
         projectiles: projectilesRef.current,
         gaps: gapsRef.current,
-        npcShips: [...npcShipsRef.current],
-        stars: starsRef.current,
-        fallingStars: [...fallingStarsRef.current],
       });
 
       // Player Hitbox
@@ -874,8 +736,9 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
             pHit.bottom > sTop &&
             pHit.top < sBottom
           ) {
-            handleCrash('COLLISION');
-            return;
+            if (takeHit('COLLISION')) return;
+            distanceRef.current += 38;
+            playerVyRef.current = -5;
           }
         } else if (obs.type === 'BLOCK') {
           // If hit the front face (not landed on top)
@@ -890,8 +753,9 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
             pHit.bottom > bTop &&
             pHit.top < bBottom
           ) {
-            handleCrash('COLLISION');
-            return;
+            if (takeHit('COLLISION')) return;
+            distanceRef.current += 38;
+            playerVyRef.current = -5;
           }
         } else if (obs.type === 'SPIKE_DROP') {
           const curPlayerX = nextDist + playerScreenX;
@@ -912,8 +776,8 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
             pHit.bottom > spikeY + 3 &&
             pHit.top < spikeY + obs.h - 3
           ) {
-            handleCrash('DROP_SPIKE');
-            return;
+            if (takeHit('DROP_SPIKE')) return;
+            distanceRef.current += 38;
           }
         }
       }
@@ -947,14 +811,13 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
     playerY,
     rotation,
     score,
+    lives: curLives = 3,
+    isInvulnerable = false,
     segments = [],
     obstacles = [],
     turrets = [],
     gaps = [],
     projectiles = [],
-    npcShips = [],
-    stars = [],
-    fallingStars = [],
   } = frameState;
 
   // Viewport sampling for continuous corridor lines (top ceiling & bottom floor)
@@ -1057,6 +920,12 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
           </Text>
         </View>
 
+        <View style={styles.hudLivesGroup}>
+          <Text style={styles.hudLivesIcons}>
+            {Array.from({ length: 3 }).map((_, i) => (i < curLives ? '❤️' : '🖤')).join(' ')}
+          </Text>
+        </View>
+
         <View style={styles.hudStatsGroup}>
           <Text style={styles.hudScoreLabel}>
             DIST <Text style={styles.hudScoreVal}>{score}m</Text>
@@ -1085,19 +954,6 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
               <Stop offset="0%" stopColor="#FFE600" stopOpacity="1" />
               <Stop offset="100%" stopColor="#FF6D00" stopOpacity="1" />
             </LinearGradient>
-            <RadialGradient id="nebulaViolet" cx="50%" cy="50%" rx="50%" ry="50%">
-              <Stop offset="0%" stopColor="#7928CA" stopOpacity="0.22" />
-              <Stop offset="100%" stopColor="#7928CA" stopOpacity="0" />
-            </RadialGradient>
-            <RadialGradient id="nebulaCyan" cx="50%" cy="50%" rx="50%" ry="50%">
-              <Stop offset="0%" stopColor="#00F5FF" stopOpacity="0.16" />
-              <Stop offset="100%" stopColor="#00F5FF" stopOpacity="0" />
-            </RadialGradient>
-            <LinearGradient id="runnerShipGrad" x1="0" y1="0" x2="1" y2="0">
-              <Stop offset="0%" stopColor="#00F5FF" stopOpacity="0.95" />
-              <Stop offset="50%" stopColor="#7928CA" stopOpacity="0.85" />
-              <Stop offset="100%" stopColor="#FF007F" stopOpacity="0.95" />
-            </LinearGradient>
             <LinearGradient id="topWallGrad" x1="0" y1="0" x2="0" y2="1">
               <Stop offset="0%" stopColor="#060314" stopOpacity="0.96" />
               <Stop offset="100%" stopColor="#14082C" stopOpacity="0.96" />
@@ -1108,179 +964,11 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
             </LinearGradient>
           </Defs>
 
-          {/* GALAXY DEEP SPACE BACKGROUND */}
-          <Circle cx={arenaWidth * 0.22} cy={arenaHeight * 0.18} r={120} fill="url(#nebulaViolet)" />
-          <Circle cx={arenaWidth * 0.82} cy={arenaHeight * 0.82} r={140} fill="url(#nebulaCyan)" />
-
-          {/* Ambient Parallax Galaxy Stars */}
-          {stars.map((star) => {
-            const screenX =
-              ((star.origX - distance * star.parallax) % (arenaWidth + 80) +
-                arenaWidth +
-                80) %
-                (arenaWidth + 80) -
-              40;
-            const screenY = star.yRatio * arenaHeight;
-
-            return (
-              <Circle
-                key={star.id}
-                cx={screenX}
-                cy={screenY}
-                r={star.r}
-                fill={star.color}
-                opacity={star.opacity}
-              />
-            );
-          })}
-
           {/* TOP SOLID WALL (Curves dynamically with track elevations) */}
           <Path d={topWallPath} fill="url(#topWallGrad)" />
 
           {/* BOTTOM SOLID WALL (Curves dynamically with track elevations) */}
           <Path d={botWallPath} fill="url(#bottomWallGrad)" />
-
-          {/* UPPER SKY ZONE: Fallen Stars and Static Space Ships strictly ABOVE the top ceiling line */}
-          <G>
-            {fallingStars
-              .filter((fs) => fs.zone === 'SKY_TOP')
-              .map((fs) => (
-                <G key={fs.id} opacity={fs.opacity}>
-                  <Line
-                    x1={fs.x}
-                    y1={fs.y}
-                    x2={fs.x - fs.vx * 12}
-                    y2={fs.y - fs.vy * 12}
-                    stroke={fs.color}
-                    strokeWidth={2.4}
-                    strokeLinecap="round"
-                  />
-                  <Circle cx={fs.x} cy={fs.y} r={3} fill="#FFFFFF" />
-                  <Circle cx={fs.x} cy={fs.y} r={5.2} fill={fs.color} opacity={0.6} />
-                </G>
-              ))}
-
-            {npcShips
-              .filter((ship) => ship.zone === 'SKY_TOP')
-              .map((ship) => {
-                const sY = ship.y || 28;
-                const scaleX = ship.dir * ship.scale;
-                const scaleY = ship.scale;
-
-                return (
-                  <G
-                    key={ship.id}
-                    transform={`translate(${ship.x}, ${sY}) scale(${scaleX}, ${scaleY})`}
-                  >
-                    {ship.type === 'CUTE_UFO' && (
-                      <G>
-                        <Polygon points="-8,7 8,7 16,24 -16,24" fill="rgba(0, 245, 212, 0.25)" />
-                        <Circle cx={0} cy={-5} r={9} fill="rgba(0, 245, 212, 0.55)" stroke="#00F5D4" strokeWidth={1.6} />
-                        <Circle cx={0} cy={-5} r={5} fill="#39FF14" />
-                        <Circle cx={-2} cy={-6} r={1.2} fill="#050510" />
-                        <Circle cx={2} cy={-6} r={1.2} fill="#050510" />
-                        <Circle cx={-3.2} cy={-3.5} r={1} fill="#FF007F" opacity={0.7} />
-                        <Circle cx={3.2} cy={-3.5} r={1} fill="#FF007F" opacity={0.7} />
-                        <Rect x={-18} y={-1} width={36} height={8} rx={4} fill="#FF70A6" stroke="#FFFFFF" strokeWidth={1.5} />
-                        <Circle cx={-10} cy={3} r={1.6} fill="#FFE600" />
-                        <Circle cx={0} cy={3} r={1.6} fill="#FFE600" />
-                        <Circle cx={10} cy={3} r={1.6} fill="#FFE600" />
-                      </G>
-                    )}
-
-                    {ship.type === 'STAR_KITTY' && (
-                      <G>
-                        <Circle cx={-16} cy={0} r={3} fill="#FFB3C6" opacity={0.8} />
-                        <Circle cx={-22} cy={0} r={1.8} fill="#FF70A6" opacity={0.6} />
-                        <Polygon points="-8,-8 -4,-16 0,-10" fill="#FF70A6" stroke="#FFFFFF" strokeWidth={1} />
-                        <Polygon points="2,-10 6,-16 10,-8" fill="#FF70A6" stroke="#FFFFFF" strokeWidth={1} />
-                        <Circle cx={0} cy={0} r={11} fill="#FFE5EC" stroke="#FF70A6" strokeWidth={1.6} />
-                        <Circle cx={0} cy={0} r={11} fill="none" stroke="rgba(0, 245, 255, 0.55)" strokeWidth={1.4} />
-                        <Circle cx={-3.2} cy={-1.5} r={1.3} fill="#331832" />
-                        <Circle cx={3.2} cy={-1.5} r={1.3} fill="#331832" />
-                        <Polygon points="0,0.8 -1.2,0 1.2,0" fill="#FF007F" />
-                        <Circle cx={-5.5} cy={1.2} r={1.4} fill="#FF70A6" opacity={0.6} />
-                        <Circle cx={5.5} cy={1.2} r={1.4} fill="#FF70A6" opacity={0.6} />
-                      </G>
-                    )}
-
-                    {ship.type === 'WARP_FIGHTER' && (
-                      <G>
-                        <Polygon points="-14,0 4,-9 22,0 4,9" fill="url(#runnerShipGrad)" stroke="#FFFFFF" strokeWidth={1.4} />
-                        <Polygon points="2,0 8,-4 16,0 8,4" fill="#0C1328" />
-                        <Circle cx={12} cy={0} r={2} fill="#00F5FF" />
-                        <Line x1={-18} y1={0} x2={-12} y2={0} stroke="#00F5FF" strokeWidth={2} />
-                      </G>
-                    )}
-                  </G>
-                );
-              })}
-          </G>
-
-          {/* LOWER ABYSS ZONE: Fallen Stars and Static Space Ships strictly BELOW the bottom floor line */}
-          <G>
-            {fallingStars
-              .filter((fs) => fs.zone === 'SKY_BOTTOM')
-              .map((fs) => (
-                <G key={fs.id} opacity={fs.opacity}>
-                  <Line
-                    x1={fs.x}
-                    y1={fs.y}
-                    x2={fs.x - fs.vx * 12}
-                    y2={fs.y - fs.vy * 12}
-                    stroke={fs.color}
-                    strokeWidth={2.4}
-                    strokeLinecap="round"
-                  />
-                  <Circle cx={fs.x} cy={fs.y} r={3} fill="#FFFFFF" />
-                  <Circle cx={fs.x} cy={fs.y} r={5.2} fill={fs.color} opacity={0.6} />
-                </G>
-              ))}
-
-            {npcShips
-              .filter((ship) => ship.zone === 'SKY_BOTTOM')
-              .map((ship) => {
-                const sY = ship.y || (arenaHeight - 34);
-                const scaleX = ship.dir * ship.scale;
-                const scaleY = ship.scale;
-
-                return (
-                  <G
-                    key={ship.id}
-                    transform={`translate(${ship.x}, ${sY}) scale(${scaleX}, ${scaleY})`}
-                  >
-                    {ship.type === 'CHIBI_ROCKET' && (
-                      <G>
-                        <Circle cx={-16} cy={0} r={4} fill="#FFE600" />
-                        <Circle cx={-22} cy={0} r={2.5} fill="#FF6D00" />
-                        <Polygon points="-8,-8 -14,-12 -11,-3" fill="#7928CA" />
-                        <Polygon points="-8,8 -14,12 -11,3" fill="#7928CA" />
-                        <Path
-                          d="M 15 0 C 11 -7 -7 -7 -11 -4 C -12 0 -12 0 -11 4 C -7 7 11 7 15 0 Z"
-                          fill="#FFFFFF"
-                          stroke="#00F5FF"
-                          strokeWidth={1.6}
-                        />
-                        <Path d="M 15 0 C 12 -3.5 8 -3.5 8 0 C 8 3.5 12 3.5 15 0 Z" fill="#FF007F" />
-                        <Circle cx={-1} cy={0} r={4.5} fill="#180A2E" stroke="#FFE600" strokeWidth={1.3} />
-                        <Circle cx={-2} cy={-0.8} r={1} fill="#00F5FF" />
-                        <Circle cx={0.5} cy={-0.8} r={1} fill="#00F5FF" />
-                      </G>
-                    )}
-
-                    {ship.type === 'CYBER_SHUTTLE' && (
-                      <G>
-                        <Rect x={-14} y={-6} width={26} height={12} rx={4} fill="#170A34" stroke="#FF70A6" strokeWidth={1.5} />
-                        <Polygon points="12,-5 19,0 12,5" fill="#00F5D4" />
-                        <Circle cx={-4} cy={0} r={2.2} fill="#00F5FF" />
-                        <Circle cx={3} cy={0} r={2.2} fill="#FFE600" />
-                        <Line x1={-18} y1={0} x2={-14} y2={0} stroke="#FFE600" strokeWidth={2.4} />
-                      </G>
-                    )}
-                  </G>
-                );
-              })}
-          </G>
 
           {/* TOP CEILING NEON GUIDEWAY LINE (Moves UP & DOWN with the path) */}
           <Path
@@ -1592,6 +1280,7 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
             transform={`rotate(${rotation}, ${playerScreenX + CUBE_SIZE / 2}, ${
               playerY + CUBE_SIZE / 2
             })`}
+            opacity={isInvulnerable ? 0.65 : 1}
           >
             <Rect
               x={playerScreenX}
@@ -1600,7 +1289,7 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
               height={CUBE_SIZE}
               rx={5}
               fill="url(#cubeGrad)"
-              stroke="#FFFFFF"
+              stroke={isInvulnerable ? '#00F5FF' : '#FFFFFF'}
               strokeWidth={1.8}
             />
             {/* Inner Core */}
@@ -1620,6 +1309,19 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
               fill="#00F5FF"
             />
           </G>
+
+          {/* Invulnerability Shield Bubble */}
+          {isInvulnerable && (
+            <Circle
+              cx={playerScreenX + CUBE_SIZE / 2}
+              cy={playerY + CUBE_SIZE / 2}
+              r={CUBE_SIZE * 0.88}
+              stroke="#00F5FF"
+              strokeWidth={2}
+              fill="rgba(0, 245, 255, 0.18)"
+              strokeDasharray="4,3"
+            />
+          )}
         </Svg>
 
         {/* Start / Jump Tap Overlay Hint */}
@@ -1673,6 +1375,15 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 8,
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  hudLivesGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+  },
+  hudLivesIcons: {
+    fontSize: 13,
+    letterSpacing: 2,
   },
   hudPhaseText: {
     fontFamily: monoFont,
