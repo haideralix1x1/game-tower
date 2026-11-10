@@ -1949,7 +1949,7 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
         >
           <MiniGameHeader
             title="BRICK BREAKER"
-            floorLabel="FLOOR 09 // QUANTUM ARENA"
+            floorLabel="FLOOR 23 // QUANTUM ARENA"
             score={score}
             bestScore={bestScore}
             accentColor={mode === 'HARD_SPHERE_DUEL' ? '#FF0055' : '#00F5FF'}

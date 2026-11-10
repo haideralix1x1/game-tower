@@ -345,7 +345,7 @@ export default function WordlyGame({ onBackToHub, onScoreUpdate }) {
 
         <MiniGameHeader
           title="WORDLY NEO"
-          floorLabel="FLOOR 03 // WORD CIPHER"
+          floorLabel="FLOOR 24 // WORD CIPHER"
           score={score}
           bestScore={bestScore}
           accentColor={COLORS.matrixMint}

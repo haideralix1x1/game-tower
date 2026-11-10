@@ -923,6 +923,7 @@ export default function BoxEscapeGame({
       <View style={styles.container}>
         <MiniGameHeader
           title="BOX ESCAPE"
+          floorLabel="FLOOR 19 // PHYSICS CRATE"
           score={totalScore}
           bestScore={highScore}
           onBackToHub={onBackToHub}

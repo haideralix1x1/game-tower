@@ -545,7 +545,7 @@ export default function Game2048({ onBackToHub, onScoreUpdate, isPaused = false 
 
         <MiniGameHeader
           title="DROP 2048 NEO"
-          floorLabel="FLOOR 01 // VERTICAL MERGE"
+          floorLabel="FLOOR 20 // VERTICAL MERGE"
           score={score}
           bestScore={bestScore}
           accentColor={COLORS.cyan}
