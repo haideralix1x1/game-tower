@@ -410,6 +410,9 @@ export default function IcyTowerClimberGame({ onBackToHub, onScoreUpdate, isPaus
         p.vx = Math.max(-6.2, p.vx - airImpulse);
       } else if (direction === 'RIGHT') {
         p.vx = Math.min(6.2, p.vx + airImpulse);
+      } else {
+        // CENTER tap in mid-air: stop horizontal drift to fall/rise straight!
+        p.vx = 0;
       }
       return;
     }
@@ -461,12 +464,18 @@ export default function IcyTowerClimberGame({ onBackToHub, onScoreUpdate, isPaus
         const isUpSwipe = gesture.dy < -35;
         let dir = 'CENTER';
 
+        const tapX = evt.nativeEvent.locationX;
+        const midLeft = arenaWidth * 0.35;
+        const midRight = arenaWidth * 0.65;
+
         if (gesture.dx > 25) {
           dir = 'RIGHT';
         } else if (gesture.dx < -25) {
           dir = 'LEFT';
+        } else if (tapX >= midLeft && tapX <= midRight) {
+          // Middle tap: Jump straight up!
+          dir = 'CENTER';
         } else {
-          const tapX = evt.nativeEvent.locationX;
           dir = tapX > arenaWidth * 0.5 ? 'RIGHT' : 'LEFT';
         }
 
@@ -791,8 +800,13 @@ export default function IcyTowerClimberGame({ onBackToHub, onScoreUpdate, isPaus
         }
       }
 
-      // 9. Player Physics & Gravity (Smooth air glide & wall bounce)
-      let vx = p.vx * 0.98;
+      // 9. Player Physics & Gravity (Solid early grip, gradually scaling to icy slide at higher floors)
+      const standingPlat = plats.find((pl) => pl.id === p.currentPlatId);
+      const floorNum = standingPlat?.floor != null ? standingPlat.floor : 0;
+      // Start: Floors 0-25 are firm and stable (0.58). Friction ramps up gradually to icy (0.97) as altitude rises
+      const groundFriction = floorNum < 25 ? 0.58 : floorNum < 50 ? 0.80 : floorNum < 75 ? 0.90 : 0.97;
+      let vx = p.isGrounded ? p.vx * groundFriction : p.vx * 0.98;
+      if (p.isGrounded && Math.abs(vx) < 0.08) vx = 0;
       let vy = p.vy;
 
       if (!p.isGrounded) {

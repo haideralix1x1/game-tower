@@ -743,6 +743,7 @@ export default function RopeCutGame({ onBackToHub, onScoreUpdate, isPaused = fal
 
         if (dist < SPIDER_RADIUS + 4) {
           handleFail('ZAPPED BY QUANTUM LASER GRID!');
+          animFrameRef.current = requestAnimationFrame(tick);
           return;
         }
       }
@@ -775,12 +776,14 @@ export default function RopeCutGame({ onBackToHub, onScoreUpdate, isPaused = fal
       const distToNest = Math.hypot(curSpider.x - curNest.x, curSpider.y - curNest.y);
       if (distToNest < curNest.radius + 6) {
         handleWin();
+        animFrameRef.current = requestAnimationFrame(tick);
         return;
       }
 
       // 8. Fallen into the void below
       if (curSpider.y > arenaHeight + 40) {
         handleFail('SPIDER FELL INTO THE CYBER VOID!');
+        animFrameRef.current = requestAnimationFrame(tick);
         return;
       }
 

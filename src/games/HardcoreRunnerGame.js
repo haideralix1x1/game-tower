@@ -242,20 +242,20 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
               h: 22,
             });
           }
-        } else if (curX < 2800) {
-          // Phase 2: Ground spikes & blocks only. NO drop spikes, NO turrets, NO gaps.
+        } else if (curX < 2600) {
+          // Phase 2: Gradually introduce ground spikes and occasional small void gaps
           const rand = Math.random();
           if (rand < 0.35) {
             newObs.push({
               id: `blk_${curX}`,
               type: 'BLOCK',
-              x: curX + 140 + Math.random() * (segW - 260),
+              x: curX + 130 + Math.random() * (segW - 260),
               w: 24,
               h: 22,
             });
-          } else if (rand < 0.85) {
+          } else if (rand < 0.75) {
             const isDouble = Math.random() > 0.65;
-            const spX = curX + 140 + Math.random() * (segW - 260);
+            const spX = curX + 130 + Math.random() * (segW - 260);
             newObs.push({
               id: `sp_1_${spX}`,
               type: 'SPIKE_BOTTOM',
@@ -272,119 +272,9 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
                 h: 22,
               });
             }
-          }
-        } else if (curX < 4500) {
-          // Phase 3: Introduce aero-drop spikes from ceiling + ground obstacles. NO turrets, NO gaps.
-          const rand = Math.random();
-          if (rand < 0.30) {
-            newObs.push({
-              id: `blk_${curX}`,
-              type: 'BLOCK',
-              x: curX + 130 + Math.random() * (segW - 240),
-              w: 24,
-              h: 22,
-            });
-          } else if (rand < 0.70) {
-            const spX = curX + 130 + Math.random() * (segW - 240);
-            newObs.push({
-              id: `sp_1_${spX}`,
-              type: 'SPIKE_BOTTOM',
-              x: spX,
-              w: 22,
-              h: 22,
-            });
-          }
-
-          // Aero-Drop Spike chance
-          if (Math.random() < 0.35) {
-            newObs.push({
-              id: `sp_drop_${curX}`,
-              type: 'SPIKE_DROP',
-              x: curX + segW * 0.72,
-              w: 22,
-              h: 24,
-            });
-          }
-        } else if (curX < 6500) {
-          // Phase 4: Introduce ceiling plasma turrets. NO void gaps yet.
-          const rand = Math.random();
-          if (rand < 0.30) {
-            newObs.push({
-              id: `blk_${curX}`,
-              type: 'BLOCK',
-              x: curX + 130 + Math.random() * (segW - 240),
-              w: 24,
-              h: 22,
-            });
-          } else if (rand < 0.70) {
-            const isDouble = Math.random() > 0.45;
-            const spX = curX + 130 + Math.random() * (segW - 240);
-            newObs.push({
-              id: `sp_1_${spX}`,
-              type: 'SPIKE_BOTTOM',
-              x: spX,
-              w: 22,
-              h: 22,
-            });
-            if (isDouble) {
-              newObs.push({
-                id: `sp_2_${spX}`,
-                type: 'SPIKE_BOTTOM',
-                x: spX + 22,
-                w: 22,
-                h: 22,
-              });
-            }
-          }
-
-          if (Math.random() < 0.35) {
-            newTurrets.push({
-              id: `turret_${curX}`,
-              x: curX + segW * 0.5,
-              fired: false,
-            });
-          }
-          if (Math.random() < 0.30) {
-            newObs.push({
-              id: `sp_drop_${curX}`,
-              type: 'SPIKE_DROP',
-              x: curX + segW * 0.72,
-              w: 22,
-              h: 24,
-            });
-          }
-        } else {
-          // Phase 5: Everything enabled, including Void Chasms!
-          const randChoice = Math.random();
-          if (randChoice < 0.28) {
-            newObs.push({
-              id: `blk_${curX}`,
-              type: 'BLOCK',
-              x: curX + 140 + Math.random() * (segW - 240),
-              w: 24,
-              h: 22,
-            });
-          } else if (randChoice < 0.58) {
-            const isDouble = Math.random() > 0.5;
-            const spX = curX + 130 + Math.random() * (segW - 240);
-            newObs.push({
-              id: `sp_1_${spX}`,
-              type: 'SPIKE_BOTTOM',
-              x: spX,
-              w: 22,
-              h: 22,
-            });
-            if (isDouble) {
-              newObs.push({
-                id: `sp_2_${spX}`,
-                type: 'SPIKE_BOTTOM',
-                x: spX + 22,
-                w: 22,
-                h: 22,
-              });
-            }
-          } else if (randChoice < 0.82) {
-            const gapW = 82;
+          } else if (curX >= 1800 && terrainType === 'STRAIGHT') {
+            // Early gentle void gap
+            const gapW = 76;
             const gapX = curX + 140 + Math.random() * (segW - gapW - 180);
             newGaps.push({
               id: `gap_${gapX}`,
@@ -392,22 +282,135 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
               w: gapW,
             });
           }
-
+        } else if (curX < 4500) {
+          // Phase 3: 2 obstacles per segment (ground obstacles, drop spikes, void gaps)
+          const spX1 = curX + 110 + Math.random() * (segW * 0.35);
           if (Math.random() < 0.40) {
-            newTurrets.push({
-              id: `turret_${curX}`,
-              x: curX + segW * 0.5,
-              fired: false,
+            newObs.push({
+              id: `blk_${spX1}`,
+              type: 'BLOCK',
+              x: spX1,
+              w: 24,
+              h: 22,
+            });
+          } else {
+            newObs.push({
+              id: `sp_1_${spX1}`,
+              type: 'SPIKE_BOTTOM',
+              x: spX1,
+              w: 22,
+              h: 22,
             });
           }
 
-          if (Math.random() < 0.30) {
+          // Second obstacle in segment
+          if (Math.random() < 0.45 && terrainType === 'STRAIGHT') {
+            const gapW = 80;
+            const gapX = curX + segW * 0.55 + Math.random() * (segW * 0.25);
+            newGaps.push({
+              id: `gap_${gapX}`,
+              x: gapX,
+              w: gapW,
+            });
+          } else if (Math.random() < 0.50) {
             newObs.push({
               id: `sp_drop_${curX}`,
               type: 'SPIKE_DROP',
               x: curX + segW * 0.72,
               w: 22,
               h: 24,
+            });
+          } else {
+            const spX2 = curX + segW * 0.62 + Math.random() * (segW * 0.25);
+            newObs.push({
+              id: `sp_2_${spX2}`,
+              type: 'SPIKE_BOTTOM',
+              x: spX2,
+              w: 22,
+              h: 22,
+            });
+          }
+        } else if (curX < 6500) {
+          // Phase 4: 2 to 3 obstacles per segment (turrets, drop spikes, ground hazards, gaps)
+          const spX1 = curX + 100 + Math.random() * (segW * 0.28);
+          newObs.push({
+            id: `sp_1_${spX1}`,
+            type: Math.random() < 0.35 ? 'BLOCK' : 'SPIKE_BOTTOM',
+            x: spX1,
+            w: 24,
+            h: 22,
+          });
+
+          // Second obstacle
+          if (terrainType === 'STRAIGHT' && Math.random() < 0.50) {
+            const gapW = 82;
+            const gapX = curX + segW * 0.45 + Math.random() * (segW * 0.2);
+            newGaps.push({
+              id: `gap_${gapX}`,
+              x: gapX,
+              w: gapW,
+            });
+          } else {
+            newObs.push({
+              id: `sp_drop_${curX}`,
+              type: 'SPIKE_DROP',
+              x: curX + segW * 0.52,
+              w: 22,
+              h: 24,
+            });
+          }
+
+          // Turret or third obstacle
+          if (Math.random() < 0.45) {
+            newTurrets.push({
+              id: `turret_${curX}`,
+              x: curX + segW * 0.78,
+              fired: false,
+            });
+          }
+        } else {
+          // Phase 5: High density obstacles (3 obstacles per segment)
+          const spX1 = curX + 90 + Math.random() * (segW * 0.25);
+          newObs.push({
+            id: `sp_1_${spX1}`,
+            type: Math.random() < 0.3 ? 'BLOCK' : 'SPIKE_BOTTOM',
+            x: spX1,
+            w: 24,
+            h: 22,
+          });
+
+          if (terrainType === 'STRAIGHT' && Math.random() < 0.60) {
+            const gapW = 84;
+            const gapX = curX + segW * 0.42 + Math.random() * (segW * 0.2);
+            newGaps.push({
+              id: `gap_${gapX}`,
+              x: gapX,
+              w: gapW,
+            });
+          } else {
+            newObs.push({
+              id: `sp_drop_${curX}`,
+              type: 'SPIKE_DROP',
+              x: curX + segW * 0.48,
+              w: 22,
+              h: 24,
+            });
+          }
+
+          if (Math.random() < 0.55) {
+            newTurrets.push({
+              id: `turret_${curX}`,
+              x: curX + segW * 0.76,
+              fired: false,
+            });
+          } else {
+            const spX3 = curX + segW * 0.74 + Math.random() * (segW * 0.18);
+            newObs.push({
+              id: `sp_3_${spX3}`,
+              type: 'SPIKE_BOTTOM',
+              x: spX3,
+              w: 22,
+              h: 22,
             });
           }
         }
@@ -678,10 +681,16 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
       const targetGroundY = curFloorSurface - CUBE_SIZE;
 
       // VOID GAP TEST:
-      // Player is over a void gap if their center of mass is within the gap boundaries
-      const isOverGap = gapsRef.current.some(
-        (g) => playerCenterX >= g.x + 4 && playerCenterX <= g.x + g.w - 4
+      // Player is over a void gap if their horizontal footprint overlaps the gap opening
+      const pLeft = nextDist + 4;
+      const pRight = nextDist + CUBE_SIZE - 4;
+      const activeGap = gapsRef.current.find(
+        (g) => (playerCenterX >= g.x && playerCenterX <= g.x + g.w) || (pRight > g.x && pLeft < g.x + g.w)
       );
+      const isOverGap = !!activeGap;
+
+      // Track if cube is submerged below solid floor line
+      const isFallingInVoid = playerYRef.current > targetGroundY + 6 || (isOverGap && nextY > targetGroundY + 6);
 
       // Check if landing on static BLOCK from above
       let landedOnBlock = false;
@@ -691,14 +700,14 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
         const obs = obsList[i];
         if (obs.type === 'BLOCK') {
           const obsScreenX = obs.x - nextDist + playerScreenX;
-          const pLeft = playerScreenX + 3;
-          const pRight = playerScreenX + CUBE_SIZE - 3;
+          const pLeftScr = playerScreenX + 3;
+          const pRightScr = playerScreenX + CUBE_SIZE - 3;
           const oLeft = obsScreenX;
           const oRight = obsScreenX + obs.w;
           const oTop = baseFloorY - obs.h;
 
           // If horizontally overlapping and falling onto block surface
-          if (pRight > oLeft && pLeft < oRight) {
+          if (pRightScr > oLeft && pLeftScr < oRight) {
             if (playerVyRef.current >= 0 && playerYRef.current + CUBE_SIZE <= oTop + 6) {
               landedOnBlock = true;
               blockTopY = oTop - CUBE_SIZE;
@@ -718,7 +727,7 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
         nextVy = 0;
         isGrounded = true;
         lastGroundedTimeRef.current = Date.now();
-      } else if (!isOverGap) {
+      } else if (!isOverGap && !isFallingInVoid) {
         // Solid floor under the cube
         if (isGroundedRef.current && playerVyRef.current === 0) {
           // Smoothly conform to ground elevation changes without lifting off or snapping
@@ -743,12 +752,14 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
           nextY = curCeilSurface;
           nextVy = 0;
         }
-        // Cube has fallen into abyss below the floor
-        if (nextY > baseFloorY + 45) {
+        // Cube plunges into the gap: INSTANT GAP DEATH!
+        if (nextY > targetGroundY + 12) {
+          playCrashSound();
+          triggerGameOverHaptic();
           if (takeHit('VOID_FALL')) return;
-          // Respawn safely onto solid floor past the gap
-          const gap = gapsRef.current.find((g) => playerCenterX >= g.x && playerCenterX <= g.x + g.w + 40);
-          const safeX = gap ? gap.x + gap.w + 20 : nextDist + 100;
+          // Respawn safely onto solid floor past the gap if extra lives remaining
+          const gap = activeGap || gapsRef.current.find((g) => playerCenterX >= g.x - 20 && playerCenterX <= g.x + g.w + 40);
+          const safeX = gap ? gap.x + gap.w + 30 : nextDist + 120;
           distanceRef.current = safeX;
           nextY = baseFloorY - getTrackElevation(safeX + CUBE_SIZE * 0.5, segmentsRef.current) - CUBE_SIZE;
           nextVy = 0;
