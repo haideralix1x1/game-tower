@@ -35,6 +35,7 @@ import {
   playSliceSound,
   playGameOverSound,
 } from '../utils/sound';
+import { getGeneratedRoom } from '../data/chamberLevels';
 
 const monoFont = Platform.select({
   ios: 'Menlo',
@@ -58,9 +59,14 @@ const PLAYER_H = 28;
 const CRATE_SIZE = 26;
 
 /**
- * 8 Interactive Unexpected Puzzle Escape Chambers
+ * 100 Unique Interactive Unexpected Puzzle Escape Chambers
+ * - Rooms 1-8: Hand-crafted introductory mechanic puzzles
+ * - Rooms 9-100+: Procedural multi-mechanic puzzle chambers with escalating difficulty
  */
 function getRoomConfig(lvl) {
+  if (lvl > 8) {
+    return getGeneratedRoom(lvl);
+  }
   const roomIndex = (lvl - 1) % 8;
 
   // Defaults
@@ -316,8 +322,9 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
     setBarriers(cfg.barriers);
     barriersRef.current = cfg.barriers;
 
-    setExitDoor(cfg.exitDoor);
-    exitDoorRef.current = cfg.exitDoor;
+    const doorObj = { ...cfg.exitDoor, permanentlyUnlocked: false };
+    setExitDoor(doorObj);
+    exitDoorRef.current = doorObj;
 
     setPlug(cfg.plug || null);
     plugRef.current = cfg.plug || null;
@@ -450,8 +457,6 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
 
             if (distToPlayer < 30 || distToDoor < 34) {
               k.taken = true;
-              exitDoorRef.current.locked = false;
-              setExitDoor({ ...exitDoorRef.current });
               setKeys([...curKeys]);
               playPerfectSound(4);
               triggerPerfectHaptic(2);
@@ -492,7 +497,9 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
               curPlug.plugged = false;
               setPlug({ ...curPlug });
               const curBarriers = barriersRef.current;
-              curBarriers.forEach((b) => (b.active = false));
+              curBarriers.forEach((b) => {
+                if (b.byPlug || (!b.switchId && !b.plateIds)) b.active = false;
+              });
               setBarriers([...curBarriers]);
               playSliceSound();
               triggerMediumHaptic();
@@ -509,8 +516,6 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
             if (Math.hypot(tx - dragged.startX, ty - dragged.startY) > 40) {
               curPad.onDoor = false;
               setPadlock({ ...curPad });
-              exitDoorRef.current.locked = false;
-              setExitDoor({ ...exitDoorRef.current });
               playPerfectSound(5);
               triggerPerfectHaptic(3);
               juiceRef.current?.burst(tx, ty, '#FFD166', 22);
@@ -749,8 +754,9 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
       p.y = nextPy;
       p.onGround = onFloor;
 
-      // 3. Crate Gravity & Floor Collisions
-      for (let c of curCrates) {
+      // 3. Crate Gravity & Floor Collisions (crates also STACK on top of each other)
+      const crateOrder = [...curCrates].sort((a, b) => b.y - a.y);
+      for (let c of crateOrder) {
         c.vy = (c.vy || 0) + GRAVITY;
         let nextCy = c.y + c.vy;
 
@@ -765,6 +771,20 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
               nextCy = s.y - CRATE_SIZE;
               c.vy = 0;
             }
+          }
+        }
+
+        for (let o of curCrates) {
+          if (o === c) continue;
+          if (
+            c.x < o.x + CRATE_SIZE - 3 &&
+            c.x + CRATE_SIZE > o.x + 3 &&
+            c.y + CRATE_SIZE <= o.y + 8 &&
+            nextCy + CRATE_SIZE > o.y &&
+            c.vy > 0
+          ) {
+            nextCy = o.y - CRATE_SIZE;
+            c.vy = 0;
           }
         }
         c.y = nextCy;
@@ -803,6 +823,23 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
         setPlates([...curPlates]);
       }
 
+      // 4b. Dynamic Pressure Plate Laser Gates (active unless plate is pressed)
+      let barriersUpdated = false;
+      curBarriers.forEach((b) => {
+        if (b.plateIds && b.plateIds.length > 0) {
+          const isPressed = curPlates.some((pl) => b.plateIds.includes(pl.id) && pl.pressed);
+          const nextActive = !isPressed;
+          if (b.active !== nextActive) {
+            b.active = nextActive;
+            barriersUpdated = true;
+          }
+        }
+      });
+      if (barriersUpdated) {
+        barriersRef.current = curBarriers;
+        setBarriers([...curBarriers]);
+      }
+
       // 5. Switches Interaction (Touched by player)
       for (let sw of curSwitches) {
         if (!sw.active) {
@@ -820,7 +857,11 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
 
             // Deactivate laser barriers associated with switch
             curBarriers.forEach((b) => {
-              if (!b.isBridge) b.active = false;
+              if (b.switchId) {
+                if (b.switchId === sw.id) b.active = false;
+              } else if (!b.isBridge && !b.plateIds && !b.byPlug) {
+                b.active = false;
+              }
             });
             barriersRef.current = [...curBarriers];
             setBarriers([...curBarriers]);
@@ -878,6 +919,7 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
           p.y <= curDoor.y + curDoor.h;
         if (inDoor) {
           handleWin();
+          animFrameRef.current = requestAnimationFrame(tick);
           return;
         }
       }
@@ -891,6 +933,7 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
           p.y < h.y + h.h
         ) {
           handleFail('IMPALED BY SECURITY SPIKES!');
+          animFrameRef.current = requestAnimationFrame(tick);
           return;
         }
       }
@@ -898,6 +941,7 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
       // Fall off bottom check
       if (p.y > GAME_H + 30) {
         handleFail('FALLEN INTO THE ABYSS!');
+        animFrameRef.current = requestAnimationFrame(tick);
         return;
       }
 
@@ -916,41 +960,42 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
     };
   }, [handleWin, handleFail]);
 
-  // Touch button controls (Supports concurrent multi-touch run + jump)
+  // Touch button controls: ONE multi-touch handler reads every active finger,
+  // so holding ▶ while tapping ▲ JUMP works (jump forward) and survives restarts.
   const [isLeftActive, setIsLeftActive] = useState(false);
   const [isRightActive, setIsRightActive] = useState(false);
   const [isJumpActive, setIsJumpActive] = useState(false);
 
-  const handleLeftDown = () => {
-    inputLeftRef.current = true;
-    setIsLeftActive(true);
-  };
-  const handleLeftUp = () => {
-    inputLeftRef.current = false;
-    setIsLeftActive(false);
-  };
-  const handleRightDown = () => {
-    inputRightRef.current = true;
-    setIsRightActive(true);
-  };
-  const handleRightUp = () => {
-    inputRightRef.current = false;
-    setIsRightActive(false);
-  };
-  const handleJumpDown = () => {
-    setIsJumpActive(true);
-    handleJump();
-  };
-  const handleJumpUp = () => {
-    setIsJumpActive(false);
+  const handleControlsTouch = (evt, phase) => {
+    const { touches = [], changedTouches = [] } = evt.nativeEvent;
+    const jumpX = width * 0.55;
+    let l = false;
+    let r = false;
+    let j = false;
+    touches.forEach((t) => {
+      if (t.pageX >= jumpX) j = true;
+      else if (t.pageX < 88) l = true;
+      else r = true;
+    });
+    if (phase === 'start') {
+      const newJump = changedTouches.some((t) => t.pageX >= jumpX);
+      if (newJump) handleJump();
+    }
+    inputLeftRef.current = l;
+    inputRightRef.current = r;
+    setIsLeftActive(l);
+    setIsRightActive(r);
+    setIsJumpActive(j);
   };
 
   return (
     <JuiceEngine ref={juiceRef}>
       <View style={styles.container}>
         <MiniGameHeader
+          floorNum={9}
+          floorLabel={level <= 100 ? `ROOM ${level}/100` : `ROOM ${level}`}
           title="CHAMBER ESCAPE"
-          category="PUZZLE PLATFORMER"
+          category="100 VAULTS"
           accentColor="#00F5FF"
           score={score}
           onBack={onBackToHub}
@@ -1270,41 +1315,26 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
         </View>
 
         {/* On-Screen Touch D-PAD & Jump Controls (Supports simultaneous Multi-Touch Running + Jumping) */}
-        <View style={styles.controlsBar}>
-          <View style={styles.dpadRow}>
-            <View
-              onTouchStart={handleLeftDown}
-              onTouchEnd={handleLeftUp}
-              onTouchCancel={handleLeftUp}
-              style={[
-                styles.ctrlBtn,
-                isLeftActive && styles.ctrlBtnPressed,
-              ]}
-            >
+        <View
+          style={styles.controlsBar}
+          onTouchStart={(e) => handleControlsTouch(e, 'start')}
+          onTouchMove={(e) => handleControlsTouch(e, 'move')}
+          onTouchEnd={(e) => handleControlsTouch(e, 'end')}
+          onTouchCancel={(e) => handleControlsTouch(e, 'end')}
+        >
+          <View style={styles.dpadRow} pointerEvents="none">
+            <View style={[styles.ctrlBtn, isLeftActive && styles.ctrlBtnPressed]}>
               <Text style={styles.ctrlBtnText}>◀</Text>
             </View>
 
-            <View
-              onTouchStart={handleRightDown}
-              onTouchEnd={handleRightUp}
-              onTouchCancel={handleRightUp}
-              style={[
-                styles.ctrlBtn,
-                isRightActive && styles.ctrlBtnPressed,
-              ]}
-            >
+            <View style={[styles.ctrlBtn, isRightActive && styles.ctrlBtnPressed]}>
               <Text style={styles.ctrlBtnText}>▶</Text>
             </View>
           </View>
 
           <View
-            onTouchStart={handleJumpDown}
-            onTouchEnd={handleJumpUp}
-            onTouchCancel={handleJumpUp}
-            style={[
-              styles.jumpBtn,
-              isJumpActive && styles.jumpBtnPressed,
-            ]}
+            pointerEvents="none"
+            style={[styles.jumpBtn, isJumpActive && styles.jumpBtnPressed]}
           >
             <Text style={styles.jumpBtnText}>▲ JUMP</Text>
           </View>

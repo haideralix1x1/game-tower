@@ -268,6 +268,87 @@ const getBuildingTheme = (lvl) => {
 };
 
 /**
+ * Building silhouette per 10-level tier (changes shape of the whole building):
+ * 1-10 flat, 11-20 triangle roof, 21-30 wide low, 31-40 destroyed floors, 41-50 lights off,
+ * 51-60 tall spire, 61-70 twin towers, 71-80 dome, 81-90 ruined, 91-100 triple crown.
+ */
+const BUILDING_SHAPES = [
+  'FLAT',
+  'TRIANGLE',
+  'WIDE',
+  'BROKEN',
+  'BLACKOUT',
+  'SPIRE',
+  'TWIN',
+  'DOME',
+  'RUINED',
+  'CROWN',
+];
+const ROOF_PAD = 52; // extra SVG space above the facade for roofs & spires
+
+const getBuildingShape = (lvl) =>
+  BUILDING_SHAPES[Math.floor(Math.max(0, lvl - 1) / 10) % BUILDING_SHAPES.length];
+
+/** Roof silhouette points (facade top is y=15) -> polygon point list for the whole building. */
+const buildFacadePoints = (shape, W, H) => {
+  const x0 = 10;
+  const x1 = W - 10;
+  const y0 = 15;
+  const yb = H - 30;
+  const mid = W / 2;
+  let roof;
+  switch (shape) {
+    case 'TRIANGLE':
+      roof = [[x0, y0], [mid, y0 - 46], [x1, y0]];
+      break;
+    case 'WIDE':
+      roof = [[x0, y0], [x0 + 24, y0 - 14], [x1 - 24, y0 - 14], [x1, y0]];
+      break;
+    case 'SPIRE':
+      roof = [
+        [x0, y0], [x0 + 40, y0], [x0 + 40, y0 - 14], [mid - 30, y0 - 14], [mid - 30, y0 - 28],
+        [mid - 8, y0 - 28], [mid, y0 - 50], [mid + 8, y0 - 28], [mid + 30, y0 - 28],
+        [mid + 30, y0 - 14], [x1 - 40, y0 - 14], [x1 - 40, y0], [x1, y0],
+      ];
+      break;
+    case 'TWIN':
+      roof = [
+        [x0, y0 - 34], [W * 0.36, y0 - 34], [W * 0.36, y0 - 4], [W * 0.64, y0 - 4],
+        [W * 0.64, y0 - 34], [x1, y0 - 34],
+      ];
+      break;
+    case 'DOME': {
+      roof = [];
+      for (let i = 0; i <= 16; i++) {
+        const t = i / 16;
+        roof.push([x0 + (x1 - x0) * t, y0 - 38 * Math.sin(Math.PI * t)]);
+      }
+      break;
+    }
+    case 'BROKEN':
+    case 'RUINED': {
+      const hs = [-2, -14, -6, -18, -4, -12, -8, -16];
+      roof = [];
+      const steps = Math.max(6, Math.floor((x1 - x0) / 34));
+      for (let i = 0; i <= steps; i++) {
+        const x = x0 + ((x1 - x0) * i) / steps;
+        roof.push([x, y0 + (shape === 'RUINED' ? hs[i % hs.length] * 1.5 : hs[i % hs.length] * 0.5)]);
+      }
+      break;
+    }
+    case 'CROWN':
+      roof = [
+        [x0, y0], [W * 0.2, y0 - 30], [W * 0.3, y0 - 4], [mid, y0 - 52], [W * 0.7, y0 - 4],
+        [W * 0.8, y0 - 30], [x1, y0],
+      ];
+      break;
+    default:
+      roof = [[x0, y0], [x1, y0]];
+  }
+  return [[x0, yb], ...roof, [x1, yb]].map((p) => `${p[0]},${p[1]}`).join(' ');
+};
+
+/**
  * Generates 100 fully predefined, graduated heist levels according to exact user tier specification:
  * - Levels 1-10: No thief, only guards (up to 3 guards), up to 3 floors.
  * - Levels 11-20: No thief, only guards (up to 5 guards), floors up to 3, fuel required, building width increased & zooms out.
@@ -2831,6 +2912,7 @@ export default function ThiefEscapeGame({
   const activePlayerY = player.isClimbing && player.y != null ? player.y : getFloorY(player.floor);
   const isNearWindow = !player.isClimbing && getNearestWindowX(player.x, windowList) != null;
   const theme = getBuildingTheme(level);
+  const shape = getBuildingShape(level);
 
   return (
     <View style={styles.container}>
@@ -2935,7 +3017,7 @@ export default function ThiefEscapeGame({
             <Svg
               width="100%"
               height="100%"
-              viewBox={`0 0 ${arenaW} ${ARENA_H}`}
+              viewBox={`0 ${-ROOF_PAD} ${arenaW} ${ARENA_H + ROOF_PAD}`}
               preserveAspectRatio="xMidYMid meet"
               style={StyleSheet.absoluteFill}
             >
@@ -2972,17 +3054,51 @@ export default function ThiefEscapeGame({
                 </SvgRadialGradient>
               </Defs>
 
-              {/* Building Facade Background */}
-              <Rect
-                x={10}
-                y={15}
-                width={arenaW - 20}
-                height={ARENA_H - 45}
-                rx={12}
-                fill="url(#buildingGrad)"
-                stroke={theme.borderColor}
-                strokeWidth={theme.borderWidth}
-              />
+              {/* Building Facade Background (silhouette changes every 10 levels) */}
+              {shape === 'FLAT' ? (
+                <Rect
+                  x={10}
+                  y={15}
+                  width={arenaW - 20}
+                  height={ARENA_H - 45}
+                  rx={12}
+                  fill="url(#buildingGrad)"
+                  stroke={theme.borderColor}
+                  strokeWidth={theme.borderWidth}
+                />
+              ) : (
+                <Polygon
+                  points={buildFacadePoints(shape, arenaW, ARENA_H)}
+                  fill="url(#buildingGrad)"
+                  stroke={theme.borderColor}
+                  strokeWidth={theme.borderWidth}
+                  strokeLinejoin="round"
+                />
+              )}
+
+              {/* Roof decorations */}
+              {shape === 'SPIRE' && (
+                <G>
+                  <Line x1={arenaW / 2} y1={-35} x2={arenaW / 2} y2={-ROOF_PAD + 6} stroke={theme.accent} strokeWidth={2} />
+                  <Circle cx={arenaW / 2} cy={-ROOF_PAD + 6} r={3.5} fill={theme.accent} />
+                </G>
+              )}
+              {shape === 'TWIN' && (
+                <G>
+                  <Line x1={arenaW * 0.18} y1={-19} x2={arenaW * 0.18} y2={-ROOF_PAD + 8} stroke={theme.accent} strokeWidth={2} />
+                  <Line x1={arenaW * 0.82} y1={-19} x2={arenaW * 0.82} y2={-ROOF_PAD + 8} stroke={theme.accent} strokeWidth={2} />
+                  <Line x1={arenaW * 0.36} y1={11} x2={arenaW * 0.64} y2={11} stroke={theme.accent} strokeWidth={2.5} strokeDasharray="5 4" />
+                </G>
+              )}
+              {shape === 'TRIANGLE' && (
+                <Line x1={arenaW / 2} y1={-31} x2={arenaW / 2} y2={15} stroke={theme.windowFrame} strokeWidth={1.5} />
+              )}
+              {shape === 'WIDE' && (
+                <G>
+                  <Rect x={arenaW * 0.2} y={-22} width={34} height={16} fill={theme.windowOuter} stroke={theme.windowFrame} strokeWidth={1.2} />
+                  <Rect x={arenaW * 0.62} y={-18} width={44} height={12} fill={theme.windowOuter} stroke={theme.windowFrame} strokeWidth={1.2} />
+                </G>
+              )}
 
               {/* Architectural Windows across the building */}
               {Array.from({ length: levelConfig.floorsCount }).map((_, f) => {
@@ -3053,6 +3169,52 @@ export default function ThiefEscapeGame({
                   </G>
                 );
               })}
+
+              {/* Lights-off tier: building goes dark, only guard lights/beams stay visible */}
+              {shape === 'BLACKOUT' && (
+                <Polygon
+                  points={buildFacadePoints('FLAT', arenaW, ARENA_H)}
+                  fill="#000000"
+                  fillOpacity={0.72}
+                />
+              )}
+
+              {/* Destroyed tiers: blasted wall holes, cracks, collapsed floor sections & rubble */}
+              {(shape === 'BROKEN' || shape === 'RUINED') &&
+                Array.from({ length: levelConfig.floorsCount }).map((_, f) => {
+                  const fy = getFloorY(f);
+                  const span = Math.max(80, arenaW - 140);
+                  const gaps = [0, 1, 2].map((k) => 70 + ((f * 97 + k * 181 + level * 13) % span));
+                  return (
+                    <G key={`damage_${f}`}>
+                      {gaps.map((gx, k) => (
+                        <G key={`dmg_${f}_${k}`}>
+                          <Polygon
+                            points={`${gx - 16},${fy + 2} ${gx - 6},${fy + 14} ${gx + 4},${fy + 6} ${gx + 16},${fy + 15} ${gx + 18},${fy + 2}`}
+                            fill="#020308"
+                            stroke={theme.windowFrame}
+                            strokeWidth={1}
+                          />
+                          <Polygon
+                            points={`${gx - 4},${fy + 15} ${gx},${fy + 24} ${gx + 5},${fy + 15}`}
+                            fill={theme.catwalkRung}
+                          />
+                          {k === 0 && (
+                            <Polygon
+                              points={`${gx + 30},${fy - 52} ${gx + 44},${fy - 40} ${gx + 38},${fy - 26} ${gx + 50},${fy - 14} ${gx + 28},${fy - 18} ${gx + 22},${fy - 34}`}
+                              fill="#020308"
+                              stroke={theme.accent}
+                              strokeOpacity={0.5}
+                              strokeWidth={1}
+                            />
+                          )}
+                        </G>
+                      ))}
+                      <Line x1={gaps[0] + 60} y1={fy - 46} x2={gaps[0] + 72} y2={fy - 20} stroke={theme.windowFrame} strokeWidth={1.2} />
+                      <Line x1={gaps[0] + 72} y1={fy - 20} x2={gaps[0] + 64} y2={fy - 4} stroke={theme.windowFrame} strokeWidth={1.2} />
+                    </G>
+                  );
+                })}
 
               {/* Fire Escape Metal Catwalks */}
               {Array.from({ length: levelConfig.floorsCount }).map((_, f) => {
