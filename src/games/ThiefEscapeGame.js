@@ -1176,6 +1176,11 @@ export default function ThiefEscapeGame({
           searchFloor: 0,
           searchTargetX: null,
           searchTimer: 0,
+          smokeBombs: 2,
+          smokeInvisTimer: 0,
+          pebbleCooldown: 0,
+          hasKey: false,
+          keyStealTimer: 0,
         });
       }
       setRivals(initialRivals);
@@ -1940,7 +1945,7 @@ export default function ThiefEscapeGame({
 
         // Check if CCTV spots unhidden rival thief
         curRivals.forEach((riv) => {
-          if (!riv.isAlive || riv.isHiding || riv.isClimbing) return;
+          if (!riv.isAlive || riv.isHiding || riv.isClimbing || (riv.smokeInvisTimer && riv.smokeInvisTimer > 0)) return;
           if (riv.floor === cam.floor) {
             const projectedX = cam.x + Math.tan((cam.angle * Math.PI) / 180) * 45;
             if (Math.abs(riv.x - projectedX) < 32) {
@@ -2087,7 +2092,27 @@ export default function ThiefEscapeGame({
             const physicalTouch = Math.abs(dist) < 20;
 
             if (physicalTouch) {
-              // Guard catches unhidden rival!
+              // 1. Smoke Cloak Active: Guard swipes through smoke and misses completely!
+              if (riv.smokeInvisTimer > 0) return;
+
+              // 2. Ninja Smoke Bomb Escape: Drop smoke bomb, stun guard, vault away!
+              if ((riv.smokeBombs || 0) > 0) {
+                riv.smokeBombs -= 1;
+                riv.smokeInvisTimer = 90; // 1.5 seconds smoke cloak
+                g.isChasing = false;
+                g.isInvestigating = false;
+                g.pauseTimer = 90; // Stun guard
+                // Vault to safe distance away from guard
+                const vaultDir = riv.x < g.x ? -1 : 1;
+                riv.x = Math.max(35, Math.min(arenaW - 35, riv.x + vaultDir * 55));
+                playSnapTickSound();
+                triggerMediumHaptic();
+                juiceRef.current?.burst(riv.x, gy - 12, '#9D4EDD', 26);
+                juiceRef.current?.popup('💨 RIVAL NINJA SMOKE BOMB!', 'Rival stunned guard and vanished in smoke!', '#C77DFF');
+                return;
+              }
+
+              // 3. Out of smoke bombs: Guard catches rival!
               riv.isAlive = false;
               juiceRef.current?.burst(riv.x, gy - 12, '#FF0055', 20);
               if (riv.hasDiamond) {
@@ -2160,7 +2185,21 @@ export default function ThiefEscapeGame({
               if (!riv.isAlive || riv.isHiding) return;
               const rivY = riv.isClimbing && riv.y != null ? riv.y : getFloorY(riv.floor);
               if (Math.abs(rivY - 18 - b.y) < 20 && Math.abs(b.x - riv.x) < 16) {
+                if ((riv.smokeInvisTimer || 0) > 0) return; // Cloaked in smoke, bullet misses!
+
                 hitRival = true;
+                if ((riv.smokeBombs || 0) > 0) {
+                  riv.smokeBombs -= 1;
+                  riv.smokeInvisTimer = 80;
+                  const dodgeDir = b.vx > 0 ? -1 : 1;
+                  riv.x = Math.max(35, Math.min(arenaW - 35, riv.x + dodgeDir * 45));
+                  playSnapTickSound();
+                  triggerMediumHaptic();
+                  juiceRef.current?.burst(riv.x, rivY - 12, '#9D4EDD', 22);
+                  juiceRef.current?.popup('💨 RIVAL SMOKE DODGE!', 'Rival dodged gunfire with smoke!', '#C77DFF');
+                  return;
+                }
+
                 riv.isAlive = false;
                 juiceRef.current?.burst(riv.x, rivY - 12, '#FF0055', 20);
                 if (riv.hasDiamond) {
@@ -2288,6 +2327,8 @@ export default function ThiefEscapeGame({
         if (riv.snatchCooldown > 0) riv.snatchCooldown -= 1;
         if (riv.hideTimer > 0) riv.hideTimer -= 1;
         if (riv.searchTimer > 0) riv.searchTimer -= 1;
+        if (riv.smokeInvisTimer > 0) riv.smokeInvisTimer -= 1;
+        if (riv.pebbleCooldown > 0) riv.pebbleCooldown -= 1;
 
         const curRivY = riv.isClimbing && riv.y != null ? riv.y : getFloorY(riv.floor);
         const curPlyY = curPlayer.isClimbing && curPlayer.y != null ? curPlayer.y : getFloorY(curPlayer.floor);
@@ -2347,7 +2388,7 @@ export default function ThiefEscapeGame({
           const stair = levelConfig.stairs[riv.stairIdx];
           const yBottom = getFloorY(stair.fromFloor);
           const yTop = getFloorY(stair.toFloor);
-          const climbSpeed = riv.hasDiamond ? 2.3 : 1.8;
+          const climbSpeed = riv.hasDiamond ? 2.8 : 2.5;
 
           riv.x = stair.x;
           if (riv.y == null) riv.y = riv.climbDir === -1 ? yBottom - 4 : yTop + 4;
@@ -2480,10 +2521,33 @@ export default function ThiefEscapeGame({
                   riv.hideTimer = 60;
                   return;
                 } else {
-                  // Sprint towards window at high speed (2.8) to evade!
+                  // Sprint towards window at high speed (3.2) to evade!
                   riv.facing = riv.x < closestWin ? 1 : -1;
-                  riv.x += riv.facing * 2.8;
+                  riv.x += riv.facing * 3.2;
                   return;
+                }
+              }
+            }
+
+            // Proactive Rival Distractor Pebble: If guard is approaching on same floor, toss distractor stone!
+            if ((riv.pebbleCooldown || 0) <= 0) {
+              const guardOnFloor = curGuards.find((g) => g.floor === riv.floor && !g.isDefeated && !g.isInvestigating);
+              if (guardOnFloor) {
+                const dist = Math.abs(guardOnFloor.x - riv.x);
+                const guardFacingRiv = (guardOnFloor.dir === 1 && guardOnFloor.x < riv.x) || (guardOnFloor.dir === -1 && guardOnFloor.x > riv.x);
+                if (dist < 130 && (guardFacingRiv || guardOnFloor.isChasing)) {
+                  const noiseX = guardOnFloor.dir === 1 ? Math.max(25, guardOnFloor.x - 70) : Math.min(arenaW - 25, guardOnFloor.x + 70);
+                  thrownStonesRef.current.push({
+                    id: Math.random(),
+                    x: riv.x,
+                    y: curRivY - 14,
+                    vx: (noiseX - riv.x) * 0.08,
+                    vy: -2.8,
+                    life: 50,
+                    active: true,
+                  });
+                  riv.pebbleCooldown = 180;
+                  juiceRef.current?.popup('🎯 RIVAL THREW DISTRACTOR!', 'Guard diverted by clever trick!', '#C77DFF');
                 }
               }
             }
@@ -2493,6 +2557,9 @@ export default function ThiefEscapeGame({
           let targetFloor = 0;
           let targetX = 0;
           let isEscaping = false;
+
+          const keyNeeded = levelConfig.diamondLockedInCase && !hasKeyRef.current && !riv.hasKey;
+          const keyGuard = keyNeeded ? curGuards.find((g) => g.hasKey && !g.isDefeated) : null;
 
           if (riv.hasDiamond) {
             // Escapes down to ground floor exit
@@ -2522,6 +2589,10 @@ export default function ThiefEscapeGame({
               targetFloor = curPlayer.floor;
               targetX = curPlayer.x;
             }
+          } else if (keyGuard) {
+            // Vault locked: Target key guard to steal key!
+            targetFloor = keyGuard.floor;
+            targetX = keyGuard.x;
           } else {
             // Diamond uncollected
             targetFloor = levelConfig.diamond.floor;
@@ -2551,7 +2622,7 @@ export default function ThiefEscapeGame({
                 riv.y = getFloorY(chosen.fromFloor) - 4;
               } else {
                 riv.facing = riv.x < chosen.x ? 1 : -1;
-                riv.x += riv.facing * 1.6;
+                riv.x += riv.facing * 2.4;
               }
             }
           } else if (riv.floor > targetFloor) {
@@ -2577,14 +2648,14 @@ export default function ThiefEscapeGame({
                 riv.y = getFloorY(chosen.toFloor) + 4;
               } else {
                 riv.facing = riv.x < chosen.x ? 1 : -1;
-                riv.x += riv.facing * 1.8;
+                riv.x += riv.facing * 2.4;
               }
             }
           } else {
             // Same floor
             if (isEscaping && riv.floor === 0) {
               riv.facing = riv.x < targetX ? 1 : -1;
-              riv.x += riv.facing * 2.5;
+              riv.x += riv.facing * 2.8;
 
               const reached = (targetX > arenaW / 2 && riv.x >= targetX - 5) || (targetX < arenaW / 2 && riv.x <= targetX + 5);
               if (reached) {
@@ -2602,26 +2673,69 @@ export default function ThiefEscapeGame({
             } else if (curPlayer.hasDiamond && !curPlayer.isHiding) {
               // Run toward player to snatch!
               riv.facing = riv.x < curPlayer.x ? 1 : -1;
-              riv.x += riv.facing * 2.1;
+              riv.x += riv.facing * 2.5;
             } else if (riv.isSearching) {
               // Walking to search point away from player's window
               riv.facing = riv.x < targetX ? 1 : -1;
-              riv.x += riv.facing * 1.4;
+              riv.x += riv.facing * 1.8;
               if (Math.abs(riv.x - targetX) < 8) {
                 // Reached search point, look around or change search target
                 riv.searchTargetX = riv.x < arenaW / 2 ? arenaW - 65 : 65;
               }
-            } else if (!riv.hasDiamond && !diamondTakenRef.current && riv.floor === levelConfig.diamond.floor && !levelConfig.diamondLockedInCase) {
-              if (Math.abs(riv.x - levelConfig.diamond.x) < 10) {
-                riv.hasDiamond = true;
-                diamondTakenRef.current = true;
-                setDiamondTaken(true);
-                playSliceSound();
-                triggerMediumHaptic();
-                juiceRef.current?.popup('⚠️ RIVAL STOLE DIAMOND!', 'Intercept him!', '#FF0055');
+            } else if (keyGuard && riv.floor === keyGuard.floor) {
+              // Sneaking towards key guard to pickpocket keycard!
+              const distToKeyG = Math.abs(riv.x - keyGuard.x);
+              if (distToKeyG < 28) {
+                if (keyGuard.isInvestigating || keyGuard.pauseTimer > 0) {
+                  riv.keyStealTimer = (riv.keyStealTimer || 0) + 1;
+                  if (riv.keyStealTimer >= 35) {
+                    riv.hasKey = true;
+                    keyGuard.hasKey = false;
+                    playSliceSound();
+                    triggerMediumHaptic();
+                    juiceRef.current?.burst(riv.x, curRivY - 14, '#FFE600', 25);
+                    juiceRef.current?.popup('🗝️ RIVAL STOLE VAULT KEY!', 'Rival pickpocketed key from guard!', '#FFE600');
+                  }
+                } else if ((riv.pebbleCooldown || 0) <= 0) {
+                  // Distract key guard with stone trick
+                  const tossDir = keyGuard.dir;
+                  const tossX = Math.max(30, Math.min(arenaW - 30, keyGuard.x + tossDir * 60));
+                  thrownStonesRef.current.push({
+                    id: Math.random(),
+                    x: riv.x,
+                    y: curRivY - 14,
+                    vx: (tossX - riv.x) * 0.08,
+                    vy: -2.8,
+                    life: 45,
+                    active: true,
+                  });
+                  riv.pebbleCooldown = 150;
+                  juiceRef.current?.popup('🎯 RIVAL DISTRACTED KEY GUARD!', 'Rival moving in for keycard!', '#C77DFF');
+                } else {
+                  riv.facing = riv.x < keyGuard.x ? 1 : -1;
+                }
+              } else {
+                riv.facing = riv.x < keyGuard.x ? 1 : -1;
+                riv.x += riv.facing * 2.3;
+              }
+            } else if (!riv.hasDiamond && !diamondTakenRef.current && riv.floor === levelConfig.diamond.floor) {
+              const canLoot = !levelConfig.diamondLockedInCase || riv.hasKey || hasKeyRef.current;
+              if (Math.abs(riv.x - levelConfig.diamond.x) < 14) {
+                if (canLoot) {
+                  if (levelConfig.diamondLockedInCase) {
+                    levelConfig.diamondLockedInCase = false;
+                  }
+                  riv.hasDiamond = true;
+                  diamondTakenRef.current = true;
+                  setDiamondTaken(true);
+                  playSliceSound();
+                  triggerMediumHaptic();
+                  juiceRef.current?.burst(riv.x, curRivY - 14, '#00F5FF', 25);
+                  juiceRef.current?.popup('⚠️ RIVAL STOLE DIAMOND!', 'Intercept him before he escapes!', '#FF0055');
+                }
               } else {
                 riv.facing = riv.x < levelConfig.diamond.x ? 1 : -1;
-                riv.x += riv.facing * 1.6;
+                riv.x += riv.facing * 2.4;
               }
             }
           }
@@ -3600,8 +3714,18 @@ export default function ThiefEscapeGame({
               {rivals.map((riv) => {
                 if (!riv.isAlive || riv.isHiding) return null;
                 const rY = riv.isClimbing && riv.y != null ? riv.y : getFloorY(riv.floor);
+                const isSmoked = (riv.smokeInvisTimer || 0) > 0;
                 return (
                   <G key={riv.id}>
+                    {/* Smoke Cloak Aura */}
+                    {isSmoked && (
+                      <G opacity={0.85}>
+                        <Circle cx={riv.x} cy={rY - 14} r={17} fill="rgba(157, 78, 221, 0.45)" stroke="#C77DFF" strokeWidth={1.5} strokeDasharray="3 3" />
+                        <SvgText x={riv.x} y={rY - 32} fontSize={10} textAnchor="middle">
+                          💨
+                        </SvgText>
+                      </G>
+                    )}
                     {riv.isSearching && (
                       <G>
                         <Circle cx={riv.x} cy={rY - 36} r={7} fill="#9D4EDD" stroke="#FFFFFF" strokeWidth={1} />
@@ -3610,8 +3734,40 @@ export default function ThiefEscapeGame({
                         </SvgText>
                       </G>
                     )}
-                    <Rect x={riv.x - 6} y={rY - 24} width={12} height={22} rx={3} fill="#2A0845" stroke="#9D4EDD" strokeWidth={1.4} />
-                    <Circle cx={riv.x} cy={rY - 26} r={5} fill="#9D4EDD" />
+                    {/* Rival Body */}
+                    <Rect
+                      x={riv.x - 6}
+                      y={rY - 24}
+                      width={12}
+                      height={22}
+                      rx={3}
+                      fill={isSmoked ? 'rgba(42, 8, 69, 0.45)' : '#2A0845'}
+                      stroke="#9D4EDD"
+                      strokeWidth={1.4}
+                    />
+                    <Circle cx={riv.x} cy={rY - 26} r={5} fill={isSmoked ? 'rgba(157, 78, 221, 0.5)' : '#9D4EDD'} />
+                    {/* Smoke Bombs on Belt */}
+                    {(riv.smokeBombs || 0) > 0 && (
+                      <G>
+                        {[...Array(riv.smokeBombs)].map((_, sIdx) => (
+                          <Circle
+                            key={sIdx}
+                            cx={riv.x - 3 + sIdx * 6}
+                            cy={rY - 12}
+                            r={2}
+                            fill="#C77DFF"
+                            stroke="#2A0845"
+                            strokeWidth={0.5}
+                          />
+                        ))}
+                      </G>
+                    )}
+                    {/* Stolen Key Badge */}
+                    {riv.hasKey && (
+                      <SvgText x={riv.x + 8} y={rY - 20} fontSize={10} textAnchor="middle">
+                        🗝️
+                      </SvgText>
+                    )}
                     {riv.hasDiamond && <Circle cx={riv.x} cy={rY - 34} r={4} fill="#00F5FF" stroke="#FFFFFF" strokeWidth={1} />}
                   </G>
                 );
