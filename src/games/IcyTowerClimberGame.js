@@ -397,32 +397,39 @@ export default function IcyTowerClimberGame({ onBackToHub, onScoreUpdate, isPaus
     initTower();
   }, [initTower]);
 
-  // Jump execution with GROUNDING (No mid-air infinite jumps)
-  const executeJump = useCallback((direction = 'CENTER', isHigh = false) => {
+  // Jump execution with GROUNDING and DURATION-SENSITIVE JUMP / LATERAL PHYSICS
+  const executeJump = useCallback((direction = 'CENTER', isHigh = false, chargeRatio = 0.5) => {
     if (isPausedRef.current) return;
     const p = playerRef.current;
+    const clampedCharge = Math.min(1, Math.max(0, chargeRatio));
 
     if (!p.isGrounded) {
-      // In mid-air: allow responsive air drift steering
+      // In mid-air: allow responsive air drift steering scaled by hold duration
+      const airImpulse = 1.2 + clampedCharge * 1.8;
       if (direction === 'LEFT') {
-        p.vx = Math.max(-6.6, p.vx - 2.8);
+        p.vx = Math.max(-6.2, p.vx - airImpulse);
       } else if (direction === 'RIGHT') {
-        p.vx = Math.min(6.6, p.vx + 2.8);
+        p.vx = Math.min(6.2, p.vx + airImpulse);
       }
       return;
     }
 
-    // GROUNDED: Execute Full Jump Impulse!
+    // GROUNDED: Execute Jump Impulse proportional to tap / hold duration!
     p.isGrounded = false;
     p.currentPlatId = null;
 
-    const jumpPower = isHigh ? HIGH_JUMP : NORMAL_JUMP;
-    p.vy = jumpPower;
+    // Short tap = gentle hop (~ -6.8), full hold = high launch (~ -12.4 to -14.2)
+    const minJump = -6.8;
+    const maxJump = isHigh ? -14.2 : -12.4;
+    p.vy = minJump + clampedCharge * (maxJump - minJump);
+
+    // Short tap = gentle lateral nudge (2.2), full hold = wide lateral reach (5.8)
+    const latSpeed = 2.2 + clampedCharge * 3.6;
 
     if (direction === 'LEFT') {
-      p.vx = -6.6;
+      p.vx = -latSpeed;
     } else if (direction === 'RIGHT') {
-      p.vx = 6.6;
+      p.vx = latSpeed;
     } else {
       p.vx = 0;
     }
@@ -431,15 +438,25 @@ export default function IcyTowerClimberGame({ onBackToHub, onScoreUpdate, isPaus
     triggerLightHaptic();
   }, []);
 
+  // Hold-duration tracking for jump height and lateral control
+  const touchStartTimeRef = useRef(0);
+
   // Touch & Swipe Controls
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: () => {
+        touchStartTimeRef.current = Date.now();
+      },
       onPanResponderRelease: (evt, gesture) => {
         if (!isPlaying) {
           setIsPlaying(true);
         }
+
+        const holdMs = Math.max(0, Date.now() - touchStartTimeRef.current);
+        // Short tap (< 60ms) -> charge ~0.0; held (~320ms+) -> charge 1.0
+        const chargeRatio = Math.min(1, Math.max(0, (holdMs - 40) / 280));
 
         const isUpSwipe = gesture.dy < -35;
         let dir = 'CENTER';
@@ -453,7 +470,7 @@ export default function IcyTowerClimberGame({ onBackToHub, onScoreUpdate, isPaus
           dir = tapX > arenaWidth * 0.5 ? 'RIGHT' : 'LEFT';
         }
 
-        executeJump(dir, isUpSwipe);
+        executeJump(dir, isUpSwipe, chargeRatio);
       },
     })
   ).current;

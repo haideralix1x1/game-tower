@@ -410,13 +410,14 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
           }
         }
 
-        // 7. Check Pressure Plates (Finger-Press)
+        // 7. Check Pressure Plates (Finger-Press & Touch Override)
         const curPlates = platesRef.current;
         let platePressed = false;
         for (let i = 0; i < curPlates.length; i++) {
           const pl = curPlates[i];
-          if (tx >= pl.x - 12 && tx <= pl.x + pl.w + 12 && ty >= pl.y - 14 && ty <= pl.y + pl.h + 14) {
+          if (tx >= pl.x - 18 && tx <= pl.x + pl.w + 18 && ty >= pl.y - 18 && ty <= pl.y + pl.h + 18) {
             pl.pressedByFinger = true;
+            pl.overridden = true;
             platePressed = true;
           }
         }
@@ -523,7 +524,7 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
         const curPlates = platesRef.current;
         let changed = false;
         for (let i = 0; i < curPlates.length; i++) {
-          if (curPlates[i].pressedByFinger) {
+          if (curPlates[i].pressedByFinger && !curPlates[i].overridden) {
             curPlates[i].pressedByFinger = false;
             changed = true;
           }
@@ -786,7 +787,7 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
             c.y + CRATE_SIZE <= pl.y + 12
         );
 
-        const pressed = isPlayerOn || isCrateOn || Boolean(pl.pressedByFinger);
+        const pressed = isPlayerOn || isCrateOn || Boolean(pl.pressedByFinger) || Boolean(pl.overridden);
         if (pressed !== pl.pressed) {
           pl.pressed = pressed;
           platesUpdated = true;
@@ -851,15 +852,20 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
       const curPad = padlockRef.current;
       const padlockCleared = !curPad || !curPad.onDoor;
 
-      const isUnlocked = allKeysCollected && allPlatesPressed && allSwitchesActive && padlockCleared;
-      if (isUnlocked !== !curDoor.locked) {
-        curDoor.locked = !isUnlocked;
+      const isUnlocked =
+        Boolean(curDoor.permanentlyUnlocked) ||
+        (allKeysCollected && allPlatesPressed && allSwitchesActive && padlockCleared);
+
+      if (isUnlocked && curDoor.locked) {
+        curDoor.locked = false;
+        curDoor.permanentlyUnlocked = true;
         exitDoorRef.current = curDoor;
         setExitDoor({ ...curDoor });
-        if (isUnlocked) {
-          playSliceSound();
-          triggerPerfectHaptic(2);
-          if (juiceRef.current) juiceRef.current.burst(curDoor.x + 14, curDoor.y + 20, '#00F5D4', 16);
+        playSliceSound();
+        triggerPerfectHaptic(2);
+        if (juiceRef.current) {
+          juiceRef.current.burst(curDoor.x + 14, curDoor.y + 20, '#00F5D4', 22);
+          juiceRef.current.flash('#00F5D4');
         }
       }
 
@@ -910,18 +916,33 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
     };
   }, [handleWin, handleFail]);
 
-  // Touch button controls
+  // Touch button controls (Supports concurrent multi-touch run + jump)
+  const [isLeftActive, setIsLeftActive] = useState(false);
+  const [isRightActive, setIsRightActive] = useState(false);
+  const [isJumpActive, setIsJumpActive] = useState(false);
+
   const handleLeftDown = () => {
     inputLeftRef.current = true;
+    setIsLeftActive(true);
   };
   const handleLeftUp = () => {
     inputLeftRef.current = false;
+    setIsLeftActive(false);
   };
   const handleRightDown = () => {
     inputRightRef.current = true;
+    setIsRightActive(true);
   };
   const handleRightUp = () => {
     inputRightRef.current = false;
+    setIsRightActive(false);
+  };
+  const handleJumpDown = () => {
+    setIsJumpActive(true);
+    handleJump();
+  };
+  const handleJumpUp = () => {
+    setIsJumpActive(false);
   };
 
   return (
@@ -1248,41 +1269,45 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
           </View>
         </View>
 
-        {/* On-Screen Touch D-PAD & Jump Controls */}
+        {/* On-Screen Touch D-PAD & Jump Controls (Supports simultaneous Multi-Touch Running + Jumping) */}
         <View style={styles.controlsBar}>
           <View style={styles.dpadRow}>
-            <Pressable
-              onPressIn={handleLeftDown}
-              onPressOut={handleLeftUp}
-              style={({ pressed }) => [
+            <View
+              onTouchStart={handleLeftDown}
+              onTouchEnd={handleLeftUp}
+              onTouchCancel={handleLeftUp}
+              style={[
                 styles.ctrlBtn,
-                pressed && styles.ctrlBtnPressed,
+                isLeftActive && styles.ctrlBtnPressed,
               ]}
             >
               <Text style={styles.ctrlBtnText}>◀</Text>
-            </Pressable>
+            </View>
 
-            <Pressable
-              onPressIn={handleRightDown}
-              onPressOut={handleRightUp}
-              style={({ pressed }) => [
+            <View
+              onTouchStart={handleRightDown}
+              onTouchEnd={handleRightUp}
+              onTouchCancel={handleRightUp}
+              style={[
                 styles.ctrlBtn,
-                pressed && styles.ctrlBtnPressed,
+                isRightActive && styles.ctrlBtnPressed,
               ]}
             >
               <Text style={styles.ctrlBtnText}>▶</Text>
-            </Pressable>
+            </View>
           </View>
 
-          <Pressable
-            onPressIn={handleJump}
-            style={({ pressed }) => [
+          <View
+            onTouchStart={handleJumpDown}
+            onTouchEnd={handleJumpUp}
+            onTouchCancel={handleJumpUp}
+            style={[
               styles.jumpBtn,
-              pressed && styles.jumpBtnPressed,
+              isJumpActive && styles.jumpBtnPressed,
             ]}
           >
             <Text style={styles.jumpBtnText}>▲ JUMP</Text>
-          </Pressable>
+          </View>
         </View>
 
         <GameResultModal

@@ -66,12 +66,12 @@ function getPhaseForDistance(dist) {
 
 /**
  * Continuous mathematical elevation profile along the track.
- * Every segment smoothly starts and ends at elevation 0 so the corridor
- * has zero discontinuities and both lines (top and bottom) move up and down together!
- * - STRAIGHT: Flat horizontal baseline (0). Static cubes, spikes & void gaps spawn ONLY here!
- * - SMOOTH: Full sine wave cycle (curves smoothly up to +amp, dips to -amp, returns to 0)
- * - SHARP: Angular cyber peaks and valleys (angles up to +h, slopes down to -h, angles back to 0)
- * - RAMP: Launch ramp climbing up to high highway plateau (+h), then declining back to 0
+ * Every curve segment starts and ends at elevation 0 AND derivative slope 0 (C1 continuous),
+ * perfectly matching the flat straight segments with zero angular kinks, jerks, or sudden jumps!
+ * - STRAIGHT: Flat horizontal baseline (0). Static cubes, spikes & void gaps spawn here.
+ * - SMOOTH: C1 continuous gentle rolling hill (smooth raised cosine with 0 slope at boundaries).
+ * - VALLEY: C1 continuous gentle dip (smooth inverted cosine with 0 slope at boundaries).
+ * - WAVE: C1 continuous dual-phase wave seamlessly blended to zero slope at boundaries.
  */
 function getTrackElevation(worldX, segments) {
   for (let i = 0; i < segments.length; i++) {
@@ -85,23 +85,18 @@ function getTrackElevation(worldX, segments) {
       }
 
       if (s.type === 'SMOOTH') {
-        // Full smooth sine cycle: starts at 0, climbs to +amp, crosses 0, dips to -amp, ends at 0
-        return s.amp * Math.sin(2 * Math.PI * t);
+        // C1 continuous raised cosine hill: 0 at t=0, slope 0 at t=0, 0 at t=1, slope 0 at t=1! Zero kinks!
+        return s.amp * 0.5 * (1 - Math.cos(2 * Math.PI * t));
       }
 
-      if (s.type === 'SHARP') {
-        // Angular cyber peaks and valleys
-        if (t < 0.25) return (t / 0.25) * s.h;
-        if (t < 0.50) return (1 - (t - 0.25) / 0.25) * s.h;
-        if (t < 0.75) return -((t - 0.50) / 0.25) * s.h;
-        return -((1 - (t - 0.75) / 0.25)) * s.h;
+      if (s.type === 'VALLEY') {
+        // C1 continuous smooth dip: 0 at t=0, slope 0 at t=0, 0 at t=1, slope 0 at t=1! Zero kinks!
+        return -s.amp * 0.5 * (1 - Math.cos(2 * Math.PI * t));
       }
 
-      if (s.type === 'RAMP') {
-        // Elevated launch ramp to highway plateau
-        if (t < 0.22) return (t / 0.22) * s.h;
-        if (t < 0.78) return s.h;
-        return (1 - (t - 0.78) / 0.22) * s.h;
+      if (s.type === 'WAVE') {
+        // Smooth dual-phase wave seamlessly blended to zero slope at both ends
+        return s.amp * Math.sin(2 * Math.PI * t) * Math.pow(Math.sin(Math.PI * t), 2);
       }
     }
   }
@@ -179,6 +174,7 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
   const animFrameRef = useRef(null);
   const tickCountRef = useRef(0);
   const lastGroundedTimeRef = useRef(0);
+  const isGroundedRef = useRef(true);
 
   // Load high score
   useEffect(() => {
@@ -213,16 +209,13 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
       // Gate available terrain types by distance
       let terrainType = 'STRAIGHT';
       if (curX >= 6500) {
-        const pool = ['STRAIGHT', 'SMOOTH', 'STRAIGHT', 'SHARP', 'RAMP'];
+        const pool = ['STRAIGHT', 'STRAIGHT', 'SMOOTH', 'VALLEY', 'WAVE'];
         terrainType = pool[Math.floor(Math.random() * pool.length)];
       } else if (curX >= 4500) {
-        const pool = ['STRAIGHT', 'STRAIGHT', 'SMOOTH', 'SHARP', 'RAMP'];
+        const pool = ['STRAIGHT', 'STRAIGHT', 'STRAIGHT', 'SMOOTH', 'VALLEY'];
         terrainType = pool[Math.floor(Math.random() * pool.length)];
       } else if (curX >= 2800) {
-        const pool = ['STRAIGHT', 'STRAIGHT', 'SMOOTH', 'SHARP'];
-        terrainType = pool[Math.floor(Math.random() * pool.length)];
-      } else if (curX >= 1200) {
-        const pool = ['STRAIGHT', 'STRAIGHT', 'STRAIGHT', 'SMOOTH'];
+        const pool = ['STRAIGHT', 'STRAIGHT', 'STRAIGHT', 'STRAIGHT', 'SMOOTH'];
         terrainType = pool[Math.floor(Math.random() * pool.length)];
       } else {
         terrainType = 'STRAIGHT';
@@ -421,8 +414,8 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
 
         curX += segW;
       } else if (terrainType === 'SMOOTH') {
-        const segW = 380 + Math.floor(Math.random() * 80);
-        const amp = 28 + Math.floor(Math.random() * 8);
+        const segW = 440 + Math.floor(Math.random() * 80);
+        const amp = 16 + Math.floor(Math.random() * 6);
         newSegments.push({
           id: `seg_sm_${curX}`,
           type: 'SMOOTH',
@@ -441,15 +434,15 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
         }
 
         curX += segW;
-      } else if (terrainType === 'SHARP') {
-        const segW = 360 + Math.floor(Math.random() * 80);
-        const h = 26 + Math.floor(Math.random() * 6);
+      } else if (terrainType === 'VALLEY') {
+        const segW = 440 + Math.floor(Math.random() * 80);
+        const amp = 14 + Math.floor(Math.random() * 6);
         newSegments.push({
-          id: `seg_shp_${curX}`,
-          type: 'SHARP',
+          id: `seg_val_${curX}`,
+          type: 'VALLEY',
           x: curX,
           w: segW,
-          h,
+          amp,
         });
 
         if (curX >= 4500 && Math.random() < 0.35) {
@@ -461,15 +454,15 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
         }
 
         curX += segW;
-      } else if (terrainType === 'RAMP') {
-        const segW = 420 + Math.floor(Math.random() * 80);
-        const h = 34 + Math.floor(Math.random() * 8);
+      } else if (terrainType === 'WAVE') {
+        const segW = 480 + Math.floor(Math.random() * 80);
+        const amp = 15 + Math.floor(Math.random() * 5);
         newSegments.push({
-          id: `seg_ramp_${curX}`,
-          type: 'RAMP',
+          id: `seg_wav_${curX}`,
+          type: 'WAVE',
           x: curX,
           w: segW,
-          h,
+          amp,
         });
 
         if (curX >= 4500 && Math.random() < 0.35) {
@@ -523,6 +516,7 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
     });
     spawnCursorXRef.current = 520;
 
+    isGroundedRef.current = true;
     livesRef.current = 3;
     setLives(3);
     invulnerableUntilRef.current = 0;
@@ -565,7 +559,7 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
     }
 
     const curDist = distanceRef.current;
-    const playerCenterX = curDist + playerScreenX + CUBE_SIZE * 0.5;
+    const playerCenterX = curDist + CUBE_SIZE * 0.5;
     const currentElev = getTrackElevation(playerCenterX, segmentsRef.current);
     const targetFloorY = baseFloorY - currentElev;
     const targetSurfaceY = targetFloorY - CUBE_SIZE;
@@ -581,6 +575,7 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
 
     if (!isOverGap && (isCloseToGround || canCoyoteJump)) {
       playerVyRef.current = JUMP_VELOCITY;
+      isGroundedRef.current = false;
       lastGroundedTimeRef.current = 0;
       playTapSound();
       triggerLightHaptic();
@@ -676,7 +671,7 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
       };
 
       // Exact mathematical elevation at player's center of mass
-      const playerCenterX = nextDist + playerScreenX + CUBE_SIZE * 0.5;
+      const playerCenterX = nextDist + CUBE_SIZE * 0.5;
       const currentElev = getTrackElevation(playerCenterX, segmentsRef.current);
       const curFloorSurface = baseFloorY - currentElev;
       const curCeilSurface = curFloorSurface - CORRIDOR_HEIGHT;
@@ -685,7 +680,7 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
       // VOID GAP TEST:
       // Player is over a void gap if their center of mass is within the gap boundaries
       const isOverGap = gapsRef.current.some(
-        (g) => playerCenterX >= g.x + 4 && playerCenterX <= g.x + g.w
+        (g) => playerCenterX >= g.x + 4 && playerCenterX <= g.x + g.w - 4
       );
 
       // Check if landing on static BLOCK from above
@@ -724,36 +719,44 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
         isGrounded = true;
         lastGroundedTimeRef.current = Date.now();
       } else if (!isOverGap) {
-        if (playerYRef.current <= targetGroundY + 4 && nextY >= targetGroundY) {
-          // Landing safely onto solid ground from above
+        // Solid floor under the cube
+        if (isGroundedRef.current && playerVyRef.current === 0) {
+          // Smoothly conform to ground elevation changes without lifting off or snapping
           nextY = targetGroundY;
           nextVy = 0;
           isGrounded = true;
           lastGroundedTimeRef.current = Date.now();
-        } else if (playerYRef.current > targetGroundY + 4) {
-          // Cube fell below the floor level
-          if (takeHit('VOID_FALL')) return;
+        } else if (nextY >= targetGroundY) {
+          // Touchdown / land onto solid ground
           nextY = targetGroundY;
           nextVy = 0;
-          distanceRef.current += 110;
+          isGrounded = true;
+          lastGroundedTimeRef.current = Date.now();
         } else if (nextY <= curCeilSurface) {
+          // Ceiling collision
           nextY = curCeilSurface;
           nextVy = 0;
         }
       } else {
-        // Falling into void gap!
+        // Free fall into void gap!
         if (nextY <= curCeilSurface) {
           nextY = curCeilSurface;
           nextVy = 0;
         }
-        if (nextY > targetGroundY + 8) {
+        // Cube has fallen into abyss below the floor
+        if (nextY > baseFloorY + 45) {
           if (takeHit('VOID_FALL')) return;
-          nextY = targetGroundY;
+          // Respawn safely onto solid floor past the gap
+          const gap = gapsRef.current.find((g) => playerCenterX >= g.x && playerCenterX <= g.x + g.w + 40);
+          const safeX = gap ? gap.x + gap.w + 20 : nextDist + 100;
+          distanceRef.current = safeX;
+          nextY = baseFloorY - getTrackElevation(safeX + CUBE_SIZE * 0.5, segmentsRef.current) - CUBE_SIZE;
           nextVy = 0;
-          distanceRef.current += 110;
+          isGrounded = true;
         }
       }
 
+      isGroundedRef.current = isGrounded;
       playerVyRef.current = nextVy;
       playerYRef.current = nextY;
 
@@ -765,8 +768,11 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
       } else {
         const slope = getTrackSlope(playerCenterX, segmentsRef.current);
         const slopeDeg = -Math.atan(slope) * (180 / Math.PI);
-        rotationRef.current = slopeDeg;
-        nextRot = slopeDeg;
+        const currentRot = rotationRef.current;
+        const targetRot = Math.round(slopeDeg * 10) / 10;
+        const smoothedRot = currentRot + (targetRot - currentRot) * 0.35;
+        rotationRef.current = smoothedRot;
+        nextRot = smoothedRot;
       }
 
       // CEILING MOUNTED TURRETS: Mounted to top line, aiming & shooting at player!
@@ -888,8 +894,7 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
             playerVyRef.current = -5;
           }
         } else if (obs.type === 'SPIKE_DROP') {
-          const curPlayerX = nextDist + playerScreenX;
-          const distToPlayer = obs.x - curPlayerX;
+          const distToPlayer = obs.x - nextDist;
           const obsElev = getTrackElevation(obs.x, segmentsRef.current);
           const obsCeil = baseFloorY - obsElev - CORRIDOR_HEIGHT;
           const obsFloor = baseFloorY - obsElev;
@@ -951,12 +956,12 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
   } = frameState;
 
   // Viewport sampling for continuous corridor lines (top ceiling & bottom floor)
-  const sampleStep = 12; // Smooth 60 FPS performance without per-frame trigonometric lag
-  const numSteps = Math.ceil((arenaWidth + 60) / sampleStep) + 3;
+  const sampleStep = 8; // Fine-grained sampling matching exact player screen position
+  const numSteps = Math.ceil((arenaWidth + 80) / sampleStep) + 6;
   const samplePoints = [];
   for (let i = 0; i < numSteps; i++) {
-    const sX = -30 + i * sampleStep;
-    const worldX = distance + sX;
+    const sX = -40 + i * sampleStep;
+    const worldX = distance + (sX - playerScreenX);
     const elev = getTrackElevation(worldX, segments);
     const fY = baseFloorY - elev;
     const cY = fY - CORRIDOR_HEIGHT;
@@ -970,7 +975,7 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
   }
 
   // Top Solid Wall SVG Path (From y=0 down to ceiling curve)
-  let topWallPath = `M -30 0 L ${arenaWidth + 30} 0 L ${arenaWidth + 30} ${samplePoints[samplePoints.length - 1].cY}`;
+  let topWallPath = `M -40 0 L ${arenaWidth + 40} 0 L ${arenaWidth + 40} ${samplePoints[samplePoints.length - 1].cY}`;
   for (let i = samplePoints.length - 1; i >= 0; i--) {
     topWallPath += ` L ${samplePoints[i].sX} ${samplePoints[i].cY}`;
   }
@@ -981,7 +986,7 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
   for (let i = 1; i < samplePoints.length; i++) {
     botWallPath += ` L ${samplePoints[i].sX} ${samplePoints[i].fY}`;
   }
-  botWallPath += ` L ${arenaWidth + 30} ${arenaHeight} L -30 ${arenaHeight} Z`;
+  botWallPath += ` L ${arenaWidth + 40} ${arenaHeight} L -40 ${arenaHeight} Z`;
 
   // Floor continuous neon guideway path (with physical gaps over void chasms)
   const activeGaps = gaps;
@@ -1334,8 +1339,7 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
             }
 
             if (obs.type === 'SPIKE_DROP') {
-              const curPlayerX = distance + playerScreenX;
-              const distToPlayer = obs.x - curPlayerX;
+              const distToPlayer = obs.x - distance;
               const obsElev = getTrackElevation(obs.x, segments);
               const obsCeil = baseFloorY - obsElev - CORRIDOR_HEIGHT;
               const obsFloor = baseFloorY - obsElev;

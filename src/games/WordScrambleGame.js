@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,9 @@ import {
   useWindowDimensions,
   Platform,
   Animated,
+  PanResponder,
 } from 'react-native';
+import Svg, { Line, Circle, G, Defs, RadialGradient, Stop } from 'react-native-svg';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -201,13 +203,19 @@ export default function WordScrambleGame({ onBackToHub, onScoreUpdate, isPaused 
   // Rotation animation for shuffle button
   const shuffleSpin = useRef(new Animated.Value(0)).current;
 
-  // Latest state refs to eliminate timer stale closures
+  // Latest state refs to eliminate timer and pan responder stale closures
   const foundWordsRef = useRef(foundWords);
   foundWordsRef.current = foundWords;
   const roundConfigRef = useRef(roundConfig);
   roundConfigRef.current = roundConfig;
   const levelRef = useRef(level);
   levelRef.current = level;
+  const scoreRef = useRef(score);
+  scoreRef.current = score;
+  const bestScoreRef = useRef(bestScore);
+  bestScoreRef.current = bestScore;
+  const shuffledLettersRef = useRef(shuffledLetters);
+  shuffledLettersRef.current = shuffledLetters;
 
   // Load saved level & score
   useEffect(() => {
@@ -366,80 +374,95 @@ export default function WordScrambleGame({ onBackToHub, onScoreUpdate, isPaused 
     setSelectedIndices(newSelectedIndices);
   };
 
+  // Submit word helper (used by both Pattern Lock release & Submit button)
+  const submitWordValue = useCallback(
+    (rawWord) => {
+      const word = (rawWord || '').trim().toUpperCase();
+      if (word.length < 2) {
+        setFeedbackMsg('AT LEAST 2 LETTERS REQUIRED!');
+        playSliceSound();
+        triggerSliceHaptic();
+        if (juiceRef.current) juiceRef.current.shake(3, 2);
+        setSelectedIndices([]);
+        return;
+      }
+
+      if (foundWordsRef.current.includes(word)) {
+        const penalizedScore = Math.max(0, scoreRef.current - 10);
+        setScore(penalizedScore);
+        scoreRef.current = penalizedScore;
+        onScoreUpdate?.(penalizedScore);
+        setFeedbackMsg(`ALREADY FOUND "${word}"! (-10 PTS)`);
+        playSliceSound();
+        triggerSliceHaptic();
+        if (juiceRef.current) juiceRef.current.shake(4, 2);
+        setSelectedIndices([]);
+        return;
+      }
+
+      if (!isValidWord(word)) {
+        const penalizedScore = Math.max(0, scoreRef.current - 10);
+        setScore(penalizedScore);
+        scoreRef.current = penalizedScore;
+        onScoreUpdate?.(penalizedScore);
+        setFeedbackMsg(`"${word}" IS NOT A VALID WORD! (-10 PTS)`);
+        playSliceSound();
+        triggerSliceHaptic();
+        if (juiceRef.current) juiceRef.current.shake(5, 2);
+        setSelectedIndices([]);
+        return;
+      }
+
+      // Valid new word!
+      const pts = getWordScore(word);
+      const newScore = scoreRef.current + pts;
+      const newFound = [...foundWordsRef.current, word];
+
+      setScore(newScore);
+      scoreRef.current = newScore;
+      setFoundWords(newFound);
+      foundWordsRef.current = newFound;
+      setSelectedIndices([]);
+      setFeedbackMsg(`+${pts} PTS! "${word}" FOUND!`);
+
+      triggerPerfectHaptic(Math.min(5, word.length));
+      playPerfectSound(Math.min(5, word.length));
+
+      if (newScore > bestScoreRef.current) {
+        setBestScore(newScore);
+        bestScoreRef.current = newScore;
+        AsyncStorage.setItem(STORAGE_BEST_KEY, String(newScore)).catch(() => {});
+      }
+      onScoreUpdate?.(newScore);
+
+      if (juiceRef.current) {
+        juiceRef.current.celebrate(
+          `+${pts} PTS!`,
+          `"${word}" ADDED`,
+          '#00F5FF'
+        );
+      }
+
+      // Celebrate milestone when goal reached
+      if (newFound.length === roundConfigRef.current.goal) {
+        setTimeout(() => {
+          if (juiceRef.current) {
+            juiceRef.current.celebrate(
+              'GOAL REACHED!',
+              `LEVEL ${levelRef.current} GOAL UNLOCKED!`,
+              '#FFD166'
+            );
+          }
+        }, 400);
+      }
+    },
+    [onScoreUpdate]
+  );
+
   // Submit current word: Wrong submissions cut -10 score!
   const handleSubmitWord = useCallback(() => {
-    if (currentWord.length < 2) {
-      setFeedbackMsg('AT LEAST 2 LETTERS REQUIRED!');
-      playSliceSound();
-      triggerSliceHaptic();
-      if (juiceRef.current) juiceRef.current.shake(3, 2);
-      return;
-    }
-
-    if (foundWords.includes(currentWord)) {
-      const penalizedScore = Math.max(0, score - 10);
-      setScore(penalizedScore);
-      onScoreUpdate?.(penalizedScore);
-      setFeedbackMsg(`ALREADY FOUND "${currentWord}"! (-10 PTS)`);
-      playSliceSound();
-      triggerSliceHaptic();
-      if (juiceRef.current) juiceRef.current.shake(4, 2);
-      setSelectedIndices([]);
-      return;
-    }
-
-    if (!isValidWord(currentWord)) {
-      const penalizedScore = Math.max(0, score - 10);
-      setScore(penalizedScore);
-      onScoreUpdate?.(penalizedScore);
-      setFeedbackMsg(`"${currentWord}" IS NOT A VALID WORD! (-10 PTS)`);
-      playSliceSound();
-      triggerSliceHaptic();
-      if (juiceRef.current) juiceRef.current.shake(5, 2);
-      setSelectedIndices([]);
-      return;
-    }
-
-    // Valid new word!
-    const pts = getWordScore(currentWord);
-    const newScore = score + pts;
-    const newFound = [...foundWords, currentWord];
-
-    setScore(newScore);
-    setFoundWords(newFound);
-    setSelectedIndices([]);
-    setFeedbackMsg(`+${pts} PTS! "${currentWord}" FOUND!`);
-
-    triggerPerfectHaptic(Math.min(5, currentWord.length));
-    playPerfectSound(Math.min(5, currentWord.length));
-
-    if (newScore > bestScore) {
-      setBestScore(newScore);
-      AsyncStorage.setItem(STORAGE_BEST_KEY, String(newScore)).catch(() => {});
-    }
-    onScoreUpdate?.(newScore);
-
-    if (juiceRef.current) {
-      juiceRef.current.celebrate(
-        `+${pts} PTS!`,
-        `"${currentWord}" ADDED`,
-        '#00F5FF'
-      );
-    }
-
-    // Celebrate milestone when goal reached
-    if (newFound.length === roundConfig.goal) {
-      setTimeout(() => {
-        if (juiceRef.current) {
-          juiceRef.current.celebrate(
-            'GOAL REACHED!',
-            `LEVEL ${level} GOAL UNLOCKED!`,
-            '#FFD166'
-          );
-        }
-      }, 400);
-    }
-  }, [bestScore, currentWord, foundWords, level, onScoreUpdate, roundConfig.goal, score]);
+    submitWordValue(currentWord);
+  }, [currentWord, submitWordValue]);
 
   // Advance to next level (guaranteed DIFFERENT letters)
   const handleNextLevel = () => {
@@ -471,6 +494,117 @@ export default function WordScrambleGame({ onBackToHub, onScoreUpdate, isPaused 
   const dialRadius = dialSize * 0.38;
   const letterCount = shuffledLetters.length;
   const letterBtnSize = Math.max(38, Math.min(50, Math.floor((dialSize * 2.6) / (letterCount + 2))));
+
+  // Pattern Lock Swipe Gesture & Connection Trail State
+  const [patternTrail, setPatternTrail] = useState([]);
+  const [dragPointer, setDragPointer] = useState(null);
+  const patternTrailRef = useRef([]);
+  const isDraggingPatternRef = useRef(false);
+
+  // Helper: compute center coords of letter node
+  const getLetterCenter = useCallback(
+    (idx) => {
+      const angle = (idx / letterCount) * 2 * Math.PI - Math.PI / 2;
+      return {
+        x: dialSize / 2 + dialRadius * Math.cos(angle),
+        y: dialSize / 2 + dialRadius * Math.sin(angle),
+      };
+    },
+    [dialSize, dialRadius, letterCount]
+  );
+
+  // Helper: hit test touch coords against letter buttons
+  const findLetterAt = useCallback(
+    (tx, ty) => {
+      const hitRadius = letterBtnSize * 0.72;
+      for (let i = 0; i < letterCount; i++) {
+        const pt = getLetterCenter(i);
+        if (Math.hypot(tx - pt.x, ty - pt.y) <= hitRadius) {
+          return i;
+        }
+      }
+      return -1;
+    },
+    [getLetterCenter, letterBtnSize, letterCount]
+  );
+
+  // Helper: test if touch is in center shuffle button
+  const isInsideCenterShuffle = useCallback(
+    (tx, ty) => {
+      const cx = dialSize / 2;
+      const cy = dialSize / 2;
+      return Math.hypot(tx - cx, ty - cy) < dialSize * 0.18;
+    },
+    [dialSize]
+  );
+
+  // Mobile Lockscreen Pattern PanResponder on the Dial
+  const dialPanResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: () => true,
+        onPanResponderGrant: (evt) => {
+          const { locationX, locationY } = evt.nativeEvent;
+          if (isInsideCenterShuffle(locationX, locationY)) {
+            handleShuffle();
+            return;
+          }
+
+          const touchedIdx = findLetterAt(locationX, locationY);
+          if (touchedIdx !== -1) {
+            isDraggingPatternRef.current = true;
+            patternTrailRef.current = [touchedIdx];
+            setPatternTrail([touchedIdx]);
+            setSelectedIndices([touchedIdx]);
+            setDragPointer({ x: locationX, y: locationY });
+            triggerLightHaptic();
+            playTapSound();
+          }
+        },
+        onPanResponderMove: (evt) => {
+          if (!isDraggingPatternRef.current) return;
+          const { locationX, locationY } = evt.nativeEvent;
+          setDragPointer({ x: locationX, y: locationY });
+
+          const touchedIdx = findLetterAt(locationX, locationY);
+          if (touchedIdx !== -1) {
+            const trail = patternTrailRef.current;
+            const len = trail.length;
+            // Android lockscreen style: backtrack if dragging back to second-to-last node
+            if (len >= 2 && trail[len - 2] === touchedIdx) {
+              trail.pop();
+              patternTrailRef.current = [...trail];
+              setPatternTrail([...trail]);
+              setSelectedIndices([...trail]);
+              triggerLightHaptic();
+            } else if (!trail.includes(touchedIdx)) {
+              // New letter in pattern
+              trail.push(touchedIdx);
+              patternTrailRef.current = [...trail];
+              setPatternTrail([...trail]);
+              setSelectedIndices([...trail]);
+              triggerLightHaptic();
+              playTapSound();
+            }
+          }
+        },
+        onPanResponderRelease: () => {
+          if (isDraggingPatternRef.current) {
+            const trail = patternTrailRef.current;
+            if (trail.length >= 2) {
+              const word = trail.map((idx) => shuffledLettersRef.current[idx]).join('');
+              submitWordValue(word);
+            }
+          }
+          isDraggingPatternRef.current = false;
+          patternTrailRef.current = [];
+          setPatternTrail([]);
+          setDragPointer(null);
+        },
+      }),
+    [findLetterAt, isInsideCenterShuffle, submitWordValue]
+  );
 
   return (
     <JuiceEngine ref={juiceRef}>
@@ -606,9 +740,12 @@ export default function WordScrambleGame({ onBackToHub, onScoreUpdate, isPaused 
           )}
         </View>
 
-        {/* Circular Letter Dial with Center Shuffle */}
+        {/* Circular Letter Dial with Mobile Lockscreen Pattern Swiping */}
         <View style={styles.dialArena}>
-          <View style={[styles.dialRing, { width: dialSize, height: dialSize }]}>
+          <View
+            style={[styles.dialRing, { width: dialSize, height: dialSize }]}
+            {...dialPanResponder.panHandlers}
+          >
             {/* Center Shuffle Button */}
             <Pressable
               onPress={handleShuffle}
@@ -625,17 +762,112 @@ export default function WordScrambleGame({ onBackToHub, onScoreUpdate, isPaused 
               <Text style={styles.shuffleLabel}>SHUFFLE</Text>
             </Pressable>
 
+            {/* Mobile Lockscreen Pattern SVG Connection Lines */}
+            <Svg width={dialSize} height={dialSize} style={StyleSheet.absoluteFill} pointerEvents="none">
+              <Defs>
+                <RadialGradient id="nodeGlow" cx="50%" cy="50%" rx="50%" ry="50%">
+                  <Stop offset="0%" stopColor="#00F5FF" stopOpacity="0.85" />
+                  <Stop offset="100%" stopColor="#00F5FF" stopOpacity="0" />
+                </RadialGradient>
+              </Defs>
+
+              {/* Connected lines between selected pattern letters */}
+              {patternTrail.map((idx, i) => {
+                if (i === 0) return null;
+                const prev = getLetterCenter(patternTrail[i - 1]);
+                const curr = getLetterCenter(idx);
+                return (
+                  <G key={`pat_seg_${i}`}>
+                    {/* Outer Neon Glow Beam */}
+                    <Line
+                      x1={prev.x}
+                      y1={prev.y}
+                      x2={curr.x}
+                      y2={curr.y}
+                      stroke="#00F5FF"
+                      strokeWidth={14}
+                      strokeLinecap="round"
+                      opacity={0.32}
+                    />
+                    {/* Inner Core Bright Beam */}
+                    <Line
+                      x1={prev.x}
+                      y1={prev.y}
+                      x2={curr.x}
+                      y2={curr.y}
+                      stroke="#FFFFFF"
+                      strokeWidth={4.5}
+                      strokeLinecap="round"
+                      opacity={0.95}
+                    />
+                  </G>
+                );
+              })}
+
+              {/* Trailing dynamic beam connecting last node to active finger position */}
+              {patternTrail.length > 0 && dragPointer && (
+                <G>
+                  {(() => {
+                    const last = getLetterCenter(patternTrail[patternTrail.length - 1]);
+                    return (
+                      <>
+                        <Line
+                          x1={last.x}
+                          y1={last.y}
+                          x2={dragPointer.x}
+                          y2={dragPointer.y}
+                          stroke="#00F5FF"
+                          strokeWidth={10}
+                          strokeLinecap="round"
+                          opacity={0.28}
+                        />
+                        <Line
+                          x1={last.x}
+                          y1={last.y}
+                          x2={dragPointer.x}
+                          y2={dragPointer.y}
+                          stroke="#00F5FF"
+                          strokeWidth={3.5}
+                          strokeLinecap="round"
+                          opacity={0.88}
+                        />
+                        {/* Finger Cursor Orb */}
+                        <Circle
+                          cx={dragPointer.x}
+                          cy={dragPointer.y}
+                          r={10}
+                          fill="#00F5FF"
+                          opacity={0.75}
+                        />
+                      </>
+                    );
+                  })()}
+                </G>
+              )}
+
+              {/* Glowing rings over visited pattern nodes */}
+              {patternTrail.map((idx) => {
+                const pt = getLetterCenter(idx);
+                return (
+                  <G key={`pat_node_${idx}`}>
+                    <Circle cx={pt.x} cy={pt.y} r={letterBtnSize * 0.52} fill="url(#nodeGlow)" />
+                    <Circle cx={pt.x} cy={pt.y} r={letterBtnSize * 0.44} stroke="#00F5FF" strokeWidth={2.5} fill="none" />
+                  </G>
+                );
+              })}
+            </Svg>
+
             {/* Radially Placed Letter Buttons */}
             {shuffledLetters.map((char, idx) => {
-              const angle = (idx / letterCount) * 2 * Math.PI - Math.PI / 2;
-              const cx = dialSize / 2 + dialRadius * Math.cos(angle) - letterBtnSize / 2;
-              const cy = dialSize / 2 + dialRadius * Math.sin(angle) - letterBtnSize / 2;
+              const { x, y } = getLetterCenter(idx);
+              const cx = x - letterBtnSize / 2;
+              const cy = y - letterBtnSize / 2;
               const isUsed = selectedIndices.includes(idx);
+              const patternOrder = patternTrail.indexOf(idx);
 
               return (
-                <Pressable
+                <View
                   key={`dial_char_${idx}`}
-                  onPress={() => handleTapLetter(idx)}
                   style={[
                     styles.letterDialBtn,
                     {
@@ -645,17 +877,25 @@ export default function WordScrambleGame({ onBackToHub, onScoreUpdate, isPaused 
                       top: cy,
                     },
                     isUsed && styles.letterDialBtnUsed,
+                    patternOrder !== -1 && styles.letterDialBtnPattern,
                   ]}
+                  pointerEvents="none"
                 >
                   <Text
                     style={[
                       styles.letterDialBtnText,
                       isUsed && styles.letterDialBtnTextUsed,
+                      patternOrder !== -1 && styles.letterDialBtnTextPattern,
                     ]}
                   >
                     {char}
                   </Text>
-                </Pressable>
+                  {patternOrder !== -1 && (
+                    <View style={styles.patternOrderBadge}>
+                      <Text style={styles.patternOrderText}>{patternOrder + 1}</Text>
+                    </View>
+                  )}
+                </View>
               );
             })}
           </View>
@@ -985,6 +1225,36 @@ const styles = StyleSheet.create({
   },
   letterDialBtnTextUsed: {
     color: '#64748B',
+  },
+  letterDialBtnPattern: {
+    backgroundColor: 'rgba(0, 245, 255, 0.35)',
+    borderColor: '#FFFFFF',
+    shadowColor: '#00F5FF',
+    shadowOpacity: 0.95,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  letterDialBtnTextPattern: {
+    color: '#FFFFFF',
+  },
+  patternOrderBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#00F5FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+  },
+  patternOrderText: {
+    fontFamily: monoFont,
+    fontSize: 9.5,
+    fontWeight: '900',
+    color: '#060B14',
   },
   bottomBar: {
     paddingHorizontal: 24,

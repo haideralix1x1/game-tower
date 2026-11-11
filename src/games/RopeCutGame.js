@@ -25,6 +25,7 @@ import GameResultModal from '../components/GameResultModal';
 import JuiceEngine from '../components/JuiceEngine';
 import { playSliceSound, playTapSound, playGameOverSound, playPerfectSound } from '../utils/sound';
 import {
+  triggerLightHaptic,
   triggerSliceHaptic,
   triggerGameOverHaptic,
   triggerMediumHaptic,
@@ -374,7 +375,9 @@ export default function RopeCutGame({ onBackToHub, onScoreUpdate, isPaused = fal
 
   // Web-Shooting and Synchronous Rope Slicing
   const shootWebToHook = useCallback((hook) => {
+    if (!hook || typeof hook.x !== 'number' || typeof hook.y !== 'number') return;
     const curSpider = spiderRef.current;
+    if (!curSpider) return;
     const dist = Math.hypot(curSpider.x - hook.x, curSpider.y - hook.y);
     const newRope = {
       id: `rope_shoot_${Date.now()}_${Math.random()}`,
