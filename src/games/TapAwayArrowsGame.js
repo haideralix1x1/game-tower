@@ -14,9 +14,6 @@ import Svg, {
   Rect,
   G,
   Circle,
-  Defs,
-  LinearGradient,
-  Stop,
 } from 'react-native-svg';
 import MiniGameHeader from '../components/MiniGameHeader';
 import GameResultModal from '../components/GameResultModal';
@@ -40,8 +37,9 @@ const monoFont = Platform.select({
   default: 'monospace',
 });
 
-const COLS = 10;
-const ROWS = 14;
+// Dense grid dimensions matching Arrow Go tightly packed labyrinth
+const COLS = 16;
+const ROWS = 22;
 
 const DIRS = [
   { dr: -1, dc: 0, name: 'UP' },
@@ -55,10 +53,11 @@ const STORAGE_BEST_KEY = '@game_tower:best_arrows_v1';
 
 /**
  * Reverse-generate guaranteed 100% solvable labyrinths
- * Densely packs arrows directly adjacent to each other with turns and bends
+ * Tightly packs arrows side-by-side with multi-turn shapes (L, U, spiral, straight)
  */
-function generatePatternArrows(lvl = 1) {
-  const targetCount = Math.min(36, 22 + Math.floor(lvl * 0.8));
+function generateDenseLabyrinth(lvl = 1) {
+  // Target arrow count scales with level (28 up to 48 arrows)
+  const targetCount = Math.min(48, 28 + Math.floor(lvl * 0.9));
 
   const grid = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
   const arrows = [];
@@ -69,15 +68,17 @@ function generatePatternArrows(lvl = 1) {
   for (let id = 0; id < targetCount; id++) {
     let placed = false;
 
-    // Gather candidate cells: prioritize central and adjacent cells
+    // Gather candidate head positions
     const candidates = [];
     if (placedPoints.length === 0) {
-      for (let dr = -1; dr <= 1; dr++) {
-        for (let dc = -1; dc <= 1; dc++) {
+      // Start in central region
+      for (let dr = -2; dr <= 2; dr++) {
+        for (let dc = -2; dc <= 2; dc++) {
           candidates.push({ r: midR + dr, c: midC + dc });
         }
       }
     } else {
+      // Prioritize cells directly adjacent to already-placed arrows to pack them tightly
       for (let r = 1; r < ROWS - 1; r++) {
         for (let c = 1; c < COLS - 1; c++) {
           if (grid[r][c] === null) {
@@ -100,7 +101,7 @@ function generatePatternArrows(lvl = 1) {
       }
     }
 
-    // Try candidates in random order
+    // Shuffle candidates
     for (let i = candidates.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
@@ -109,99 +110,107 @@ function generatePatternArrows(lvl = 1) {
     for (const cand of candidates) {
       const hr = cand.r;
       const hc = cand.c;
-      const dIdx = Math.floor(Math.random() * 4);
-      const dir = DIRS[dIdx];
-
       if (grid[hr][hc] !== null) continue;
 
-      // Raycast check: must have open ray to border
-      let rayR = hr + dir.dr;
-      let rayC = hc + dir.dc;
-      let rayClear = true;
-      while (rayR >= 0 && rayR < ROWS && rayC >= 0 && rayC < COLS) {
-        if (grid[rayR][rayC] !== null) {
-          rayClear = false;
-          break;
-        }
-        rayR += dir.dr;
-        rayC += dir.dc;
-      }
-      if (!rayClear) continue;
+      // Try all 4 exit directions
+      const dirOrder = [0, 1, 2, 3].sort(() => Math.random() - 0.5);
 
-      // First step backwards MUST be opposite to dir so line enters straight
-      const step1R = hr - dir.dr;
-      const step1C = hc - dir.dc;
-      if (
-        step1R < 0 ||
-        step1R >= ROWS ||
-        step1C < 0 ||
-        step1C >= COLS ||
-        grid[step1R][step1C] !== null
-      ) {
-        continue;
-      }
+      for (const dIdx of dirOrder) {
+        const dir = DIRS[dIdx];
 
-      const path = [
-        { r: hr, c: hc },
-        { r: step1R, c: step1C },
-      ];
-      let curR = step1R;
-      let curC = step1C;
-      let bodyDir = (dIdx + 2) % 4;
-
-      // Scale path length for rich multi-turn maze shapes
-      const maxLen = Math.min(8, 3 + Math.floor(lvl / 3));
-      const len = 2 + Math.floor(Math.random() * (maxLen - 1));
-
-      for (let s = 2; s < len; s++) {
-        const choices = [bodyDir, (bodyDir + 1) % 4, (bodyDir + 3) % 4];
-        let found = false;
-        for (const testIdx of choices) {
-          const td = DIRS[testIdx];
-          const nr = curR + td.dr;
-          const nc = curC + td.dc;
-          if (
-            nr >= 0 &&
-            nr < ROWS &&
-            nc >= 0 &&
-            nc < COLS &&
-            grid[nr][nc] === null &&
-            !path.some((p) => p.r === nr && p.c === nc)
-          ) {
-            curR = nr;
-            curC = nc;
-            bodyDir = testIdx;
-            path.push({ r: curR, c: curC });
-            found = true;
+        // Raycast check: must have open ray to border at time of placement
+        let rayR = hr + dir.dr;
+        let rayC = hc + dir.dc;
+        let rayClear = true;
+        while (rayR >= 0 && rayR < ROWS && rayC >= 0 && rayC < COLS) {
+          if (grid[rayR][rayC] !== null) {
+            rayClear = false;
             break;
           }
+          rayR += dir.dr;
+          rayC += dir.dc;
         }
-        if (!found) break;
-      }
+        if (!rayClear) continue;
 
-      if (path.length >= 2) {
-        const colorVariant = id % 3; // 0: Cyan/Mint, 1: Gold/Orange, 2: Pink/Violet
-        const arrow = {
-          id: 'arr_' + id + '_' + Math.random().toString(36).substring(2, 6),
-          path: path.reverse(), // head is last element
-          headDir: dir.name,
-          dr: dir.dr,
-          dc: dir.dc,
-          colorVariant,
-        };
-
-        for (const pt of arrow.path) {
-          grid[pt.r][pt.c] = arrow.id;
-          placedPoints.push(pt);
+        // First step backwards MUST be opposite to dir so line enters straight to the head
+        const step1R = hr - dir.dr;
+        const step1C = hc - dir.dc;
+        if (
+          step1R < 0 ||
+          step1R >= ROWS ||
+          step1C < 0 ||
+          step1C >= COLS ||
+          grid[step1R][step1C] !== null
+        ) {
+          continue;
         }
 
-        arrows.push(arrow);
-        placed = true;
-        break;
+        const path = [
+          { r: hr, c: hc },
+          { r: step1R, c: step1C },
+        ];
+        let curR = step1R;
+        let curC = step1C;
+        let bodyDir = (dIdx + 2) % 4; // backward direction
+
+        // Variable length: some short (2-3), some medium (4-6), some long labyrinthine (7-12)
+        const lenDice = Math.random();
+        const maxLen = lenDice > 0.4 ? 4 + Math.floor(Math.random() * 8) : 3 + Math.floor(Math.random() * 3);
+
+        for (let s = 2; s < maxLen; s++) {
+          // Can continue straight, turn 90 deg left, or turn 90 deg right
+          const choices = [bodyDir, (bodyDir + 1) % 4, (bodyDir + 3) % 4];
+          // Give higher weight to straight or hugging adjacent lines
+          choices.sort(() => Math.random() - 0.4);
+
+          let found = false;
+          for (const testIdx of choices) {
+            const td = DIRS[testIdx];
+            const nr = curR + td.dr;
+            const nc = curC + td.dc;
+            if (
+              nr >= 0 &&
+              nr < ROWS &&
+              nc >= 0 &&
+              nc < COLS &&
+              grid[nr][nc] === null &&
+              !path.some((p) => p.r === nr && p.c === nc)
+            ) {
+              curR = nr;
+              curC = nc;
+              bodyDir = testIdx;
+              path.push({ r: curR, c: curC });
+              found = true;
+              break;
+            }
+          }
+          if (!found) break;
+        }
+
+        if (path.length >= 2) {
+          const arrow = {
+            id: 'arr_' + id + '_' + Math.random().toString(36).substring(2, 6),
+            path: path.reverse(), // head is last element
+            headDir: dir.name,
+            dr: dir.dr,
+            dc: dir.dc,
+          };
+
+          for (const pt of arrow.path) {
+            grid[pt.r][pt.c] = arrow.id;
+            placedPoints.push(pt);
+          }
+
+          arrows.push(arrow);
+          placed = true;
+          break;
+        }
       }
+
+      if (placed) break;
     }
 
-    if (!placed && arrows.length >= 18) {
+    if (!placed && arrows.length >= 24) {
       break;
     }
   }
@@ -221,11 +230,11 @@ export default function TapAwayArrowsGame({
 
   const { width } = useWindowDimensions();
 
-  // Maze board dimensions: clean responsive fit
+  // Dense board dimensions: responsive fit
   const boardPadding = 12;
   const boardWidth = Math.min(width - 24, 380);
   const cellW = (boardWidth - boardPadding * 2) / COLS;
-  const cellH = cellW * 1.1;
+  const cellH = cellW * 1.12;
   const boardHeight = cellH * ROWS + boardPadding * 2;
 
   const MAX_MISTAKES = 3;
@@ -280,7 +289,7 @@ export default function TapAwayArrowsGame({
     setModalVisible(false);
     setModalType('VICTORY');
 
-    const generated = generatePatternArrows(lvl);
+    const generated = generateDenseLabyrinth(lvl);
     setArrows(generated.arrows);
   }, []);
 
@@ -306,12 +315,12 @@ export default function TapAwayArrowsGame({
       const current = escapingRef.current;
       if (current.length === 0) return;
 
-      const MAX_OFFSET = 550;
+      const MAX_OFFSET = 600;
       const next = [];
 
       for (let i = 0; i < current.length; i++) {
         const item = current[i];
-        const speed = 20 + Math.pow(item.progress, 0.7) * 28;
+        const speed = 22 + Math.pow(item.progress, 0.7) * 32;
         const newOffset = item.offset + speed;
         const progress = Math.min(1, newOffset / MAX_OFFSET);
 
@@ -361,7 +370,7 @@ export default function TapAwayArrowsGame({
     []
   );
 
-  // Set of movable arrow IDs in real-time
+  // Set of movable arrow IDs in real-time (used for logic & live counter, NOT highlighted!)
   const movableArrowIds = useMemo(() => {
     const ids = new Set();
     for (const a of arrows) {
@@ -384,7 +393,7 @@ export default function TapAwayArrowsGame({
     const c = (locationX - boardPadding) / cellW;
     const r = (locationY - boardPadding) / cellH;
 
-    // Find arrow whose path is closest to the tap point
+    // Find arrow whose path is closest to tap point
     let bestArrow = null;
     let minDistance = 0.95;
 
@@ -489,7 +498,7 @@ export default function TapAwayArrowsGame({
     }
   };
 
-  // Hint button: Highlights or executes a free arrow
+  // Hint button: Highlights and frees one unblocked arrow
   const handleUseHint = () => {
     const freeArrows = arrows.filter((a) => movableArrowIds.has(a.id));
     if (freeArrows.length > 0) {
@@ -506,7 +515,7 @@ export default function TapAwayArrowsGame({
       }
       setTimeout(() => {
         tryEscapeArrow(chosen);
-      }, 250);
+      }, 300);
     } else {
       triggerLightHaptic();
       if (juiceRef.current) {
@@ -618,8 +627,8 @@ export default function TapAwayArrowsGame({
 
     const hx = Number(headPt.x.toFixed(1));
     const hy = Number(headPt.y.toFixed(1));
-    const headLen = Number((Math.min(cellW, cellH) * 0.44).toFixed(1));
-    const wingW = Number((Math.min(cellW, cellH) * 0.32).toFixed(1));
+    const headLen = Number((Math.min(cellW, cellH) * 0.46).toFixed(1));
+    const wingW = Number((Math.min(cellW, cellH) * 0.35).toFixed(1));
 
     let headPoints = '';
     switch (arrow.headDir) {
@@ -661,8 +670,8 @@ export default function TapAwayArrowsGame({
     const hx = Number((boardPadding + (head.c + 0.5) * cellW).toFixed(1));
     const hy = Number((boardPadding + (head.r + 0.5) * cellH).toFixed(1));
 
-    const headLen = Number((Math.min(cellW, cellH) * 0.44).toFixed(1));
-    const wingW = Number((Math.min(cellW, cellH) * 0.32).toFixed(1));
+    const headLen = Number((Math.min(cellW, cellH) * 0.46).toFixed(1));
+    const wingW = Number((Math.min(cellW, cellH) * 0.35).toFixed(1));
 
     switch (arrow.headDir) {
       case 'UP':
@@ -677,29 +686,11 @@ export default function TapAwayArrowsGame({
     }
   };
 
-  const getArrowGradId = (colorVariant) => {
-    switch (colorVariant) {
-      case 0:
-        return 'url(#neonCyanGrad)';
-      case 1:
-        return 'url(#solarGoldGrad)';
-      case 2:
-      default:
-        return 'url(#laserPinkGrad)';
-    }
-  };
-
-  const getArrowHeadColor = (colorVariant) => {
-    switch (colorVariant) {
-      case 0:
-        return '#00F5FF';
-      case 1:
-        return '#FFE600';
-      case 2:
-      default:
-        return '#FF007F';
-    }
-  };
+  // UNIFORM THEME: All arrows share the same cyber neon cyan style (#00F5FF)
+  // No arrows are pre-highlighted as movable, preserving the true puzzle challenge!
+  const ARROW_DEFAULT_COLOR = '#00F5FF';
+  const ARROW_BLOCKED_FLASH = '#FF0055';
+  const ARROW_HINT_COLOR = '#FFE600';
 
   return (
     <JuiceEngine ref={juiceRef}>
@@ -787,44 +778,6 @@ export default function TapAwayArrowsGame({
                 height={boardHeight}
                 style={StyleSheet.absoluteFill}
               >
-                <Defs>
-                  {/* Neon Cyan to Matrix Mint */}
-                  <LinearGradient
-                    id="neonCyanGrad"
-                    x1="0%"
-                    y1="0%"
-                    x2="100%"
-                    y2="100%"
-                  >
-                    <Stop offset="0%" stopColor="#00F5FF" />
-                    <Stop offset="100%" stopColor="#00FF9D" />
-                  </LinearGradient>
-
-                  {/* Solar Gold to Tangerine */}
-                  <LinearGradient
-                    id="solarGoldGrad"
-                    x1="0%"
-                    y1="0%"
-                    x2="100%"
-                    y2="100%"
-                  >
-                    <Stop offset="0%" stopColor="#FFE600" />
-                    <Stop offset="100%" stopColor="#FF8500" />
-                  </LinearGradient>
-
-                  {/* Laser Pink to Cyber Violet */}
-                  <LinearGradient
-                    id="laserPinkGrad"
-                    x1="0%"
-                    y1="0%"
-                    x2="100%"
-                    y2="100%"
-                  >
-                    <Stop offset="0%" stopColor="#FF007F" />
-                    <Stop offset="100%" stopColor="#9D4EDD" />
-                  </LinearGradient>
-                </Defs>
-
                 {/* Dark Matrix Glass Board Background */}
                 <Rect
                   x={0}
@@ -835,7 +788,7 @@ export default function TapAwayArrowsGame({
                   rx={16}
                 />
 
-                {/* Faint Grid Dots for empty/all cells */}
+                {/* Faint Grid Dots across all cells */}
                 {Array.from({ length: ROWS }).map((_, r) =>
                   Array.from({ length: COLS }).map((_, c) => {
                     const cx = boardPadding + (c + 0.5) * cellW;
@@ -845,47 +798,38 @@ export default function TapAwayArrowsGame({
                         key={`dot_${r}_${c}`}
                         cx={cx}
                         cy={cy}
-                        r={1.5}
-                        fill="rgba(0, 245, 255, 0.2)"
+                        r={1.2}
+                        fill="rgba(0, 245, 255, 0.18)"
                       />
                     );
                   })
                 )}
 
-                {/* Active Arrows in Maze */}
+                {/* Active Arrows in Maze - ALL SAME UNIFORM COLOR */}
                 {arrows.map((arrow) => {
                   if (!arrow || !arrow.path || arrow.path.length < 2)
                     return null;
 
                   const isBlocked = blockedArrowId === arrow.id;
-                  const isMovable = movableArrowIds.has(arrow.id);
                   const isHinted = hintedArrowId === arrow.id;
 
-                  // Blocked arrows: dark stealth slate #24304D
-                  // Movable arrows: glowing neon gradients!
-                  let strokeColor = '#24304D';
-                  let fillColor = '#24304D';
-
-                  if (isBlocked) {
-                    strokeColor = '#FF0055';
-                    fillColor = '#FF0055';
-                  } else if (isMovable) {
-                    strokeColor = getArrowGradId(arrow.colorVariant);
-                    fillColor = getArrowHeadColor(arrow.colorVariant);
-                  }
+                  // All arrows share the exact same cyber neon color (#00F5FF)
+                  let color = ARROW_DEFAULT_COLOR;
+                  if (isBlocked) color = ARROW_BLOCKED_FLASH;
+                  else if (isHinted) color = ARROW_HINT_COLOR;
 
                   const pathStr = getSvgPathString(arrow);
                   const headPoints = getArrowHeadPoints(arrow);
 
                   return (
                     <G key={arrow.id}>
-                      {/* Hint Highlight Pulse */}
+                      {/* Hint Glow */}
                       {isHinted && pathStr ? (
                         <Path
                           d={pathStr}
                           fill="none"
                           stroke="#FFFFFF"
-                          strokeWidth={9}
+                          strokeWidth={8}
                           strokeLinecap="round"
                           strokeLinejoin="round"
                           opacity={0.8}
@@ -897,8 +841,8 @@ export default function TapAwayArrowsGame({
                         <Path
                           d={pathStr}
                           fill="none"
-                          stroke={strokeColor}
-                          strokeWidth={isBlocked ? 6.5 : 5.4}
+                          stroke={color}
+                          strokeWidth={isBlocked ? 5.8 : 4.6}
                           strokeLinecap="round"
                           strokeLinejoin="round"
                         />
@@ -908,9 +852,9 @@ export default function TapAwayArrowsGame({
                       {headPoints ? (
                         <Polygon
                           points={headPoints}
-                          fill={fillColor}
-                          stroke={isMovable && !isBlocked ? '#FFFFFF' : fillColor}
-                          strokeWidth={isMovable && !isBlocked ? 0.8 : 0.5}
+                          fill={color}
+                          stroke="#FFFFFF"
+                          strokeWidth={0.8}
                         />
                       ) : null}
                     </G>
@@ -923,9 +867,6 @@ export default function TapAwayArrowsGame({
                   const opacity = Math.max(0, 1 - progress);
                   const { pathStr, headPoints } = getEscapingGeometry(item);
 
-                  const escapeStroke = getArrowGradId(arrow.colorVariant);
-                  const escapeFill = getArrowHeadColor(arrow.colorVariant);
-
                   return (
                     <G key={`esc_${item.id}`} opacity={opacity}>
                       {/* Trail glow */}
@@ -934,18 +875,18 @@ export default function TapAwayArrowsGame({
                           d={pathStr}
                           fill="none"
                           stroke="#FFFFFF"
-                          strokeWidth={8}
+                          strokeWidth={7}
                           strokeLinecap="round"
                           strokeLinejoin="round"
-                          opacity={0.4}
+                          opacity={0.5}
                         />
                       ) : null}
                       {pathStr ? (
                         <Path
                           d={pathStr}
                           fill="none"
-                          stroke={escapeStroke}
-                          strokeWidth={5.4}
+                          stroke="#00F5FF"
+                          strokeWidth={4.8}
                           strokeLinecap="round"
                           strokeLinejoin="round"
                         />
@@ -953,7 +894,7 @@ export default function TapAwayArrowsGame({
                       {headPoints ? (
                         <Polygon
                           points={headPoints}
-                          fill={escapeFill}
+                          fill="#00F5FF"
                           stroke="#FFFFFF"
                           strokeWidth={1}
                         />
