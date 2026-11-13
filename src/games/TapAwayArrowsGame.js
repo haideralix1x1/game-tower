@@ -50,172 +50,307 @@ const DIRS = [
 
 const STORAGE_LEVEL_KEY = '@game_tower:level_arrows_v1';
 const STORAGE_BEST_KEY = '@game_tower:best_arrows_v1';
+const MAX_LEVEL = 200;
+const MAX_HINTS_PER_ROUND = 2;
 
 /**
- * Reverse-generate guaranteed 100% solvable labyrinths
+ * Fast seeded pseudo-random generator (Mulberry32)
+ * Ensures every level 1..200 has a unique, deterministic, reproducible pattern.
+ */
+function createRng(seed) {
+  let s = seed >>> 0;
+  return function () {
+    s = (s + 0x6D2B79F5) | 0;
+    let t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * Smooth difficulty scaling from Level 1 (5 arrows) to Level 200 (52 arrows)
+ */
+function getTargetArrowCount(lvl) {
+  if (lvl <= 1) return 5;
+  if (lvl <= 5) return 4 + lvl; // 5..9
+  if (lvl <= 15) return 9 + Math.floor((lvl - 5) * 0.5); // 10..14
+  if (lvl <= 35) return 14 + Math.floor((lvl - 15) * 0.45); // 15..23
+  if (lvl <= 70) return 23 + Math.floor((lvl - 35) * 0.35); // 24..35
+  if (lvl <= 120) return 35 + Math.floor((lvl - 70) * 0.2); // 36..45
+  return Math.min(52, 45 + Math.floor((lvl - 120) * 0.09)); // 46..52
+}
+
+/**
+ * Checks if an arrow can escape out of the board without collisions
+ */
+function checkMovable(arrow, allArrows) {
+  if (!arrow || !arrow.path || arrow.path.length === 0) return false;
+  const head = arrow.path[arrow.path.length - 1];
+  if (!head) return false;
+
+  let rayR = head.r + arrow.dr;
+  let rayC = head.c + arrow.dc;
+
+  while (rayR >= 0 && rayR < ROWS && rayC >= 0 && rayC < COLS) {
+    for (const other of allArrows) {
+      if (other && other.id !== arrow.id && other.path) {
+        if (other.path.some((p) => p.r === rayR && p.c === rayC)) {
+          return false;
+        }
+      }
+    }
+    rayR += arrow.dr;
+    rayC += arrow.dc;
+  }
+  return true;
+}
+
+/**
+ * In-engine solver: rigorously proves that all arrows can escape with zero deadlocks
+ */
+function solveMazeCheck(arrows) {
+  const current = [...arrows];
+  while (current.length > 0) {
+    const freeIdx = current.findIndex((a) => checkMovable(a, current));
+    if (freeIdx === -1) return false;
+    current.splice(freeIdx, 1);
+  }
+  return true;
+}
+
+/**
+ * Offsets the entire generated arrow cluster so its bounding box sits in the exact middle-center of the board.
+ */
+function centerArrows(arrows) {
+  if (!arrows || arrows.length === 0) return arrows;
+  let minR = Infinity,
+    maxR = -Infinity,
+    minC = Infinity,
+    maxC = -Infinity;
+  for (const a of arrows) {
+    if (!a.path) continue;
+    for (const p of a.path) {
+      if (p.r < minR) minR = p.r;
+      if (p.r > maxR) maxR = p.r;
+      if (p.c < minC) minC = p.c;
+      if (p.c > maxC) maxC = p.c;
+    }
+  }
+  const deltaR = Math.round((ROWS - 1 - (minR + maxR)) / 2);
+  const deltaC = Math.round((COLS - 1 - (minC + maxC)) / 2);
+
+  const safeDeltaR = Math.max(-minR, Math.min(ROWS - 1 - maxR, deltaR));
+  const safeDeltaC = Math.max(-minC, Math.min(COLS - 1 - maxC, deltaC));
+
+  return arrows.map((a) => ({
+    ...a,
+    path: a.path.map((p) => ({
+      r: p.r + safeDeltaR,
+      c: p.c + safeDeltaC,
+    })),
+  }));
+}
+
+/**
+ * Reverse-generate guaranteed 100% solvable labyrinths for levels 1..200
  * Tightly packs arrows side-by-side with multi-turn shapes (L, U, spiral, straight)
  */
 function generateDenseLabyrinth(lvl = 1) {
-  // Target arrow count scales with level (28 up to 48 arrows)
-  const targetCount = Math.min(48, 28 + Math.floor(lvl * 0.9));
+  const safeLvl = Math.max(1, Math.min(MAX_LEVEL, lvl));
 
-  const grid = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
-  const arrows = [];
-  const placedPoints = [];
-  const midR = Math.floor(ROWS / 2);
-  const midC = Math.floor(COLS / 2);
+  for (let attempt = 0; attempt < 8; attempt++) {
+    // Unique deterministic seed per level & attempt
+    const rng = createRng((safeLvl * 9973 + 12345 + attempt * 777) >>> 0);
+    const targetCount = getTargetArrowCount(safeLvl);
 
-  for (let id = 0; id < targetCount; id++) {
-    let placed = false;
+    const grid = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
+    const arrows = [];
+    const placedPoints = [];
+    const midR = Math.floor(ROWS / 2);
+    const midC = Math.floor(COLS / 2);
 
-    // Gather candidate head positions
-    const candidates = [];
-    if (placedPoints.length === 0) {
-      // Start in central region
-      for (let dr = -2; dr <= 2; dr++) {
-        for (let dc = -2; dc <= 2; dc++) {
-          candidates.push({ r: midR + dr, c: midC + dc });
-        }
-      }
-    } else {
-      // Prioritize cells directly adjacent to already-placed arrows to pack them tightly
-      for (let r = 1; r < ROWS - 1; r++) {
-        for (let c = 1; c < COLS - 1; c++) {
-          if (grid[r][c] === null) {
-            const isAdj = placedPoints.some(
-              (p) => Math.abs(p.r - r) + Math.abs(p.c - c) === 1
-            );
-            if (isAdj) candidates.push({ r, c });
+    // Initial bounding spread expands gradually as level increases
+    const rSpread = Math.min(Math.floor(ROWS / 2) - 1, 2 + Math.floor(safeLvl * 0.06));
+    const cSpread = Math.min(Math.floor(COLS / 2) - 1, 2 + Math.floor(safeLvl * 0.05));
+
+    for (let id = 0; id < targetCount; id++) {
+      let placed = false;
+      const candidates = [];
+
+      if (placedPoints.length === 0) {
+        for (let dr = -rSpread; dr <= rSpread; dr++) {
+          for (let dc = -cSpread; dc <= cSpread; dc++) {
+            candidates.push({ r: midR + dr, c: midC + dc });
           }
         }
-      }
-    }
-
-    if (candidates.length === 0) {
-      for (let r = 1; r < ROWS - 1; r++) {
-        for (let c = 1; c < COLS - 1; c++) {
-          if (grid[r][c] === null) {
-            candidates.push({ r, c });
-          }
-        }
-      }
-    }
-
-    // Shuffle candidates
-    for (let i = candidates.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
-    }
-
-    for (const cand of candidates) {
-      const hr = cand.r;
-      const hc = cand.c;
-      if (grid[hr][hc] !== null) continue;
-
-      // Try all 4 exit directions
-      const dirOrder = [0, 1, 2, 3].sort(() => Math.random() - 0.5);
-
-      for (const dIdx of dirOrder) {
-        const dir = DIRS[dIdx];
-
-        // Raycast check: must have open ray to border at time of placement
-        let rayR = hr + dir.dr;
-        let rayC = hc + dir.dc;
-        let rayClear = true;
-        while (rayR >= 0 && rayR < ROWS && rayC >= 0 && rayC < COLS) {
-          if (grid[rayR][rayC] !== null) {
-            rayClear = false;
-            break;
-          }
-          rayR += dir.dr;
-          rayC += dir.dc;
-        }
-        if (!rayClear) continue;
-
-        // First step backwards MUST be opposite to dir so line enters straight to the head
-        const step1R = hr - dir.dr;
-        const step1C = hc - dir.dc;
-        if (
-          step1R < 0 ||
-          step1R >= ROWS ||
-          step1C < 0 ||
-          step1C >= COLS ||
-          grid[step1R][step1C] !== null
-        ) {
-          continue;
-        }
-
-        const path = [
-          { r: hr, c: hc },
-          { r: step1R, c: step1C },
-        ];
-        let curR = step1R;
-        let curC = step1C;
-        let bodyDir = (dIdx + 2) % 4; // backward direction
-
-        // Variable length: some short (2-3), some medium (4-6), some long labyrinthine (7-12)
-        const lenDice = Math.random();
-        const maxLen = lenDice > 0.4 ? 4 + Math.floor(Math.random() * 8) : 3 + Math.floor(Math.random() * 3);
-
-        for (let s = 2; s < maxLen; s++) {
-          // Can continue straight, turn 90 deg left, or turn 90 deg right
-          const choices = [bodyDir, (bodyDir + 1) % 4, (bodyDir + 3) % 4];
-          // Give higher weight to straight or hugging adjacent lines
-          choices.sort(() => Math.random() - 0.4);
-
-          let found = false;
-          for (const testIdx of choices) {
-            const td = DIRS[testIdx];
-            const nr = curR + td.dr;
-            const nc = curC + td.dc;
-            if (
-              nr >= 0 &&
-              nr < ROWS &&
-              nc >= 0 &&
-              nc < COLS &&
-              grid[nr][nc] === null &&
-              !path.some((p) => p.r === nr && p.c === nc)
-            ) {
-              curR = nr;
-              curC = nc;
-              bodyDir = testIdx;
-              path.push({ r: curR, c: curC });
-              found = true;
-              break;
+      } else {
+        for (let r = 1; r < ROWS - 1; r++) {
+          for (let c = 1; c < COLS - 1; c++) {
+            if (grid[r][c] === null) {
+              const isAdj = placedPoints.some(
+                (p) => Math.abs(p.r - r) + Math.abs(p.c - c) === 1
+              );
+              if (isAdj) candidates.push({ r, c });
             }
           }
-          if (!found) break;
-        }
-
-        if (path.length >= 2) {
-          const arrow = {
-            id: 'arr_' + id + '_' + Math.random().toString(36).substring(2, 6),
-            path: path.reverse(), // head is last element
-            headDir: dir.name,
-            dr: dir.dr,
-            dc: dir.dc,
-          };
-
-          for (const pt of arrow.path) {
-            grid[pt.r][pt.c] = arrow.id;
-            placedPoints.push(pt);
-          }
-
-          arrows.push(arrow);
-          placed = true;
-          break;
         }
       }
 
-      if (placed) break;
+      if (candidates.length === 0) {
+        for (let r = 1; r < ROWS - 1; r++) {
+          for (let c = 1; c < COLS - 1; c++) {
+            if (grid[r][c] === null) {
+              candidates.push({ r, c });
+            }
+          }
+        }
+      }
+
+      // Shuffle candidates with seeded RNG
+      for (let i = candidates.length - 1; i > 0; i--) {
+        const j = Math.floor(rng() * (i + 1));
+        [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
+      }
+
+      for (const cand of candidates) {
+        const hr = cand.r;
+        const hc = cand.c;
+        if (grid[hr][hc] !== null) continue;
+
+        // Try all 4 exit directions in randomized order
+        const dirOrder = [0, 1, 2, 3].sort(() => rng() - 0.5);
+
+        for (const dIdx of dirOrder) {
+          const dir = DIRS[dIdx];
+
+          // Raycast check: open ray to border at time of placement
+          let rayR = hr + dir.dr;
+          let rayC = hc + dir.dc;
+          let rayClear = true;
+          while (rayR >= 0 && rayR < ROWS && rayC >= 0 && rayC < COLS) {
+            if (grid[rayR][rayC] !== null) {
+              rayClear = false;
+              break;
+            }
+            rayR += dir.dr;
+            rayC += dir.dc;
+          }
+          if (!rayClear) continue;
+
+          // First step backwards must be opposite to dir
+          const step1R = hr - dir.dr;
+          const step1C = hc - dir.dc;
+          if (
+            step1R < 0 ||
+            step1R >= ROWS ||
+            step1C < 0 ||
+            step1C >= COLS ||
+            grid[step1R][step1C] !== null
+          ) {
+            continue;
+          }
+
+          const path = [
+            { r: hr, c: hc },
+            { r: step1R, c: step1C },
+          ];
+          let curR = step1R;
+          let curC = step1C;
+          let bodyDir = (dIdx + 2) % 4;
+
+          // Arrow length limits scale smoothly with level
+          const minLen = safeLvl <= 5 ? 2 : safeLvl <= 20 ? 3 : 4;
+          const maxLenLimit =
+            safeLvl <= 5 ? 3 : safeLvl <= 15 ? 5 : safeLvl <= 50 ? 7 : 11;
+          const maxLen = minLen + Math.floor(rng() * (maxLenLimit - minLen + 1));
+
+          for (let s = 2; s < maxLen; s++) {
+            const choices = [bodyDir, (bodyDir + 1) % 4, (bodyDir + 3) % 4];
+            choices.sort(() => rng() - 0.4);
+
+            let found = false;
+            for (const testIdx of choices) {
+              const td = DIRS[testIdx];
+              const nr = curR + td.dr;
+              const nc = curC + td.dc;
+              if (
+                nr >= 0 &&
+                nr < ROWS &&
+                nc >= 0 &&
+                nc < COLS &&
+                grid[nr][nc] === null &&
+                !path.some((p) => p.r === nr && p.c === nc)
+              ) {
+                curR = nr;
+                curC = nc;
+                bodyDir = testIdx;
+                path.push({ r: curR, c: curC });
+                found = true;
+                break;
+              }
+            }
+            if (!found) break;
+          }
+
+          if (path.length >= 2) {
+            const arrow = {
+              id: `arr_${safeLvl}_${id}_${rng().toString(36).substring(2, 6)}`,
+              path: path.reverse(), // head is last element
+              headDir: dir.name,
+              dr: dir.dr,
+              dc: dir.dc,
+            };
+
+            for (const pt of arrow.path) {
+              grid[pt.r][pt.c] = arrow.id;
+              placedPoints.push(pt);
+            }
+
+            arrows.push(arrow);
+            placed = true;
+            break;
+          }
+        }
+
+        if (placed) break;
+      }
+
+      if (!placed && arrows.length >= Math.max(4, Math.floor(targetCount * 0.85))) {
+        break;
+      }
     }
 
-    if (!placed && arrows.length >= 24) {
-      break;
+    // Center arrows in the middle-center of the board and verify 100% solvability
+    if (arrows.length >= 4) {
+      const centered = centerArrows(arrows);
+      if (solveMazeCheck(centered)) {
+        return { arrows: centered };
+      }
+      if (solveMazeCheck(arrows)) {
+        return { arrows };
+      }
     }
   }
 
-  return { arrows };
+  // Fallback guaranteed simple pattern if multiple tight collisions occurred
+  const fallbackArrows = [];
+  const baseCount = Math.max(4, Math.min(8, getTargetArrowCount(safeLvl)));
+  for (let i = 0; i < baseCount; i++) {
+    const r = midR - Math.floor(baseCount / 2) + i;
+    const c = midC;
+    const arr = {
+      id: `fallback_${safeLvl}_${i}`,
+      path: [
+        { r, c: c - 1 },
+        { r, c },
+      ],
+      headDir: 'RIGHT',
+      dr: 0,
+      dc: 1,
+    };
+    fallbackArrows.push(arr);
+  }
+  return { arrows: centerArrows(fallbackArrows) };
 }
 
 export default function TapAwayArrowsGame({
@@ -241,6 +376,7 @@ export default function TapAwayArrowsGame({
   const [level, setLevel] = useState(1);
   const [bestScore, setBestScore] = useState(0);
   const [mistakes, setMistakes] = useState(0);
+  const [hintsRemaining, setHintsRemaining] = useState(MAX_HINTS_PER_ROUND);
   const [score, setScore] = useState(0);
   const [arrows, setArrows] = useState([]);
   const [blockedArrowId, setBlockedArrowId] = useState(null);
@@ -286,6 +422,7 @@ export default function TapAwayArrowsGame({
     setBlockedArrowId(null);
     setHintedArrowId(null);
     setMistakes(0);
+    setHintsRemaining(MAX_HINTS_PER_ROUND);
     setModalVisible(false);
     setModalType('VICTORY');
 
@@ -498,18 +635,30 @@ export default function TapAwayArrowsGame({
     }
   };
 
-  // Hint button: Highlights and frees one unblocked arrow
+  // Hint button: Highlights and frees one unblocked arrow (max 2 per round)
   const handleUseHint = () => {
+    if (hintsRemaining <= 0) {
+      playTapSound();
+      triggerLightHaptic();
+      if (juiceRef.current) {
+        juiceRef.current.shake(4, 3);
+        juiceRef.current.popup('NO HINTS LEFT', '2 / 2 Used This Round', '#FF0055');
+      }
+      return;
+    }
+
     const freeArrows = arrows.filter((a) => movableArrowIds.has(a.id));
     if (freeArrows.length > 0) {
       const chosen = freeArrows[0];
+      const remaining = hintsRemaining - 1;
+      setHintsRemaining(remaining);
       setHintedArrowId(chosen.id);
       playTapSound();
       triggerMediumHaptic();
       if (juiceRef.current) {
         juiceRef.current.popup(
           '💡 HINT ACTIVATED!',
-          `Follow ${chosen.headDir} arrow!`,
+          `${remaining} hint${remaining === 1 ? '' : 's'} remaining`,
           '#00F5FF'
         );
       }
@@ -525,7 +674,7 @@ export default function TapAwayArrowsGame({
   };
 
   const handleNextLevel = () => {
-    const nextLvl = level + 1;
+    const nextLvl = Math.min(MAX_LEVEL, level + 1);
     setLevel(nextLvl);
     AsyncStorage.setItem(STORAGE_LEVEL_KEY, String(nextLvl)).catch(() => {});
   };
@@ -699,7 +848,7 @@ export default function TapAwayArrowsGame({
         <MiniGameHeader
           floorNum={8}
           gameTitle="ARROW MAZE"
-          category="LOGIC UNRAVEL"
+          category={`LEVEL ${level}/${MAX_LEVEL}`}
           accentColor="#00F5FF"
           score={score}
           highScore={bestScore}
@@ -739,19 +888,31 @@ export default function TapAwayArrowsGame({
             </Text>
           </View>
 
-          {/* Hint Lightbulb on Right */}
+          {/* Hint Lightbulb on Right (Max 2 per round) */}
           <Pressable
             onPress={handleUseHint}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            style={styles.hintBtn}
+            style={[styles.hintBtn, hintsRemaining <= 0 && styles.hintBtnDisabled]}
           >
-            <View style={styles.adBadge}>
-              <Text style={styles.adBadgeText}>AD</Text>
+            <View
+              style={[
+                styles.hintBadge,
+                hintsRemaining <= 0 && styles.hintBadgeDisabled,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.hintBadgeText,
+                  hintsRemaining <= 0 && styles.hintBadgeTextDisabled,
+                ]}
+              >
+                HINT {hintsRemaining}/2
+              </Text>
             </View>
             <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
               <Path
                 d="M9 18h6m-4 3h2m-7-9a6 6 0 1110 0c0 2-1 3-2 4H10c-1-1-2-2-2-4z"
-                stroke="#FFE600"
+                stroke={hintsRemaining > 0 ? '#FFE600' : 'rgba(255, 230, 0, 0.28)'}
                 strokeWidth={2}
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -911,17 +1072,38 @@ export default function TapAwayArrowsGame({
         <GameResultModal
           visible={modalVisible}
           type={modalType}
-          title={modalType === 'VICTORY' ? 'PATTERN SOLVED!' : 'PATTERN LOCKED OUT!'}
+          title={
+            modalType === 'VICTORY'
+              ? level >= MAX_LEVEL
+                ? 'ALL 200 LEVELS CLEARED!'
+                : 'LEVEL SOLVED!'
+              : 'PATTERN LOCKED OUT!'
+          }
           subtitle={
             modalType === 'VICTORY'
-              ? `LEVEL ${level} CLEARED // ZERO CONFLICTS`
+              ? `LEVEL ${level} OF ${MAX_LEVEL} CLEARED // ZERO CONFLICTS`
               : '3 MISTAKES EXCEEDED // TRAJECTORY BLOCKED'
           }
           score={score}
           bestScore={bestScore}
           accentColor={modalType === 'VICTORY' ? '#00F5FF' : '#FF0055'}
-          onRetry={modalType === 'VICTORY' ? handleNextLevel : () => initLevel(level)}
-          retryLabel={modalType === 'VICTORY' ? 'NEXT PATTERN' : 'RETRY PATTERN'}
+          onRetry={
+            modalType === 'VICTORY'
+              ? level >= MAX_LEVEL
+                ? () => {
+                    setLevel(1);
+                    AsyncStorage.setItem(STORAGE_LEVEL_KEY, '1').catch(() => {});
+                  }
+                : handleNextLevel
+              : () => initLevel(level)
+          }
+          retryLabel={
+            modalType === 'VICTORY'
+              ? level >= MAX_LEVEL
+                ? 'REPLAY TOWER'
+                : 'NEXT LEVEL'
+              : 'RETRY LEVEL'
+          }
           onBackToHub={onBackToHub}
         />
       </View>
@@ -991,21 +1173,31 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     minWidth: 44,
   },
-  adBadge: {
+  hintBtnDisabled: {
+    opacity: 0.4,
+  },
+  hintBadge: {
     borderWidth: 1,
     borderColor: '#FFE600',
     borderRadius: 5,
-    paddingHorizontal: 4,
+    paddingHorizontal: 5,
     paddingVertical: 1,
     marginBottom: 2,
-    backgroundColor: 'rgba(255, 230, 0, 0.12)',
+    backgroundColor: 'rgba(255, 230, 0, 0.14)',
   },
-  adBadgeText: {
+  hintBadgeDisabled: {
+    borderColor: 'rgba(255, 230, 0, 0.3)',
+    backgroundColor: 'rgba(255, 230, 0, 0.05)',
+  },
+  hintBadgeText: {
     fontFamily: monoFont,
     fontSize: 8,
     fontWeight: '900',
     color: '#FFE600',
     lineHeight: 9,
+  },
+  hintBadgeTextDisabled: {
+    color: 'rgba(255, 230, 0, 0.35)',
   },
   arenaCenter: {
     flex: 1,
