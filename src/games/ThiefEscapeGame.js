@@ -4008,56 +4008,32 @@ export default function ThiefEscapeGame({
           </View>
         </View>
 
-        {/* Tactical Control Console: Big, Ergonomic Dual-Thumb Layout */}
+        {/* Tactical Control Console: Left = Walk (LEFT/RIGHT), Center = Actions (Window & Shoot/Distract), Right = Climb (UP/DN) */}
         <View style={styles.controlsRow}>
-          {/* Movement Cluster (Left Thumb) */}
-          <View style={styles.dirCluster}>
-            {/* Top Row: Ladder Climbing (UP / DOWN) */}
-            <View style={styles.dirRow}>
-              <Pressable
-                style={({ pressed }) => [styles.climbBtn, pressed && styles.climbBtnPressed]}
-                onPressIn={() => (climbDirRef.current = -1)}
-                onPressOut={() => (climbDirRef.current = 0)}
-              >
-                <Text style={styles.climbIcon}>▲</Text>
-                <Text style={styles.climbSub}>UP</Text>
-              </Pressable>
+          {/* Movement Cluster (Left Thumb: LEFT & RIGHT) */}
+          <View style={styles.walkCluster}>
+            <Pressable
+              style={({ pressed }) => [styles.ctrlBtn, pressed && styles.ctrlBtnPressed]}
+              onPressIn={() => (inputDirRef.current = -1)}
+              onPressOut={() => (inputDirRef.current = 0)}
+            >
+              <Text style={styles.ctrlIcon}>◀</Text>
+              <Text style={styles.ctrlSub}>LEFT</Text>
+            </Pressable>
 
-              <Pressable
-                style={({ pressed }) => [styles.climbBtn, pressed && styles.climbBtnPressed]}
-                onPressIn={() => (climbDirRef.current = 1)}
-                onPressOut={() => (climbDirRef.current = 0)}
-              >
-                <Text style={styles.climbIcon}>▼</Text>
-                <Text style={styles.climbSub}>DN</Text>
-              </Pressable>
-            </View>
-
-            {/* Bottom Row: Catwalk Walking (LEFT / RIGHT) */}
-            <View style={styles.dirRow}>
-              <Pressable
-                style={({ pressed }) => [styles.ctrlBtn, pressed && styles.ctrlBtnPressed]}
-                onPressIn={() => (inputDirRef.current = -1)}
-                onPressOut={() => (inputDirRef.current = 0)}
-              >
-                <Text style={styles.ctrlIcon}>◀</Text>
-                <Text style={styles.ctrlSub}>LEFT</Text>
-              </Pressable>
-
-              <Pressable
-                style={({ pressed }) => [styles.ctrlBtn, pressed && styles.ctrlBtnPressed]}
-                onPressIn={() => (inputDirRef.current = 1)}
-                onPressOut={() => (inputDirRef.current = 0)}
-              >
-                <Text style={styles.ctrlSub}>RIGHT</Text>
-                <Text style={styles.ctrlIcon}>▶</Text>
-              </Pressable>
-            </View>
+            <Pressable
+              style={({ pressed }) => [styles.ctrlBtn, pressed && styles.ctrlBtnPressed]}
+              onPressIn={() => (inputDirRef.current = 1)}
+              onPressOut={() => (inputDirRef.current = 0)}
+            >
+              <Text style={styles.ctrlIcon}>▶</Text>
+              <Text style={styles.ctrlSub}>RIGHT</Text>
+            </Pressable>
           </View>
 
-          {/* Action Cluster (Right Thumb) */}
+          {/* Action Cluster (Middle: Window Hide & Distract/Shoot) */}
           <View style={styles.actionCluster}>
-            {/* Top Row: Window Hide Button (Large, prominent & high contrast) */}
+            {/* Top Row: Window Hide Button */}
             <Pressable
               style={({ pressed }) => [
                 styles.sneakBtn,
@@ -4137,6 +4113,27 @@ export default function ThiefEscapeGame({
                 </Pressable>
               )}
             </View>
+          </View>
+
+          {/* Ladder Climbing Cluster (Right Thumb: UP & DOWN) */}
+          <View style={styles.climbCluster}>
+            <Pressable
+              style={({ pressed }) => [styles.climbBtn, pressed && styles.climbBtnPressed]}
+              onPressIn={() => (climbDirRef.current = -1)}
+              onPressOut={() => (climbDirRef.current = 0)}
+            >
+              <Text style={styles.climbIcon}>▲</Text>
+              <Text style={styles.climbSub}>UP</Text>
+            </Pressable>
+
+            <Pressable
+              style={({ pressed }) => [styles.climbBtn, pressed && styles.climbBtnPressed]}
+              onPressIn={() => (climbDirRef.current = 1)}
+              onPressOut={() => (climbDirRef.current = 0)}
+            >
+              <Text style={styles.climbIcon}>▼</Text>
+              <Text style={styles.climbSub}>DN</Text>
+            </Pressable>
           </View>
         </View>
       </JuiceEngine>
@@ -4356,30 +4353,29 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
     backgroundColor: 'rgba(8, 10, 24, 0.96)',
     borderTopWidth: 1.5,
     borderTopColor: 'rgba(0, 245, 255, 0.25)',
+    gap: 6,
   },
-  dirCluster: {
-    gap: 8,
-  },
-  dirRow: {
+  walkCluster: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 5,
+    alignItems: 'center',
   },
   ctrlBtn: {
-    width: 72,
-    height: 48,
-    borderRadius: 12,
+    width: 58,
+    height: 98,
+    borderRadius: 14,
     backgroundColor: '#0D1426',
     borderWidth: 2,
     borderColor: '#00F5FF',
-    flexDirection: 'row',
+    flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
+    gap: 6,
     elevation: 3,
   },
   ctrlBtnPressed: {
@@ -4387,53 +4383,25 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.94 }],
   },
   ctrlIcon: {
-    fontSize: 18,
+    fontSize: 22,
     color: '#00F5FF',
     fontWeight: '900',
   },
   ctrlSub: {
     fontFamily: monoFont,
-    fontSize: 10,
+    fontSize: 9.5,
     fontWeight: '800',
     color: '#00F5FF',
     letterSpacing: 0.5,
   },
-  climbBtn: {
-    width: 72,
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: '#1C180E',
-    borderWidth: 2,
-    borderColor: '#FFE600',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    elevation: 3,
-  },
-  climbBtnPressed: {
-    backgroundColor: 'rgba(255, 230, 0, 0.35)',
-    transform: [{ scale: 0.94 }],
-  },
-  climbIcon: {
-    fontSize: 16,
-    color: '#FFE600',
-    fontWeight: '900',
-  },
-  climbSub: {
-    fontFamily: monoFont,
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#FFE600',
-    letterSpacing: 0.5,
-  },
   actionCluster: {
-    gap: 8,
-    alignItems: 'flex-end',
+    flex: 1,
+    gap: 6,
+    alignItems: 'center',
   },
   sneakBtn: {
-    width: 154,
-    height: 48,
+    width: '100%',
+    height: 46,
     borderRadius: 12,
     backgroundColor: '#151926',
     borderWidth: 2,
@@ -4468,19 +4436,19 @@ const styles = StyleSheet.create({
   },
   sneakText: {
     fontFamily: monoFont,
-    fontSize: 10.5,
+    fontSize: 10,
     fontWeight: '900',
     color: '#FFFFFF',
-    letterSpacing: 0.5,
+    letterSpacing: 0.4,
   },
   actionSubRow: {
     flexDirection: 'row',
-    gap: 6,
-    width: 154,
+    gap: 5,
+    width: '100%',
   },
   smallActionBtn: {
     flex: 1,
-    height: 48,
+    height: 46,
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
@@ -4514,8 +4482,8 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.94 }],
   },
   wideStoneBtn: {
-    width: 154,
-    height: 48,
+    width: '100%',
+    height: 46,
     borderRadius: 12,
     backgroundColor: '#1E1912',
     borderWidth: 2,
@@ -4527,12 +4495,46 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   wideStoneIcon: {
-    fontSize: 18,
+    fontSize: 17,
   },
   wideStoneText: {
     fontFamily: monoFont,
     fontSize: 9.5,
     fontWeight: '900',
+    color: '#FFE600',
+    letterSpacing: 0.5,
+  },
+  climbCluster: {
+    flexDirection: 'column',
+    gap: 6,
+    alignItems: 'center',
+  },
+  climbBtn: {
+    width: 66,
+    height: 46,
+    borderRadius: 12,
+    backgroundColor: '#1C180E',
+    borderWidth: 2,
+    borderColor: '#FFE600',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    elevation: 3,
+  },
+  climbBtnPressed: {
+    backgroundColor: 'rgba(255, 230, 0, 0.35)',
+    transform: [{ scale: 0.94 }],
+  },
+  climbIcon: {
+    fontSize: 16,
+    color: '#FFE600',
+    fontWeight: '900',
+  },
+  climbSub: {
+    fontFamily: monoFont,
+    fontSize: 10,
+    fontWeight: '800',
     color: '#FFE600',
     letterSpacing: 0.5,
   },
