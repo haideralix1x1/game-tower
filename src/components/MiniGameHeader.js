@@ -44,6 +44,7 @@ export default function MiniGameHeader({
   onBack,
   onBackToHub,
   onReset,
+  resetLabel = 'NEW',
   rightExtra = null,
   disabled = false,
 }) {
@@ -182,7 +183,7 @@ export default function MiniGameHeader({
               ]}
             >
               <Text style={[localStyles.resetText, { color: accentColor }]}>
-                NEW
+                {resetLabel}
               </Text>
             </Pressable>
           )}

@@ -7,6 +7,8 @@ import {
   PanResponder,
   useWindowDimensions,
   Platform,
+  Pressable,
+  TouchableOpacity,
 } from 'react-native';
 import Svg, {
   Line,
@@ -811,11 +813,13 @@ export default function RopeCutGame({ onBackToHub, onScoreUpdate, isPaused = fal
           category="PHYSICS SWING"
           accentColor="#00F5D4"
           score={score}
+          onReset={handleRetry}
+          resetLabel="RETRY"
           onBack={onBackToHub}
           onBackToHub={onBackToHub}
         />
 
-        {/* Top HUD: Stage Title & Stars */}
+        {/* Top HUD: Stage Title, Stars & Always-Available Restart */}
         <View style={styles.topHud}>
           <View style={styles.stageBox}>
             <Text style={styles.stageNum}>STAGE {level}</Text>
@@ -836,9 +840,15 @@ export default function RopeCutGame({ onBackToHub, onScoreUpdate, isPaused = fal
             ))}
           </View>
 
-          <View style={styles.hudBadge}>
-            <Text style={styles.hudHint}>SWIPE TO CUT • DRAG SPIDER TO SHOOT WEB</Text>
-          </View>
+          {/* Always Available Restart / Play Again Button */}
+          <TouchableOpacity
+            onPress={handleRetry}
+            activeOpacity={0.75}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            style={styles.hudRestartBtn}
+          >
+            <Text style={styles.hudRestartText}>⟳ RESTART</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Touch Arena for Physics & Slicing */}
@@ -1139,8 +1149,12 @@ export default function RopeCutGame({ onBackToHub, onScoreUpdate, isPaused = fal
           score={score}
           bestScore={bestScore}
           accentColor={modalType === 'VICTORY' ? '#00F5D4' : '#FF3366'}
-          onRetry={modalType === 'VICTORY' ? handleNextLevel : handleRetry}
-          retryLabel={modalType === 'VICTORY' ? 'NEXT STAGE' : 'TRY AGAIN'}
+          onNextLevel={handleNextLevel}
+          onPlayAgain={handleRetry}
+          onRetry={handleRetry}
+          nextLabel="NEXT STAGE ▶"
+          replayLabel="PLAY AGAIN ⟳"
+          retryLabel="TRY AGAIN ⟳"
           onBackToHub={onBackToHub}
         />
       </View>
@@ -1186,6 +1200,23 @@ const styles = StyleSheet.create({
   },
   starIcon: {
     fontSize: 18,
+  },
+  hudRestartBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: 'rgba(0, 245, 212, 0.14)',
+    borderWidth: 1.2,
+    borderColor: 'rgba(0, 245, 212, 0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  hudRestartText: {
+    fontFamily: monoFont,
+    fontSize: 10.5,
+    fontWeight: '900',
+    color: '#00F5D4',
+    letterSpacing: 0.8,
   },
   hudBadge: {
     paddingHorizontal: 10,

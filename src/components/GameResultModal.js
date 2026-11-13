@@ -43,6 +43,7 @@ export default function GameResultModal({
   retryLabel,
   buttonText,
   nextLabel,
+  replayLabel,
   actionLabel,
 }) {
   if (!visible) return null;
@@ -81,12 +82,20 @@ export default function GameResultModal({
         ? highScore
         : undefined;
 
+  const replayFn =
+    onPlayAgain ||
+    onRestart ||
+    (isWin && (onNext || onNextLevel) ? onRetry || onReset : null);
+
   const displayActionText =
     buttonText ||
-    retryLabel ||
     nextLabel ||
     actionLabel ||
-    (isWin ? 'NEXT LEVEL ▶' : 'PLAY AGAIN ⟳');
+    (isWin
+      ? retryLabel && !replayFn
+        ? retryLabel
+        : 'NEXT LEVEL ▶'
+      : retryLabel || 'PLAY AGAIN ⟳');
 
   const handleAction = () => {
     try {
@@ -100,6 +109,17 @@ export default function GameResultModal({
 
     if (primaryFn) {
       primaryFn();
+    }
+  };
+
+  const handleReplay = () => {
+    try {
+      triggerLightHaptic();
+      playTapSound();
+    } catch {}
+
+    if (replayFn) {
+      replayFn();
     }
   };
 
@@ -162,9 +182,25 @@ export default function GameResultModal({
                 onPress={handleBack}
                 activeOpacity={0.72}
                 hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
-                style={localStyles.backBtn}
+                style={[
+                  localStyles.backBtn,
+                  isWin && Boolean(replayFn) && { flex: 0.85 },
+                ]}
               >
                 <Text style={localStyles.backBtnText}>HUB</Text>
+              </TouchableOpacity>
+            )}
+
+            {isWin && Boolean(replayFn) && (
+              <TouchableOpacity
+                onPress={handleReplay}
+                activeOpacity={0.75}
+                hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
+                style={[localStyles.replayBtn, { borderColor: accent }]}
+              >
+                <Text style={[localStyles.replayBtnText, { color: accent }]}>
+                  {replayLabel || 'PLAY AGAIN ⟳'}
+                </Text>
               </TouchableOpacity>
             )}
 
@@ -172,7 +208,11 @@ export default function GameResultModal({
               onPress={handleAction}
               activeOpacity={0.8}
               hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
-              style={[localStyles.retryBtn, { backgroundColor: accent }]}
+              style={[
+                localStyles.retryBtn,
+                { backgroundColor: accent },
+                isWin && Boolean(replayFn) && { flex: 1.25 },
+              ]}
             >
               <Text
                 style={[
@@ -293,6 +333,22 @@ const localStyles = StyleSheet.create({
     fontWeight: '900',
     color: '#00F5FF',
     letterSpacing: 1,
+  },
+  replayBtn: {
+    flex: 1.25,
+    borderRadius: 12,
+    borderWidth: 1.4,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 2,
+  },
+  replayBtnText: {
+    fontSize: 11,
+    fontFamily: monoFont,
+    fontWeight: '900',
+    letterSpacing: 0.8,
   },
   retryBtn: {
     flex: 1.4,
