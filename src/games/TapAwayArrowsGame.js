@@ -7,20 +7,19 @@ import {
   Pressable,
   useWindowDimensions,
   Platform,
-  Modal,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, {
   Path,
   Polygon,
   Rect,
   G,
-  Line,
   Circle,
   Defs,
   LinearGradient,
   Stop,
 } from 'react-native-svg';
+import MiniGameHeader from '../components/MiniGameHeader';
+import GameResultModal from '../components/GameResultModal';
 import JuiceEngine from '../components/JuiceEngine';
 import {
   playTapSound,
@@ -35,6 +34,12 @@ import {
   triggerPerfectHaptic,
 } from '../utils/haptics';
 
+const monoFont = Platform.select({
+  ios: 'Menlo',
+  android: 'monospace',
+  default: 'monospace',
+});
+
 const COLS = 10;
 const ROWS = 14;
 
@@ -48,94 +53,12 @@ const DIRS = [
 const STORAGE_LEVEL_KEY = '@game_tower:level_arrows_v1';
 const STORAGE_BEST_KEY = '@game_tower:best_arrows_v1';
 
-// Theme color definitions - exact Arrow Go aesthetic
-const THEMES = {
-  CREAM: {
-    name: 'CREAM',
-    bg: '#F6EFE5',
-    boardBg: '#F6EFE5',
-    gridDot: '#DDD1BF',
-    headerText: '#B47641',
-    headerIcon: '#B47641',
-    divider: '#EAE0D0',
-    cardBg: '#FFFFFF',
-    cardText: '#B47641',
-    dropletActive: '#38A6F5',
-    dropletInactive: '#D4C7B5',
-    arrowBlocked: '#2E2018',
-    arrowMovableStart: '#F5A623',
-    arrowMovableEnd: '#FFD15C',
-    rainbowStart: '#00C9A7',
-    rainbowMid: '#845EC2',
-    rainbowEnd: '#FFC75F',
-    errorFlash: '#E74C3C',
-  },
-  DARK: {
-    name: 'DARK',
-    bg: '#181310',
-    boardBg: '#181310',
-    gridDot: '#382D26',
-    headerText: '#E6A872',
-    headerIcon: '#E6A872',
-    divider: '#2E221B',
-    cardBg: '#251D18',
-    cardText: '#E6A872',
-    dropletActive: '#38A6F5',
-    dropletInactive: '#4A3B31',
-    arrowBlocked: '#E8D8C4',
-    arrowMovableStart: '#F5A623',
-    arrowMovableEnd: '#FFD15C',
-    rainbowStart: '#00C9A7',
-    rainbowMid: '#845EC2',
-    rainbowEnd: '#FFC75F',
-    errorFlash: '#FF4757',
-  },
-};
-
-const PATTERN_TYPES = [
-  {
-    name: 'LABYRINTH PRISM',
-    mask: (r, c, midR, midC) =>
-      Math.abs(r - midR) * 1.05 + Math.abs(c - midC) * 1.35 <= 5.8,
-    minCount: 22,
-    maxCount: 34,
-  },
-  {
-    name: 'EXPANSE MAZE',
-    mask: (r, c) => r >= 1 && r <= ROWS - 2 && c >= 1 && c <= COLS - 2,
-    minCount: 24,
-    maxCount: 38,
-  },
-  {
-    name: 'TITAN CROSS',
-    mask: (r, c, midR, midC) =>
-      (Math.abs(c - midC) <= 2 && Math.abs(r - midR) <= 5) ||
-      (Math.abs(r - midR) <= 2 && Math.abs(c - midC) <= 4),
-    minCount: 20,
-    maxCount: 32,
-  },
-  {
-    name: 'SPIRAL CITADEL',
-    mask: (r, c, midR, midC) =>
-      Math.abs(r - midR) <= 5 &&
-      Math.abs(c - midC) <= 4 &&
-      Math.abs(r - midR) + Math.abs(c - midC) <= 7,
-    minCount: 22,
-    maxCount: 36,
-  },
-];
-
 /**
  * Reverse-generate guaranteed 100% solvable labyrinths
- * Strictly packs arrows directly adjacent to each other with turns and bends
+ * Densely packs arrows directly adjacent to each other with turns and bends
  */
 function generatePatternArrows(lvl = 1) {
-  const patternIndex = (lvl - 1) % PATTERN_TYPES.length;
-  const pattern = PATTERN_TYPES[patternIndex];
-  const targetCount = Math.min(
-    pattern.maxCount,
-    pattern.minCount + Math.floor(lvl * 0.75)
-  );
+  const targetCount = Math.min(36, 22 + Math.floor(lvl * 0.8));
 
   const grid = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
   const arrows = [];
@@ -146,18 +69,18 @@ function generatePatternArrows(lvl = 1) {
   for (let id = 0; id < targetCount; id++) {
     let placed = false;
 
-    // Gather candidate cells inside the pattern mask
+    // Gather candidate cells: prioritize central and adjacent cells
     const candidates = [];
     if (placedPoints.length === 0) {
-      candidates.push({ r: midR, c: midC });
-      candidates.push({ r: midR - 1, c: midC });
-      candidates.push({ r: midR + 1, c: midC });
-      candidates.push({ r: midR, c: midC - 1 });
-      candidates.push({ r: midR, c: midC + 1 });
+      for (let dr = -1; dr <= 1; dr++) {
+        for (let dc = -1; dc <= 1; dc++) {
+          candidates.push({ r: midR + dr, c: midC + dc });
+        }
+      }
     } else {
       for (let r = 1; r < ROWS - 1; r++) {
         for (let c = 1; c < COLS - 1; c++) {
-          if (grid[r][c] === null && pattern.mask(r, c, midR, midC)) {
+          if (grid[r][c] === null) {
             const isAdj = placedPoints.some(
               (p) => Math.abs(p.r - r) + Math.abs(p.c - c) === 1
             );
@@ -170,11 +93,8 @@ function generatePatternArrows(lvl = 1) {
     if (candidates.length === 0) {
       for (let r = 1; r < ROWS - 1; r++) {
         for (let c = 1; c < COLS - 1; c++) {
-          if (grid[r][c] === null && pattern.mask(r, c, midR, midC)) {
-            const isNear = placedPoints.some(
-              (p) => Math.abs(p.r - r) + Math.abs(p.c - c) <= 2
-            );
-            if (isNear) candidates.push({ r, c });
+          if (grid[r][c] === null) {
+            candidates.push({ r, c });
           }
         }
       }
@@ -216,8 +136,7 @@ function generatePatternArrows(lvl = 1) {
         step1R >= ROWS ||
         step1C < 0 ||
         step1C >= COLS ||
-        grid[step1R][step1C] !== null ||
-        !pattern.mask(step1R, step1C, midR, midC)
+        grid[step1R][step1C] !== null
       ) {
         continue;
       }
@@ -230,12 +149,11 @@ function generatePatternArrows(lvl = 1) {
       let curC = step1C;
       let bodyDir = (dIdx + 2) % 4;
 
-      // Scale path length for realistic multi-turn maze shapes
+      // Scale path length for rich multi-turn maze shapes
       const maxLen = Math.min(8, 3 + Math.floor(lvl / 3));
       const len = 2 + Math.floor(Math.random() * (maxLen - 1));
 
       for (let s = 2; s < len; s++) {
-        // Preference for straight or 90-degree turns
         const choices = [bodyDir, (bodyDir + 1) % 4, (bodyDir + 3) % 4];
         let found = false;
         for (const testIdx of choices) {
@@ -248,7 +166,6 @@ function generatePatternArrows(lvl = 1) {
             nc >= 0 &&
             nc < COLS &&
             grid[nr][nc] === null &&
-            pattern.mask(nr, nc, midR, midC) &&
             !path.some((p) => p.r === nr && p.c === nc)
           ) {
             curR = nr;
@@ -263,14 +180,14 @@ function generatePatternArrows(lvl = 1) {
       }
 
       if (path.length >= 2) {
-        const isRainbow = id % 5 === 1;
+        const colorVariant = id % 3; // 0: Cyan/Mint, 1: Gold/Orange, 2: Pink/Violet
         const arrow = {
           id: 'arr_' + id + '_' + Math.random().toString(36).substring(2, 6),
           path: path.reverse(), // head is last element
           headDir: dir.name,
           dr: dir.dr,
           dc: dir.dc,
-          isRainbow,
+          colorVariant,
         };
 
         for (const pt of arrow.path) {
@@ -284,12 +201,12 @@ function generatePatternArrows(lvl = 1) {
       }
     }
 
-    if (!placed && arrows.length >= pattern.minCount) {
+    if (!placed && arrows.length >= 18) {
       break;
     }
   }
 
-  return { arrows, patternName: pattern.name };
+  return { arrows };
 }
 
 export default function TapAwayArrowsGame({
@@ -297,7 +214,6 @@ export default function TapAwayArrowsGame({
   onScoreUpdate,
   isPaused = false,
 }) {
-  const insets = useSafeAreaInsets();
   const isPausedRef = useRef(isPaused);
   useEffect(() => {
     isPausedRef.current = isPaused;
@@ -329,12 +245,9 @@ export default function TapAwayArrowsGame({
   }, [escapingArrows]);
   const animFrameRef = useRef(null);
 
-  // Modals & themes
+  // Result modal
   const [modalVisible, setModalVisible] = useState(false);
   const [modalType, setModalType] = useState('VICTORY');
-  const [settingsVisible, setSettingsVisible] = useState(false);
-  const [themeMode, setThemeMode] = useState('CREAM');
-  const theme = THEMES[themeMode] || THEMES.CREAM;
 
   const juiceRef = useRef(null);
 
@@ -359,6 +272,7 @@ export default function TapAwayArrowsGame({
   // Initialize level
   const initLevel = useCallback((lvl) => {
     if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+    escapingRef.current = [];
     setEscapingArrows([]);
     setBlockedArrowId(null);
     setHintedArrowId(null);
@@ -380,7 +294,7 @@ export default function TapAwayArrowsGame({
     };
   }, [level, initLevel]);
 
-  // Frame Loop for Smooth Fly-Off Animation to that direction
+  // Frame Loop for Smooth Fly-Off Animation
   const runEscapeLoop = useCallback(() => {
     if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
 
@@ -397,7 +311,7 @@ export default function TapAwayArrowsGame({
 
       for (let i = 0; i < current.length; i++) {
         const item = current[i];
-        const speed = 18 + Math.pow(item.progress, 0.7) * 26;
+        const speed = 20 + Math.pow(item.progress, 0.7) * 28;
         const newOffset = item.offset + speed;
         const progress = Math.min(1, newOffset / MAX_OFFSET);
 
@@ -410,6 +324,7 @@ export default function TapAwayArrowsGame({
         }
       }
 
+      escapingRef.current = next;
       setEscapingArrows(next);
 
       if (next.length > 0) {
@@ -466,21 +381,26 @@ export default function TapAwayArrowsGame({
     const { locationX, locationY } = evt.nativeEvent;
 
     // Convert pixel coordinate to grid cell
-    const c = Math.floor((locationX - boardPadding) / cellW);
-    const r = Math.floor((locationY - boardPadding) / cellH);
+    const c = (locationX - boardPadding) / cellW;
+    const r = (locationY - boardPadding) / cellH;
 
-    if (c < 0 || c >= COLS || r < 0 || r >= ROWS) return;
+    // Find arrow whose path is closest to the tap point
+    let bestArrow = null;
+    let minDistance = 0.95;
 
-    // Find which active arrow covers or is near this grid cell
-    const clickedArrow = arrows.find(
-      (a) =>
-        a &&
-        a.path &&
-        a.path.some((pt) => Math.hypot(pt.c - c, pt.r - r) <= 0.88)
-    );
+    for (const arrow of arrows) {
+      if (!arrow || !arrow.path) continue;
+      for (const pt of arrow.path) {
+        const d = Math.hypot(pt.c + 0.5 - c, pt.r + 0.5 - r);
+        if (d < minDistance) {
+          minDistance = d;
+          bestArrow = arrow;
+        }
+      }
+    }
 
-    if (!clickedArrow) return;
-    tryEscapeArrow(clickedArrow);
+    if (!bestArrow) return;
+    tryEscapeArrow(bestArrow);
   };
 
   // Attempt escape
@@ -502,7 +422,7 @@ export default function TapAwayArrowsGame({
         juiceRef.current.popup(
           `BLOCKED! (${nextMistakes}/${MAX_MISTAKES})`,
           nextMistakes >= MAX_MISTAKES
-            ? 'NO CHANCES LEFT!'
+            ? 'NO ENERGY LEFT!'
             : `${MAX_MISTAKES - nextMistakes} CHANCES LEFT`,
           '#FF0055'
         );
@@ -510,7 +430,7 @@ export default function TapAwayArrowsGame({
 
       setTimeout(() => {
         setBlockedArrowId(null);
-      }, 400);
+      }, 350);
 
       if (nextMistakes >= MAX_MISTAKES) {
         setTimeout(() => {
@@ -518,7 +438,7 @@ export default function TapAwayArrowsGame({
           triggerGameOverHaptic();
           setModalType('GAMEOVER');
           setModalVisible(true);
-        }, 450);
+        }, 400);
       }
     } else {
       // FREE TO ESCAPE!
@@ -538,7 +458,9 @@ export default function TapAwayArrowsGame({
         progress: 0,
       };
 
-      setEscapingArrows((prev) => [...prev, newEscapingItem]);
+      const nextEscaping = [...escapingRef.current, newEscapingItem];
+      escapingRef.current = nextEscaping;
+      setEscapingArrows(nextEscaping);
       runEscapeLoop();
 
       const pts = 50 + level * 10;
@@ -555,14 +477,14 @@ export default function TapAwayArrowsGame({
           triggerPerfectHaptic(3);
           if (juiceRef.current) {
             juiceRef.current.celebrate(
-              'LEVEL COMPLETE!',
-              `LEVEL ${level} SOLVED!`,
-              '#B47641'
+              'MAZE SOLVED!',
+              `LEVEL ${level} CLEARED!`,
+              '#00F5FF'
             );
           }
           setModalType('VICTORY');
           setModalVisible(true);
-        }, 400);
+        }, 350);
       }
     }
   };
@@ -579,7 +501,7 @@ export default function TapAwayArrowsGame({
         juiceRef.current.popup(
           '💡 HINT ACTIVATED!',
           `Follow ${chosen.headDir} arrow!`,
-          '#F5A623'
+          '#00F5FF'
         );
       }
       setTimeout(() => {
@@ -597,11 +519,6 @@ export default function TapAwayArrowsGame({
     const nextLvl = level + 1;
     setLevel(nextLvl);
     AsyncStorage.setItem(STORAGE_LEVEL_KEY, String(nextLvl)).catch(() => {});
-  };
-
-  const handleToggleTheme = () => {
-    triggerLightHaptic();
-    setThemeMode((prev) => (prev === 'CREAM' ? 'DARK' : 'CREAM'));
   };
 
   // Geometry for escaping arrows
@@ -741,12 +658,8 @@ export default function TapAwayArrowsGame({
     if (!arrow || !arrow.path || arrow.path.length === 0) return '';
     const head = arrow.path[arrow.path.length - 1];
     if (!head) return '';
-    const hx = Number(
-      (boardPadding + (head.c + 0.5) * cellW).toFixed(1)
-    );
-    const hy = Number(
-      (boardPadding + (head.r + 0.5) * cellH).toFixed(1)
-    );
+    const hx = Number((boardPadding + (head.c + 0.5) * cellW).toFixed(1));
+    const hy = Number((boardPadding + (head.r + 0.5) * cellH).toFixed(1));
 
     const headLen = Number((Math.min(cellW, cellH) * 0.44).toFixed(1));
     const wingW = Number((Math.min(cellW, cellH) * 0.32).toFixed(1));
@@ -764,80 +677,48 @@ export default function TapAwayArrowsGame({
     }
   };
 
+  const getArrowGradId = (colorVariant) => {
+    switch (colorVariant) {
+      case 0:
+        return 'url(#neonCyanGrad)';
+      case 1:
+        return 'url(#solarGoldGrad)';
+      case 2:
+      default:
+        return 'url(#laserPinkGrad)';
+    }
+  };
+
+  const getArrowHeadColor = (colorVariant) => {
+    switch (colorVariant) {
+      case 0:
+        return '#00F5FF';
+      case 1:
+        return '#FFE600';
+      case 2:
+      default:
+        return '#FF007F';
+    }
+  };
+
   return (
     <JuiceEngine ref={juiceRef}>
-      <View
-        style={[
-          styles.container,
-          {
-            backgroundColor: theme.bg,
-            paddingTop: Math.max(insets.top, 14),
-          },
-        ]}
-      >
-        {/* Top Header matching Arrow Go */}
-        <View style={styles.header}>
-          <Pressable
-            onPress={onBackToHub}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            style={styles.headerBtn}
-          >
-            <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
-              <Path
-                d="M19 12H5M12 19l-7-7 7-7"
-                stroke={theme.headerIcon}
-                strokeWidth={2.4}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </Svg>
-          </Pressable>
+      <View style={styles.container}>
+        {/* App-Matching MiniGameHeader */}
+        <MiniGameHeader
+          floorNum={8}
+          gameTitle="ARROW MAZE"
+          category="LOGIC UNRAVEL"
+          accentColor="#00F5FF"
+          score={score}
+          highScore={bestScore}
+          onBack={onBackToHub}
+          onBackToHub={onBackToHub}
+        />
 
-          <Text style={[styles.headerTitle, { color: theme.headerText }]}>
-            Level {level}
-          </Text>
-
-          <View style={styles.headerRight}>
-            {/* Theme / Palette Button */}
-            <Pressable
-              onPress={handleToggleTheme}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              style={[styles.circleIconBtn, { borderColor: theme.divider }]}
-            >
-              <Text style={styles.paletteIconText}>🎨</Text>
-            </Pressable>
-
-            {/* Settings Button */}
-            <Pressable
-              onPress={() => setSettingsVisible(true)}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              style={[styles.circleIconBtn, { borderColor: theme.divider }]}
-            >
-              <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
-                <Path
-                  d="M12 15a3 3 0 100-6 3 3 0 000 6z"
-                  stroke={theme.headerIcon}
-                  strokeWidth={2}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-                <Path
-                  d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"
-                  stroke={theme.headerIcon}
-                  strokeWidth={2}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </Svg>
-            </Pressable>
-          </View>
-        </View>
-
-        <View style={[styles.headerDivider, { backgroundColor: theme.divider }]} />
-
-        {/* Status Row with Droplets, Floating Pill Banner, and Hint */}
+        {/* Arrow Go Layout: Status Row with Droplets, Floating Pill Banner, and Hint */}
         <View style={styles.statusRow}>
-          {/* Water Droplets on Left */}
+          {/* Energy Droplets on Left */}
           <View style={styles.dropletGroup}>
             {[0, 1, 2].map((i) => {
               const active = i < MAX_MISTAKES - mistakes;
@@ -852,7 +733,7 @@ export default function TapAwayArrowsGame({
                   <Svg width={18} height={24} viewBox="0 0 20 26" fill="none">
                     <Path
                       d="M10 2C10 2 2 12.5 2 17.5C2 21.6421 5.58172 25 10 25C14.4183 25 18 21.6421 18 17.5C18 12.5 10 2 10 2Z"
-                      fill={active ? theme.dropletActive : theme.dropletInactive}
+                      fill={active ? '#00F5FF' : 'rgba(0, 245, 255, 0.18)'}
                     />
                   </Svg>
                 </View>
@@ -860,17 +741,9 @@ export default function TapAwayArrowsGame({
             })}
           </View>
 
-          {/* Center Floating White Pill Card */}
-          <View
-            style={[
-              styles.movablePillCard,
-              { backgroundColor: theme.cardBg },
-            ]}
-          >
-            <Text
-              style={[styles.movablePillText, { color: theme.cardText }]}
-              numberOfLines={1}
-            >
+          {/* Center Floating Glassmorphic Pill Card */}
+          <View style={styles.movablePillCard}>
+            <Text style={styles.movablePillText} numberOfLines={1}>
               Currently {movableCount} {movableCount === 1 ? 'arrow can' : 'arrows can'} move
             </Text>
           </View>
@@ -878,18 +751,16 @@ export default function TapAwayArrowsGame({
           {/* Hint Lightbulb on Right */}
           <Pressable
             onPress={handleUseHint}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             style={styles.hintBtn}
           >
-            <View style={[styles.adBadge, { borderColor: theme.headerIcon }]}>
-              <Text style={[styles.adBadgeText, { color: theme.headerIcon }]}>
-                AD
-              </Text>
+            <View style={styles.adBadge}>
+              <Text style={styles.adBadgeText}>AD</Text>
             </View>
             <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
               <Path
                 d="M9 18h6m-4 3h2m-7-9a6 6 0 1110 0c0 2-1 3-2 4H10c-1-1-2-2-2-4z"
-                stroke={theme.headerIcon}
+                stroke="#FFE600"
                 strokeWidth={2}
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -906,7 +777,6 @@ export default function TapAwayArrowsGame({
               {
                 width: boardWidth,
                 height: boardHeight,
-                backgroundColor: theme.boardBg,
               },
             ]}
             onPress={handleBoardPress}
@@ -918,33 +788,54 @@ export default function TapAwayArrowsGame({
                 style={StyleSheet.absoluteFill}
               >
                 <Defs>
-                  {/* Warm Amber Gold Gradient for Movable Arrows */}
+                  {/* Neon Cyan to Matrix Mint */}
                   <LinearGradient
-                    id="goldArrowGrad"
+                    id="neonCyanGrad"
                     x1="0%"
                     y1="0%"
                     x2="100%"
                     y2="100%"
                   >
-                    <Stop offset="0%" stopColor={theme.arrowMovableStart} />
-                    <Stop offset="100%" stopColor={theme.arrowMovableEnd} />
+                    <Stop offset="0%" stopColor="#00F5FF" />
+                    <Stop offset="100%" stopColor="#00FF9D" />
                   </LinearGradient>
 
-                  {/* Special Rainbow Gradient for Feature Arrows */}
+                  {/* Solar Gold to Tangerine */}
                   <LinearGradient
-                    id="rainbowArrowGrad"
+                    id="solarGoldGrad"
                     x1="0%"
                     y1="0%"
                     x2="100%"
                     y2="100%"
                   >
-                    <Stop offset="0%" stopColor={theme.rainbowStart} />
-                    <Stop offset="50%" stopColor={theme.rainbowMid} />
-                    <Stop offset="100%" stopColor={theme.rainbowEnd} />
+                    <Stop offset="0%" stopColor="#FFE600" />
+                    <Stop offset="100%" stopColor="#FF8500" />
+                  </LinearGradient>
+
+                  {/* Laser Pink to Cyber Violet */}
+                  <LinearGradient
+                    id="laserPinkGrad"
+                    x1="0%"
+                    y1="0%"
+                    x2="100%"
+                    y2="100%"
+                  >
+                    <Stop offset="0%" stopColor="#FF007F" />
+                    <Stop offset="100%" stopColor="#9D4EDD" />
                   </LinearGradient>
                 </Defs>
 
-                {/* Faint Grid Dots for empty/all cells - Exactly matching Arrow Go */}
+                {/* Dark Matrix Glass Board Background */}
+                <Rect
+                  x={0}
+                  y={0}
+                  width={boardWidth}
+                  height={boardHeight}
+                  fill="#080D1D"
+                  rx={16}
+                />
+
+                {/* Faint Grid Dots for empty/all cells */}
                 {Array.from({ length: ROWS }).map((_, r) =>
                   Array.from({ length: COLS }).map((_, c) => {
                     const cx = boardPadding + (c + 0.5) * cellW;
@@ -954,8 +845,8 @@ export default function TapAwayArrowsGame({
                         key={`dot_${r}_${c}`}
                         cx={cx}
                         cy={cy}
-                        r={1.6}
-                        fill={theme.gridDot}
+                        r={1.5}
+                        fill="rgba(0, 245, 255, 0.2)"
                       />
                     );
                   })
@@ -970,21 +861,17 @@ export default function TapAwayArrowsGame({
                   const isMovable = movableArrowIds.has(arrow.id);
                   const isHinted = hintedArrowId === arrow.id;
 
-                  // Styling matching Arrow Go
-                  let strokeColor = theme.arrowBlocked;
-                  let fillColor = theme.arrowBlocked;
+                  // Blocked arrows: dark stealth slate #24304D
+                  // Movable arrows: glowing neon gradients!
+                  let strokeColor = '#24304D';
+                  let fillColor = '#24304D';
 
                   if (isBlocked) {
-                    strokeColor = theme.errorFlash;
-                    fillColor = theme.errorFlash;
+                    strokeColor = '#FF0055';
+                    fillColor = '#FF0055';
                   } else if (isMovable) {
-                    if (arrow.isRainbow) {
-                      strokeColor = 'url(#rainbowArrowGrad)';
-                      fillColor = theme.rainbowEnd;
-                    } else {
-                      strokeColor = 'url(#goldArrowGrad)';
-                      fillColor = theme.arrowMovableEnd;
-                    }
+                    strokeColor = getArrowGradId(arrow.colorVariant);
+                    fillColor = getArrowHeadColor(arrow.colorVariant);
                   }
 
                   const pathStr = getSvgPathString(arrow);
@@ -992,10 +879,11 @@ export default function TapAwayArrowsGame({
 
                   return (
                     <G key={arrow.id}>
-                      {/* Hint Highlight Glow */}
+                      {/* Hint Highlight Pulse */}
                       {isHinted && pathStr ? (
                         <Path
                           d={pathStr}
+                          fill="none"
                           stroke="#FFFFFF"
                           strokeWidth={9}
                           strokeLinecap="round"
@@ -1004,10 +892,11 @@ export default function TapAwayArrowsGame({
                         />
                       ) : null}
 
-                      {/* Main Arrow Body */}
+                      {/* Main Arrow Body - ALWAYS fill="none" */}
                       {pathStr ? (
                         <Path
                           d={pathStr}
+                          fill="none"
                           stroke={strokeColor}
                           strokeWidth={isBlocked ? 6.5 : 5.4}
                           strokeLinecap="round"
@@ -1020,12 +909,8 @@ export default function TapAwayArrowsGame({
                         <Polygon
                           points={headPoints}
                           fill={fillColor}
-                          stroke={
-                            isMovable && !isBlocked
-                              ? theme.arrowMovableStart
-                              : fillColor
-                          }
-                          strokeWidth={0.5}
+                          stroke={isMovable && !isBlocked ? '#FFFFFF' : fillColor}
+                          strokeWidth={isMovable && !isBlocked ? 0.8 : 0.5}
                         />
                       ) : null}
                     </G>
@@ -1038,12 +923,8 @@ export default function TapAwayArrowsGame({
                   const opacity = Math.max(0, 1 - progress);
                   const { pathStr, headPoints } = getEscapingGeometry(item);
 
-                  const escapeStroke = arrow.isRainbow
-                    ? 'url(#rainbowArrowGrad)'
-                    : 'url(#goldArrowGrad)';
-                  const escapeFill = arrow.isRainbow
-                    ? theme.rainbowEnd
-                    : theme.arrowMovableEnd;
+                  const escapeStroke = getArrowGradId(arrow.colorVariant);
+                  const escapeFill = getArrowHeadColor(arrow.colorVariant);
 
                   return (
                     <G key={`esc_${item.id}`} opacity={opacity}>
@@ -1051,6 +932,7 @@ export default function TapAwayArrowsGame({
                       {pathStr ? (
                         <Path
                           d={pathStr}
+                          fill="none"
                           stroke="#FFFFFF"
                           strokeWidth={8}
                           strokeLinecap="round"
@@ -1061,6 +943,7 @@ export default function TapAwayArrowsGame({
                       {pathStr ? (
                         <Path
                           d={pathStr}
+                          fill="none"
                           stroke={escapeStroke}
                           strokeWidth={5.4}
                           strokeLinecap="round"
@@ -1083,148 +966,23 @@ export default function TapAwayArrowsGame({
           </Pressable>
         </View>
 
-        {/* Settings / Options Modal */}
-        <Modal
-          visible={settingsVisible}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setSettingsVisible(false)}
-        >
-          <View style={styles.modalOverlay}>
-            <View
-              style={[
-                styles.dialogCard,
-                { backgroundColor: theme.cardBg },
-              ]}
-            >
-              <Text
-                style={[styles.dialogTitle, { color: theme.headerText }]}
-              >
-                SETTINGS
-              </Text>
-              <Text style={styles.dialogSubtitle}>
-                Level {level} · Best Score: {bestScore}
-              </Text>
-
-              <Pressable
-                style={[
-                  styles.dialogBtnPrimary,
-                  { backgroundColor: theme.headerText },
-                ]}
-                onPress={() => {
-                  setSettingsVisible(false);
-                  initLevel(level);
-                }}
-              >
-                <Text style={styles.dialogBtnPrimaryText}>↺ RESTART LEVEL</Text>
-              </Pressable>
-
-              <Pressable
-                style={[
-                  styles.dialogBtnSecondary,
-                  { borderColor: theme.divider },
-                ]}
-                onPress={handleToggleTheme}
-              >
-                <Text
-                  style={[
-                    styles.dialogBtnSecondaryText,
-                    { color: theme.headerText },
-                  ]}
-                >
-                  🎨 THEME: {themeMode}
-                </Text>
-              </Pressable>
-
-              <Pressable
-                style={[
-                  styles.dialogBtnSecondary,
-                  { borderColor: theme.divider },
-                ]}
-                onPress={() => setSettingsVisible(false)}
-              >
-                <Text
-                  style={[
-                    styles.dialogBtnSecondaryText,
-                    { color: theme.headerText },
-                  ]}
-                >
-                  CLOSE
-                </Text>
-              </Pressable>
-            </View>
-          </View>
-        </Modal>
-
-        {/* Victory & Game Over Modal matching Warm Paper Aesthetic */}
-        <Modal
+        {/* Global App Result Modal */}
+        <GameResultModal
           visible={modalVisible}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setModalVisible(false)}
-        >
-          <View style={styles.modalOverlay}>
-            <View
-              style={[
-                styles.dialogCard,
-                { backgroundColor: theme.cardBg },
-              ]}
-            >
-              <Text style={styles.dialogIcon}>
-                {modalType === 'VICTORY' ? '🎉' : '💔'}
-              </Text>
-              <Text
-                style={[styles.dialogTitle, { color: theme.headerText }]}
-              >
-                {modalType === 'VICTORY'
-                  ? 'LEVEL COMPLETE!'
-                  : 'OUT OF CHANCES!'}
-              </Text>
-              <Text style={styles.dialogSubtitle}>
-                {modalType === 'VICTORY'
-                  ? `Level ${level} Cleared! All arrows unraveled.`
-                  : 'You hit 3 blocked arrows. Try again!'}
-              </Text>
-
-              <Text style={[styles.dialogScore, { color: theme.headerText }]}>
-                Score: {score}
-              </Text>
-
-              <Pressable
-                style={[
-                  styles.dialogBtnPrimary,
-                  { backgroundColor: theme.headerText },
-                ]}
-                onPress={
-                  modalType === 'VICTORY'
-                    ? handleNextLevel
-                    : () => initLevel(level)
-                }
-              >
-                <Text style={styles.dialogBtnPrimaryText}>
-                  {modalType === 'VICTORY' ? 'NEXT LEVEL ➔' : 'TRY AGAIN ↺'}
-                </Text>
-              </Pressable>
-
-              <Pressable
-                style={[
-                  styles.dialogBtnSecondary,
-                  { borderColor: theme.divider },
-                ]}
-                onPress={onBackToHub}
-              >
-                <Text
-                  style={[
-                    styles.dialogBtnSecondaryText,
-                    { color: theme.headerText },
-                  ]}
-                >
-                  BACK TO HUB
-                </Text>
-              </Pressable>
-            </View>
-          </View>
-        </Modal>
+          type={modalType}
+          title={modalType === 'VICTORY' ? 'PATTERN SOLVED!' : 'PATTERN LOCKED OUT!'}
+          subtitle={
+            modalType === 'VICTORY'
+              ? `LEVEL ${level} CLEARED // ZERO CONFLICTS`
+              : '3 MISTAKES EXCEEDED // TRAJECTORY BLOCKED'
+          }
+          score={score}
+          bestScore={bestScore}
+          accentColor={modalType === 'VICTORY' ? '#00F5FF' : '#FF0055'}
+          onRetry={modalType === 'VICTORY' ? handleNextLevel : () => initLevel(level)}
+          retryLabel={modalType === 'VICTORY' ? 'NEXT PATTERN' : 'RETRY PATTERN'}
+          onBackToHub={onBackToHub}
+        />
       </View>
     </JuiceEngine>
   );
@@ -1233,88 +991,59 @@ export default function TapAwayArrowsGame({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-  },
-  headerBtn: {
-    padding: 6,
-  },
-  headerTitle: {
-    fontSize: 21,
-    fontWeight: '700',
-    letterSpacing: 0.2,
-  },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  circleIconBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    borderWidth: 1.2,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  paletteIconText: {
-    fontSize: 16,
-  },
-  headerDivider: {
-    height: 1,
-    width: '100%',
-    opacity: 0.85,
+    backgroundColor: '#03030A',
   },
   statusRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingVertical: 12,
   },
   dropletGroup: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    minWidth: 60,
+    minWidth: 64,
   },
   dropletWrapper: {
     alignItems: 'center',
     justifyContent: 'center',
   },
   dropletInactive: {
-    opacity: 0.35,
+    opacity: 0.3,
   },
   movablePillCard: {
     flex: 1,
-    marginHorizontal: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
+    marginHorizontal: 10,
+    paddingVertical: 7,
+    paddingHorizontal: 8,
     borderRadius: 20,
+    backgroundColor: 'rgba(11, 20, 42, 0.88)',
+    borderWidth: 1.2,
+    borderColor: 'rgba(0, 245, 255, 0.45)',
     alignItems: 'center',
     justifyContent: 'center',
     ...Platform.select({
       ios: {
-        shadowColor: '#000000',
+        shadowColor: '#00F5FF',
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
+        shadowOpacity: 0.35,
         shadowRadius: 8,
       },
       android: {
-        elevation: 3,
+        elevation: 4,
       },
       default: {},
     }),
   },
   movablePillText: {
-    fontSize: 14,
-    fontWeight: '700',
+    fontFamily: monoFont,
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#00F5FF',
     textAlign: 'center',
+    letterSpacing: 0.3,
   },
   hintBtn: {
     alignItems: 'center',
@@ -1323,95 +1052,42 @@ const styles = StyleSheet.create({
   },
   adBadge: {
     borderWidth: 1,
-    borderRadius: 6,
+    borderColor: '#FFE600',
+    borderRadius: 5,
     paddingHorizontal: 4,
     paddingVertical: 1,
     marginBottom: 2,
+    backgroundColor: 'rgba(255, 230, 0, 0.12)',
   },
   adBadgeText: {
-    fontSize: 8.5,
-    fontWeight: '800',
-    lineHeight: 10,
+    fontFamily: monoFont,
+    fontSize: 8,
+    fontWeight: '900',
+    color: '#FFE600',
+    lineHeight: 9,
   },
   arenaCenter: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingBottom: 16,
+    paddingBottom: 20,
   },
   mazeBoard: {
+    borderRadius: 18,
     overflow: 'hidden',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(38, 25, 17, 0.45)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-  },
-  dialogCard: {
-    width: '100%',
-    maxWidth: 320,
-    borderRadius: 24,
-    padding: 24,
-    alignItems: 'center',
+    borderWidth: 1.4,
+    borderColor: 'rgba(0, 245, 255, 0.3)',
     ...Platform.select({
       ios: {
-        shadowColor: '#000000',
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.15,
+        shadowColor: '#00F5FF',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
         shadowRadius: 16,
       },
       android: {
-        elevation: 8,
+        elevation: 6,
       },
       default: {},
     }),
-  },
-  dialogIcon: {
-    fontSize: 42,
-    marginBottom: 10,
-  },
-  dialogTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-    marginBottom: 6,
-  },
-  dialogSubtitle: {
-    fontSize: 13.5,
-    color: '#8A7A6E',
-    textAlign: 'center',
-    marginBottom: 12,
-  },
-  dialogScore: {
-    fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 18,
-  },
-  dialogBtnPrimary: {
-    width: '100%',
-    paddingVertical: 13,
-    borderRadius: 16,
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  dialogBtnPrimaryText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
-  dialogBtnSecondary: {
-    width: '100%',
-    paddingVertical: 11,
-    borderRadius: 16,
-    borderWidth: 1.2,
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  dialogBtnSecondaryText: {
-    fontSize: 13.5,
-    fontWeight: '700',
   },
 });

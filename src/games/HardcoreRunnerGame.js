@@ -754,7 +754,7 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
         }
         // Cube plunges into the gap: INSTANT GAP DEATH!
         if (nextY > targetGroundY + 12) {
-          playCrashSound();
+          playGameOverSound();
           triggerGameOverHaptic();
           if (takeHit('VOID_FALL')) return;
           // Respawn safely onto solid floor past the gap if extra lives remaining
