@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  Pressable,
   useWindowDimensions,
   Platform,
 } from 'react-native';
@@ -15,20 +14,19 @@ import Svg, {
   Line,
   Defs,
   LinearGradient,
-  RadialGradient,
   Stop,
   G,
   Path,
   Text as SvgText,
-  ClipPath,
 } from 'react-native-svg';
 import MiniGameHeader from '../components/MiniGameHeader';
 import GameResultModal from '../components/GameResultModal';
-import { playTapSound, playSliceSound, playGameOverSound } from '../utils/sound';
+import { playTapSound, playSliceSound, playGameOverSound, playPerfectSound } from '../utils/sound';
 import {
   triggerLightHaptic,
   triggerMediumHaptic,
   triggerGameOverHaptic,
+  triggerPerfectHaptic,
 } from '../utils/haptics';
 
 const monoFont = Platform.select({
@@ -126,7 +124,6 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
   // Base horizontal corridor geometry
   const baseCenterY = arenaHeight * 0.52;
   const baseFloorY = baseCenterY + CORRIDOR_HEIGHT / 2;
-  const baseCeilingY = baseCenterY - CORRIDOR_HEIGHT / 2;
   const groundY = baseFloorY - CUBE_SIZE;
   const playerScreenX = 72;
 
@@ -135,9 +132,15 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
   const [highScore, setHighScore] = useState(0);
   const [currentPhase, setCurrentPhase] = useState(PHASE_THRESHOLDS[0]);
   const [phaseBanner, setPhaseBanner] = useState(null);
-  const [lives, setLives] = useState(3);
+  const [, setLives] = useState(3);
   const livesRef = useRef(3);
   const invulnerableUntilRef = useRef(0);
+  const hasShieldRef = useRef(false);
+  const flightUntilRef = useRef(0);
+  const magnetUntilRef = useRef(0);
+  const scoreBonusRef = useRef(0);
+  const touchTargetYRef = useRef(null);
+  const pickupsRef = useRef([]);
 
   // Consolidated 60 FPS visual state
   const [frameState, setFrameState] = useState(() => ({
@@ -147,11 +150,17 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
     score: 0,
     lives: 3,
     isInvulnerable: false,
+    hasShield: false,
+    isFlying: false,
+    flightSeconds: 0,
+    isMagnet: false,
+    magnetSeconds: 0,
     segments: [],
     obstacles: [],
     turrets: [],
     projectiles: [],
     gaps: [],
+    pickups: [],
   }));
 
   // Result modal
@@ -204,6 +213,7 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
     const newObs = [];
     const newTurrets = [];
     const newGaps = [];
+    const newPickups = [];
 
     while (curX < targetWorldX) {
       // Gate available terrain types by distance
@@ -415,6 +425,41 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
           }
         }
 
+        // Collectible Pickups (Coins and Abilities)
+        if (Math.random() < 0.65) {
+          const coinCount = 3 + Math.floor(Math.random() * 3);
+          const startCoinX = curX + 70 + Math.random() * (segW - 220);
+          const isArc = Math.random() < 0.55;
+          for (let cIdx = 0; cIdx < coinCount; cIdx++) {
+            const coinX = startCoinX + cIdx * 32;
+            const arcLift = isArc ? Math.sin((cIdx / (coinCount - 1)) * Math.PI) * 26 : 0;
+            newPickups.push({
+              id: `coin_${coinX}_${cIdx}`,
+              type: 'COIN',
+              x: coinX,
+              y: baseFloorY - 24 - arcLift,
+              w: 18,
+              h: 18,
+              collected: false,
+            });
+          }
+        }
+
+        if (Math.random() < 0.58) {
+          const abTypes = ['FLY', 'FLY', 'SHIELD', 'SHIELD', 'LIFE', 'MAGNET'];
+          const abType = abTypes[Math.floor(Math.random() * abTypes.length)];
+          const abX = curX + 160 + Math.random() * (segW - 320);
+          newPickups.push({
+            id: `ab_${abType}_${abX}`,
+            type: abType,
+            x: abX,
+            y: baseFloorY - 38,
+            w: 24,
+            h: 24,
+            collected: false,
+          });
+        }
+
         curX += segW;
       } else if (terrainType === 'SMOOTH') {
         const segW = 440 + Math.floor(Math.random() * 80);
@@ -433,6 +478,20 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
             id: `turret_${curX}`,
             x: curX + segW * 0.5,
             fired: false,
+          });
+        }
+
+        if (Math.random() < 0.5) {
+          const abTypes = ['FLY', 'SHIELD', 'LIFE', 'COIN'];
+          const abType = abTypes[Math.floor(Math.random() * abTypes.length)];
+          newPickups.push({
+            id: `ab_${abType}_${curX}`,
+            type: abType,
+            x: curX + segW * 0.45,
+            y: baseFloorY - 38,
+            w: 24,
+            h: 24,
+            collected: false,
           });
         }
 
@@ -456,6 +515,20 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
           });
         }
 
+        if (Math.random() < 0.5) {
+          const abTypes = ['FLY', 'SHIELD', 'LIFE', 'COIN'];
+          const abType = abTypes[Math.floor(Math.random() * abTypes.length)];
+          newPickups.push({
+            id: `ab_${abType}_${curX}`,
+            type: abType,
+            x: curX + segW * 0.45,
+            y: baseFloorY - 38,
+            w: 24,
+            h: 24,
+            collected: false,
+          });
+        }
+
         curX += segW;
       } else if (terrainType === 'WAVE') {
         const segW = 480 + Math.floor(Math.random() * 80);
@@ -476,6 +549,20 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
           });
         }
 
+        if (Math.random() < 0.5) {
+          const abTypes = ['FLY', 'SHIELD', 'LIFE', 'COIN'];
+          const abType = abTypes[Math.floor(Math.random() * abTypes.length)];
+          newPickups.push({
+            id: `ab_${abType}_${curX}`,
+            type: abType,
+            x: curX + segW * 0.45,
+            y: baseFloorY - 38,
+            w: 24,
+            h: 24,
+            collected: false,
+          });
+        }
+
         curX += segW;
       }
     }
@@ -493,7 +580,10 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
     if (newGaps.length > 0) {
       gapsRef.current = [...gapsRef.current, ...newGaps];
     }
-  }, []);
+    if (newPickups.length > 0) {
+      pickupsRef.current = [...pickupsRef.current, ...newPickups];
+    }
+  }, [baseFloorY]);
 
   // Initialize level
   const initLevel = useCallback(() => {
@@ -509,6 +599,12 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
     turretsRef.current = [];
     projectilesRef.current = [];
     gapsRef.current = [];
+    pickupsRef.current = [];
+    hasShieldRef.current = false;
+    flightUntilRef.current = 0;
+    magnetUntilRef.current = 0;
+    scoreBonusRef.current = 0;
+    touchTargetYRef.current = null;
 
     // Initial safe flat runway
     segmentsRef.current.push({
@@ -531,11 +627,17 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
       score: 0,
       lives: 3,
       isInvulnerable: false,
+      hasShield: false,
+      isFlying: false,
+      flightSeconds: 0,
+      isMagnet: false,
+      magnetSeconds: 0,
       segments: [...segmentsRef.current],
       obstacles: [],
       turrets: [],
       projectiles: [],
       gaps: [],
+      pickups: [],
     });
     setIsPlaying(false);
     setModalVisible(false);
@@ -626,7 +728,7 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
       const nextDist = distanceRef.current + currentSpeed;
       distanceRef.current = nextDist;
 
-      const nextScore = Math.floor(nextDist / 5);
+      const nextScore = Math.floor(nextDist / 5) + (scoreBonusRef.current || 0);
 
       // Phase updates
       const newPhase = getPhaseForDistance(nextDist);
@@ -653,11 +755,22 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
         turretsRef.current = turretsRef.current.filter((t) => t.x > nextDist - 250);
         gapsRef.current = gapsRef.current.filter((g) => g.x + g.w > nextDist - 250);
         projectilesRef.current = projectilesRef.current.filter((p) => p.x > nextDist - 300);
+        pickupsRef.current = pickupsRef.current.filter((pk) => !pk.collected && pk.x > nextDist - 250);
       }
+
+      const isFlying = Date.now() < flightUntilRef.current;
+      const isMagnet = Date.now() < magnetUntilRef.current;
 
       // Take damage from obstacles or void
       const takeHit = (cause) => {
         if (Date.now() < invulnerableUntilRef.current) return false;
+        if (hasShieldRef.current) {
+          hasShieldRef.current = false;
+          invulnerableUntilRef.current = Date.now() + 1500;
+          playSliceSound();
+          triggerMediumHaptic();
+          return false; // shield absorbed hit!
+        }
         if (livesRef.current > 1) {
           livesRef.current -= 1;
           setLives(livesRef.current);
@@ -689,8 +802,8 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
       );
       const isOverGap = !!activeGap;
 
-      // Track if cube is submerged below solid floor line
-      const isFallingInVoid = playerYRef.current > targetGroundY + 6 || (isOverGap && nextY > targetGroundY + 6);
+      // Track if cube is submerged below solid floor line (Bypassed when flying)
+      const isFallingInVoid = !isFlying && (playerYRef.current > targetGroundY + 6 || (isOverGap && nextY > targetGroundY + 6));
 
       // Check if landing on static BLOCK from above
       let landedOnBlock = false;
@@ -722,7 +835,21 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
       let nextY = playerYRef.current + nextVy;
 
       let isGrounded = false;
-      if (landedOnBlock) {
+      if (isFlying) {
+        nextVy = 0;
+        if (touchTargetYRef.current !== null) {
+          nextY += (touchTargetYRef.current - nextY) * 0.28;
+        } else {
+          // Gentle floating hover bob
+          nextY += Math.sin(tickCountRef.current * 0.12) * 0.6;
+        }
+        // Clamp within flight corridor (between ceiling and floor)
+        const minFlightY = curCeilSurface + 6;
+        const maxFlightY = baseFloorY - CUBE_SIZE - 4;
+        if (nextY < minFlightY) nextY = minFlightY;
+        if (nextY > maxFlightY) nextY = maxFlightY;
+        isGrounded = false;
+      } else if (landedOnBlock) {
         nextY = blockTopY;
         nextVy = 0;
         isGrounded = true;
@@ -771,9 +898,16 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
       playerVyRef.current = nextVy;
       playerYRef.current = nextY;
 
-      // Cube Rotation: Tilts parallel to track slope when grounded, spins when airborne
+      // Cube Rotation: Tilts parallel to track slope when grounded, spins when airborne, banks when flying
       let nextRot = 0;
-      if (!isGrounded) {
+      if (isFlying) {
+        const vertVel = nextY - playerYRef.current;
+        const targetRot = Math.max(-25, Math.min(25, vertVel * 4));
+        const currentRot = rotationRef.current;
+        const smoothedRot = currentRot + (targetRot - currentRot) * 0.25;
+        rotationRef.current = smoothedRot;
+        nextRot = smoothedRot;
+      } else if (!isGrounded) {
         nextRot = (rotationRef.current + 8) % 360;
         rotationRef.current = nextRot;
       } else {
@@ -841,6 +975,53 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
         }
       }
 
+      // Collectible pickups: magnet pull & collection collision
+      const pickups = pickupsRef.current;
+      for (let i = 0; i < pickups.length; i++) {
+        const pk = pickups[i];
+        if (pk.collected) continue;
+
+        const pkScreenX = pk.x - nextDist + playerScreenX;
+        if (pkScreenX < -40 || pkScreenX > arenaWidth + 100) continue;
+
+        // Magnet pulls pickups towards cube
+        if (isMagnet) {
+          const dx = pMidX - (pkScreenX + pk.w / 2);
+          const dy = pMidY - (pk.y + pk.h / 2);
+          const dist = Math.hypot(dx, dy);
+          if (dist < 260) {
+            pk.x += (dx / dist) * 7.5;
+            pk.y += (dy / dist) * 7.5;
+          }
+        }
+
+        const curScreenX = pk.x - nextDist + playerScreenX;
+        const pkCenterX = curScreenX + pk.w / 2;
+        const pkCenterY = pk.y + pk.h / 2;
+        const distToPlayer = Math.hypot(pkCenterX - pMidX, pkCenterY - pMidY);
+
+        if (distToPlayer < CUBE_SIZE / 2 + pk.w / 2 + 6) {
+          pk.collected = true;
+          playPerfectSound();
+          triggerPerfectHaptic();
+
+          if (pk.type === 'COIN') {
+            scoreBonusRef.current = (scoreBonusRef.current || 0) + 50;
+          } else if (pk.type === 'LIFE') {
+            livesRef.current = Math.min(5, livesRef.current + 1);
+            setLives(livesRef.current);
+          } else if (pk.type === 'SHIELD') {
+            hasShieldRef.current = true;
+          } else if (pk.type === 'FLY') {
+            flightUntilRef.current = Date.now() + 9000;
+            touchTargetYRef.current = nextY;
+            playerVyRef.current = 0;
+          } else if (pk.type === 'MAGNET') {
+            magnetUntilRef.current = Date.now() + 8500;
+          }
+        }
+      }
+
       // Single consolidated frame state update
       setFrameState({
         distance: nextDist,
@@ -849,11 +1030,17 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
         score: nextScore,
         lives: livesRef.current,
         isInvulnerable: Date.now() < invulnerableUntilRef.current,
+        hasShield: hasShieldRef.current,
+        isFlying,
+        flightSeconds: isFlying ? Math.ceil((flightUntilRef.current - Date.now()) / 1000) : 0,
+        isMagnet,
+        magnetSeconds: isMagnet ? Math.ceil((magnetUntilRef.current - Date.now()) / 1000) : 0,
         segments: segmentsRef.current,
         obstacles: obstaclesRef.current,
         turrets: turretsRef.current,
         projectiles: projectilesRef.current,
         gaps: gapsRef.current,
+        pickups: pickupsRef.current,
       });
 
       // Player Hitbox
@@ -959,11 +1146,17 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
     score,
     lives: curLives = 3,
     isInvulnerable = false,
+    hasShield = false,
+    isFlying = false,
+    flightSeconds = 0,
+    isMagnet = false,
+    magnetSeconds = 0,
     segments = [],
     obstacles = [],
     turrets = [],
     gaps = [],
     projectiles = [],
+    pickups = [],
   } = frameState;
 
   // Viewport sampling for continuous corridor lines (top ceiling & bottom floor)
@@ -1043,6 +1236,12 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
     return sX > -60 && sX < arenaWidth + 60;
   });
 
+  const visiblePickups = pickups.filter((pk) => {
+    if (pk.collected) return false;
+    const sX = pk.x - distance + playerScreenX;
+    return sX > -50 && sX < arenaWidth + 50;
+  });
+
   const pMidX = playerScreenX + CUBE_SIZE / 2;
   const pMidY = playerY + CUBE_SIZE / 2;
 
@@ -1068,7 +1267,7 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
 
         <View style={styles.hudLivesGroup}>
           <Text style={styles.hudLivesIcons}>
-            {Array.from({ length: 3 }).map((_, i) => (i < curLives ? '❤️' : '🖤')).join(' ')}
+            {Array.from({ length: 5 }).map((_, i) => (i < curLives ? '❤️' : '🖤')).join(' ')}
           </Text>
         </View>
 
@@ -1082,6 +1281,27 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
         </View>
       </View>
 
+      {/* Active Abilities Bar */}
+      {(hasShield || isFlying || isMagnet) && (
+        <View style={styles.abilityBar}>
+          {hasShield && (
+            <View style={[styles.abilityPill, { borderColor: '#00F5FF', backgroundColor: 'rgba(0, 245, 255, 0.15)' }]}>
+              <Text style={[styles.abilityPillText, { color: '#00F5FF' }]}>🛡️ SHIELD</Text>
+            </View>
+          )}
+          {isFlying && (
+            <View style={[styles.abilityPill, { borderColor: '#FFE600', backgroundColor: 'rgba(255, 230, 0, 0.15)' }]}>
+              <Text style={[styles.abilityPillText, { color: '#FFE600' }]}>🪽 FLIGHT {flightSeconds}s · DRAG ↕</Text>
+            </View>
+          )}
+          {isMagnet && (
+            <View style={[styles.abilityPill, { borderColor: '#FF0055', backgroundColor: 'rgba(255, 0, 85, 0.15)' }]}>
+              <Text style={[styles.abilityPillText, { color: '#FF0055' }]}>🧲 MAGNET {magnetSeconds}s</Text>
+            </View>
+          )}
+        </View>
+      )}
+
       {/* Milestone Phase Banner */}
       {phaseBanner && (
         <View style={[styles.phaseBannerBox, { borderColor: phaseBanner.color }]}>
@@ -1092,8 +1312,34 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
         </View>
       )}
 
-      {/* Touch Arena */}
-      <Pressable style={styles.arena} onPress={handleJump}>
+      {/* Touch Arena: Tap to jump, or Drag UP & DOWN during Flight */}
+      <View
+        style={styles.arena}
+        onTouchStart={(e) => {
+          if (isPausedRef.current) return;
+          if (!isPlaying) {
+            setIsPlaying(true);
+            return;
+          }
+          if (Date.now() < flightUntilRef.current) {
+            touchTargetYRef.current = e.nativeEvent.locationY - CUBE_SIZE / 2;
+          } else {
+            handleJump();
+          }
+        }}
+        onTouchMove={(e) => {
+          if (isPausedRef.current) return;
+          if (Date.now() < flightUntilRef.current) {
+            touchTargetYRef.current = e.nativeEvent.locationY - CUBE_SIZE / 2;
+          }
+        }}
+        onTouchEnd={() => {
+          // Keep floating at target Y
+        }}
+        onTouchCancel={() => {
+          // Keep floating
+        }}
+      >
         <Svg width={arenaWidth} height={arenaHeight} style={StyleSheet.absoluteFill}>
           <Defs>
             <LinearGradient id="cubeGrad" x1="0" y1="0" x2="1" y2="1">
@@ -1420,6 +1666,109 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
             return null;
           })}
 
+          {/* COLLECTIBLE COINS, LIVES, SHIELDS, FLIGHT & MAGNETS */}
+          {visiblePickups.map((pk) => {
+            const sX = pk.x - distance + playerScreenX;
+            const sY = pk.y;
+            const pMidPkX = sX + pk.w / 2;
+            const pMidPkY = sY + pk.h / 2;
+
+            if (pk.type === 'COIN') {
+              return (
+                <G key={pk.id}>
+                  <Circle cx={pMidPkX} cy={pMidPkY} r={10} fill="rgba(255, 230, 0, 0.22)" />
+                  <Polygon
+                    points={`${pMidPkX},${sY} ${sX + pk.w},${pMidPkY} ${pMidPkX},${sY + pk.h} ${sX},${pMidPkY}`}
+                    fill="#FFE600"
+                    stroke="#FFFFFF"
+                    strokeWidth={1.4}
+                  />
+                  <Polygon
+                    points={`${pMidPkX},${sY + 4} ${sX + pk.w - 4},${pMidPkY} ${pMidPkX},${sY + pk.h - 4} ${sX + 4},${pMidPkY}`}
+                    fill="#FF9100"
+                  />
+                  <Circle cx={pMidPkX} cy={pMidPkY} r={2.2} fill="#FFFFFF" />
+                </G>
+              );
+            }
+
+            if (pk.type === 'LIFE') {
+              return (
+                <G key={pk.id}>
+                  <Circle cx={pMidPkX} cy={pMidPkY} r={14} fill="rgba(255, 0, 85, 0.25)" />
+                  <Circle cx={pMidPkX} cy={pMidPkY} r={11} fill="#14020E" stroke="#FF0055" strokeWidth={1.8} />
+                  <SvgText
+                    x={pMidPkX}
+                    y={pMidPkY + 4.5}
+                    textAnchor="middle"
+                    fontSize={13}
+                    fill="#FF0055"
+                  >
+                    ❤️
+                  </SvgText>
+                </G>
+              );
+            }
+
+            if (pk.type === 'SHIELD') {
+              return (
+                <G key={pk.id}>
+                  <Circle cx={pMidPkX} cy={pMidPkY} r={15} fill="rgba(0, 245, 255, 0.2)" />
+                  <Circle cx={pMidPkX} cy={pMidPkY} r={11} fill="#051424" stroke="#00F5FF" strokeWidth={1.8} />
+                  <Circle cx={pMidPkX} cy={pMidPkY} r={13} stroke="#00F5FF" strokeWidth={1} strokeDasharray="3,3" />
+                  <SvgText
+                    x={pMidPkX}
+                    y={pMidPkY + 4.5}
+                    textAnchor="middle"
+                    fontSize={12}
+                    fill="#00F5FF"
+                  >
+                    🛡️
+                  </SvgText>
+                </G>
+              );
+            }
+
+            if (pk.type === 'FLY') {
+              return (
+                <G key={pk.id}>
+                  <Circle cx={pMidPkX} cy={pMidPkY} r={16} fill="rgba(255, 230, 0, 0.24)" />
+                  <Circle cx={pMidPkX} cy={pMidPkY} r={11} fill="#1C1805" stroke="#FFE600" strokeWidth={1.8} />
+                  <Circle cx={pMidPkX} cy={pMidPkY} r={14} stroke="#FFE600" strokeWidth={1} strokeDasharray="4,2" />
+                  <SvgText
+                    x={pMidPkX}
+                    y={pMidPkY + 4.5}
+                    textAnchor="middle"
+                    fontSize={13}
+                    fill="#FFE600"
+                  >
+                    🪽
+                  </SvgText>
+                </G>
+              );
+            }
+
+            if (pk.type === 'MAGNET') {
+              return (
+                <G key={pk.id}>
+                  <Circle cx={pMidPkX} cy={pMidPkY} r={15} fill="rgba(255, 0, 85, 0.2)" />
+                  <Circle cx={pMidPkX} cy={pMidPkY} r={11} fill="#1C0615" stroke="#FF0055" strokeWidth={1.8} />
+                  <SvgText
+                    x={pMidPkX}
+                    y={pMidPkY + 4.5}
+                    textAnchor="middle"
+                    fontSize={13}
+                    fill="#FF0055"
+                  >
+                    🧲
+                  </SvgText>
+                </G>
+              );
+            }
+
+            return null;
+          })}
+
           {/* THE PLAYER CUBE (Riding precisely on top of the floor line, tilting with track slope) */}
           <G
             transform={`rotate(${rotation}, ${playerScreenX + CUBE_SIZE / 2}, ${
@@ -1427,6 +1776,36 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
             })`}
             opacity={isInvulnerable ? 0.65 : 1}
           >
+            {/* Aerodynamic Cyber Wings & Plasma Thrusters (during flight) */}
+            {isFlying && (
+              <G>
+                {/* Plasma Thruster Flame Exhaust */}
+                <Polygon
+                  points={`${playerScreenX},${playerY + 5} ${playerScreenX - 16},${playerY + CUBE_SIZE / 2} ${playerScreenX},${playerY + CUBE_SIZE - 5}`}
+                  fill="#00F5FF"
+                  opacity={0.85}
+                />
+                <Polygon
+                  points={`${playerScreenX},${playerY + 7} ${playerScreenX - 10},${playerY + CUBE_SIZE / 2} ${playerScreenX},${playerY + CUBE_SIZE - 7}`}
+                  fill="#FFE600"
+                />
+                {/* Top Cyber Wing */}
+                <Polygon
+                  points={`${playerScreenX + 4},${playerY} ${playerScreenX + 18},${playerY - 10} ${playerScreenX + 8},${playerY + 2}`}
+                  fill="#00F5FF"
+                  stroke="#FFFFFF"
+                  strokeWidth={1}
+                />
+                {/* Bottom Cyber Wing */}
+                <Polygon
+                  points={`${playerScreenX + 4},${playerY + CUBE_SIZE} ${playerScreenX + 18},${playerY + CUBE_SIZE + 10} ${playerScreenX + 8},${playerY + CUBE_SIZE - 2}`}
+                  fill="#00F5FF"
+                  stroke="#FFFFFF"
+                  strokeWidth={1}
+                />
+              </G>
+            )}
+
             <Rect
               x={playerScreenX}
               y={playerY}
@@ -1434,8 +1813,8 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
               height={CUBE_SIZE}
               rx={5}
               fill="url(#cubeGrad)"
-              stroke={isInvulnerable ? '#00F5FF' : '#FFFFFF'}
-              strokeWidth={1.8}
+              stroke={isFlying ? '#FFE600' : isInvulnerable ? '#00F5FF' : '#FFFFFF'}
+              strokeWidth={isFlying ? 2.4 : 1.8}
             />
             {/* Inner Core */}
             <Rect
@@ -1451,12 +1830,35 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
               cx={playerScreenX + CUBE_SIZE / 2}
               cy={playerY + CUBE_SIZE / 2}
               r={2.5}
-              fill="#00F5FF"
+              fill={isFlying ? '#FFE600' : '#00F5FF'}
             />
           </G>
 
+          {/* Active Forcefield Shield Bubble */}
+          {hasShield && (
+            <G>
+              <Circle
+                cx={playerScreenX + CUBE_SIZE / 2}
+                cy={playerY + CUBE_SIZE / 2}
+                r={CUBE_SIZE * 0.95}
+                stroke="#00F5FF"
+                strokeWidth={2.4}
+                fill="rgba(0, 245, 255, 0.22)"
+                strokeDasharray="6,4"
+              />
+              <Circle
+                cx={playerScreenX + CUBE_SIZE / 2}
+                cy={playerY + CUBE_SIZE / 2}
+                r={CUBE_SIZE * 0.75}
+                stroke="#FFE600"
+                strokeWidth={1}
+                opacity={0.6}
+              />
+            </G>
+          )}
+
           {/* Invulnerability Shield Bubble */}
-          {isInvulnerable && (
+          {!hasShield && isInvulnerable && (
             <Circle
               cx={playerScreenX + CUBE_SIZE / 2}
               cy={playerY + CUBE_SIZE / 2}
@@ -1467,16 +1869,30 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
               strokeDasharray="4,3"
             />
           )}
+
+          {/* Magnetic Flux Ring */}
+          {isMagnet && (
+            <Circle
+              cx={playerScreenX + CUBE_SIZE / 2}
+              cy={playerY + CUBE_SIZE / 2}
+              r={CUBE_SIZE * 1.3}
+              stroke="#FF0055"
+              strokeWidth={1.4}
+              strokeDasharray="3,3"
+              fill="none"
+              opacity={0.55}
+            />
+          )}
         </Svg>
 
         {/* Start / Jump Tap Overlay Hint */}
         {!isPlaying && (
           <View style={styles.startHintBox}>
             <Text style={styles.startHintTitle}>TAP ANYWHERE TO DASH</Text>
-            <Text style={styles.startHintSub}>SURVIVE THE 5 HAZARD PHASES</Text>
+            <Text style={styles.startHintSub}>COLLECT 🪽 FLIGHT · 🛡️ SHIELD · ❤️ LIVES · 🧲 MAGNET</Text>
           </View>
         )}
-      </Pressable>
+      </View>
 
       <GameResultModal
         visible={modalVisible}
@@ -1621,5 +2037,30 @@ const styles = StyleSheet.create({
     color: '#A0A5B5',
     fontWeight: '700',
     marginTop: 3,
+  },
+  abilityBar: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 5,
+    paddingHorizontal: 12,
+    backgroundColor: 'rgba(10, 4, 28, 0.94)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 230, 0, 0.25)',
+  },
+  abilityPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  abilityPillText: {
+    fontFamily: monoFont,
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 0.8,
   },
 });
