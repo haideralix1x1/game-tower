@@ -4622,10 +4622,13 @@ export default function ThiefEscapeGame({
         score={score}
         bestScore={highScore}
         accentColor="#00F5FF"
+        nextLabel="NEXT HEIST ▶"
         buttonText="NEXT HEIST ▶"
+        replayLabel="PLAY AGAIN ⟳"
         onNextLevel={handleNextLevel}
         onNext={handleNextLevel}
-        onRetry={handleNextLevel}
+        onPlayAgain={handleRetryCurrentLevel}
+        onRetry={handleRetryCurrentLevel}
         onBackToHub={onBackToHub}
       />
 

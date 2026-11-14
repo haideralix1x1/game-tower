@@ -1027,9 +1027,12 @@ export default function WordScrambleGame({ onBackToHub, onScoreUpdate, isPaused 
           score={score}
           bestScore={bestScore}
           accentColor={modalType === 'VICTORY' ? '#00F5FF' : '#FF0055'}
-          onRetry={modalType === 'VICTORY' ? handleNextLevel : handleRetry}
-          retryLabel={modalType === 'VICTORY' ? 'NEXT LEVEL ➔' : 'TRY AGAIN ⟳'}
-          buttonText={modalType === 'VICTORY' ? 'NEXT LEVEL ➔' : 'TRY AGAIN ⟳'}
+          onNextLevel={handleNextLevel}
+          onPlayAgain={handleRetry}
+          onRetry={handleRetry}
+          nextLabel="NEXT LEVEL ▶"
+          replayLabel="PLAY AGAIN ⟳"
+          retryLabel="TRY AGAIN ⟳"
           onBackToHub={onBackToHub}
         />
       </View>

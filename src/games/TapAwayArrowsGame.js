@@ -335,6 +335,8 @@ function generateDenseLabyrinth(lvl = 1) {
   // Fallback guaranteed simple pattern if multiple tight collisions occurred
   const fallbackArrows = [];
   const baseCount = Math.max(4, Math.min(8, getTargetArrowCount(safeLvl)));
+  const midR = Math.floor(ROWS / 2);
+  const midC = Math.floor(COLS / 2);
   for (let i = 0; i < baseCount; i++) {
     const r = midR - Math.floor(baseCount / 2) + i;
     const c = midC;
@@ -1024,7 +1026,7 @@ export default function TapAwayArrowsGame({
 
                 {/* Flying / Escaping Animated Arrows zooming off screen */}
                 {escapingArrows.map((item) => {
-                  const { arrow, progress } = item;
+                  const { progress } = item;
                   const opacity = Math.max(0, 1 - progress);
                   const { pathStr, headPoints } = getEscapingGeometry(item);
 
@@ -1087,23 +1089,19 @@ export default function TapAwayArrowsGame({
           score={score}
           bestScore={bestScore}
           accentColor={modalType === 'VICTORY' ? '#00F5FF' : '#FF0055'}
-          onRetry={
-            modalType === 'VICTORY'
-              ? level >= MAX_LEVEL
-                ? () => {
-                    setLevel(1);
-                    AsyncStorage.setItem(STORAGE_LEVEL_KEY, '1').catch(() => {});
-                  }
-                : handleNextLevel
-              : () => initLevel(level)
+          onNextLevel={
+            level >= MAX_LEVEL
+              ? () => {
+                  setLevel(1);
+                  AsyncStorage.setItem(STORAGE_LEVEL_KEY, '1').catch(() => {});
+                }
+              : handleNextLevel
           }
-          retryLabel={
-            modalType === 'VICTORY'
-              ? level >= MAX_LEVEL
-                ? 'REPLAY TOWER'
-                : 'NEXT LEVEL'
-              : 'RETRY LEVEL'
-          }
+          onPlayAgain={() => initLevel(level)}
+          onRetry={() => initLevel(level)}
+          nextLabel={level >= MAX_LEVEL ? 'REPLAY TOWER ▶' : 'NEXT LEVEL ▶'}
+          replayLabel="PLAY AGAIN ⟳"
+          retryLabel="RETRY LEVEL ⟳"
           onBackToHub={onBackToHub}
         />
       </View>

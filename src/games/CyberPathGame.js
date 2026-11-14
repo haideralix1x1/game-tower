@@ -1805,8 +1805,12 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
           score={score}
           bestScore={bestScore}
           accentColor={modalType === 'VICTORY' ? '#00F5D4' : '#FF3366'}
-          onRetry={modalType === 'VICTORY' ? handleNextLevel : handleRetry}
-          retryLabel={modalType === 'VICTORY' ? 'NEXT CHAMBER' : 'RETRY VAULT'}
+          onNextLevel={handleNextLevel}
+          onPlayAgain={handleRetry}
+          onRetry={handleRetry}
+          nextLabel="NEXT CHAMBER ▶"
+          replayLabel="PLAY AGAIN ⟳"
+          retryLabel="RETRY VAULT ⟳"
           onBackToHub={onBackToHub}
         />
       </View>

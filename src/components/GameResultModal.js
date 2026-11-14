@@ -136,6 +136,8 @@ export default function GameResultModal({
     }
   };
 
+  const hasThreeButtons = Boolean(isWin && replayFn && backFn);
+
   return (
     <Modal
       transparent
@@ -175,55 +177,110 @@ export default function GameResultModal({
             </View>
           ) : null}
 
-          {/* Action Buttons Row */}
-          <View style={localStyles.btnRow}>
-            {Boolean(backFn) && (
+          {/* Action Buttons: 2-Tier Stack if 3 buttons, or clean row if 2 buttons */}
+          {hasThreeButtons ? (
+            <View style={localStyles.btnColumn}>
+              {/* Primary Action Button (Prominent Full Width on Top) */}
               <TouchableOpacity
-                onPress={handleBack}
-                activeOpacity={0.72}
-                hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
-                style={[
-                  localStyles.backBtn,
-                  isWin && Boolean(replayFn) && { flex: 0.85 },
-                ]}
+                onPress={handleAction}
+                activeOpacity={0.8}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                style={[localStyles.primaryFullBtn, { backgroundColor: accent }]}
               >
-                <Text style={localStyles.backBtnText}>HUB</Text>
-              </TouchableOpacity>
-            )}
-
-            {isWin && Boolean(replayFn) && (
-              <TouchableOpacity
-                onPress={handleReplay}
-                activeOpacity={0.75}
-                hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
-                style={[localStyles.replayBtn, { borderColor: accent }]}
-              >
-                <Text style={[localStyles.replayBtnText, { color: accent }]}>
-                  {replayLabel || 'PLAY AGAIN ⟳'}
+                <Text
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.72}
+                  style={[
+                    localStyles.primaryFullBtnText,
+                    { color: isWin ? '#04040E' : '#FFFFFF' },
+                  ]}
+                >
+                  {displayActionText}
                 </Text>
               </TouchableOpacity>
-            )}
 
-            <TouchableOpacity
-              onPress={handleAction}
-              activeOpacity={0.8}
-              hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
-              style={[
-                localStyles.retryBtn,
-                { backgroundColor: accent },
-                isWin && Boolean(replayFn) && { flex: 1.25 },
-              ]}
-            >
-              <Text
+              {/* Secondary Actions Side-by-Side on Bottom */}
+              <View style={localStyles.btnRow}>
+                {Boolean(backFn) && (
+                  <TouchableOpacity
+                    onPress={handleBack}
+                    activeOpacity={0.72}
+                    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                    style={localStyles.halfBackBtn}
+                  >
+                    <Text
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.75}
+                      style={localStyles.backBtnText}
+                    >
+                      HUB
+                    </Text>
+                  </TouchableOpacity>
+                )}
+
+                <TouchableOpacity
+                  onPress={handleReplay}
+                  activeOpacity={0.75}
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                  style={[localStyles.halfReplayBtn, { borderColor: accent }]}
+                >
+                  <Text
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.7}
+                    style={[localStyles.replayBtnText, { color: accent }]}
+                  >
+                    {replayLabel || 'PLAY AGAIN ⟳'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : (
+            <View style={localStyles.btnRow}>
+              {Boolean(backFn) && (
+                <TouchableOpacity
+                  onPress={handleBack}
+                  activeOpacity={0.72}
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                  style={localStyles.backBtn}
+                >
+                  <Text
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.75}
+                    style={localStyles.backBtnText}
+                  >
+                    HUB
+                  </Text>
+                </TouchableOpacity>
+              )}
+
+              <TouchableOpacity
+                onPress={handleAction}
+                activeOpacity={0.8}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                 style={[
-                  localStyles.retryBtnText,
-                  { color: isWin ? '#04040E' : '#FFFFFF' },
+                  localStyles.retryBtn,
+                  { backgroundColor: accent },
+                  !backFn && { flex: 1 },
                 ]}
               >
-                {displayActionText}
-              </Text>
-            </TouchableOpacity>
-          </View>
+                <Text
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.72}
+                  style={[
+                    localStyles.retryBtnText,
+                    { color: isWin ? '#04040E' : '#FFFFFF' },
+                  ]}
+                >
+                  {displayActionText}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
       </View>
     </Modal>
@@ -238,17 +295,17 @@ const localStyles = StyleSheet.create({
     backgroundColor: 'rgba(3, 3, 10, 0.94)',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 20,
+    padding: 16,
     zIndex: 999999,
     elevation: 20,
   },
   card: {
     width: '100%',
-    maxWidth: 340,
+    maxWidth: 350,
     backgroundColor: '#0A0D20',
     borderRadius: 20,
     borderWidth: 2,
-    padding: 22,
+    padding: 20,
     alignItems: 'center',
     justifyContent: 'center',
     alignSelf: 'center',
@@ -310,6 +367,57 @@ const localStyles = StyleSheet.create({
     fontFamily: monoFont,
     fontWeight: '900',
   },
+  btnColumn: {
+    width: '100%',
+    gap: 8,
+    marginTop: 6,
+  },
+  primaryFullBtn: {
+    width: '100%',
+    borderRadius: 12,
+    paddingVertical: 13,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.35,
+    shadowRadius: 5,
+    overflow: 'hidden',
+  },
+  primaryFullBtnText: {
+    fontSize: 13,
+    fontFamily: monoFont,
+    fontWeight: '900',
+    letterSpacing: 0.8,
+    textAlign: 'center',
+  },
+  halfBackBtn: {
+    flex: 0.85,
+    backgroundColor: 'rgba(0, 245, 255, 0.12)',
+    borderRadius: 12,
+    borderWidth: 1.4,
+    borderColor: 'rgba(0, 245, 255, 0.6)',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 2,
+    overflow: 'hidden',
+  },
+  halfReplayBtn: {
+    flex: 1.55,
+    borderRadius: 12,
+    borderWidth: 1.4,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 2,
+    overflow: 'hidden',
+  },
   btnRow: {
     flexDirection: 'row',
     gap: 10,
@@ -317,15 +425,17 @@ const localStyles = StyleSheet.create({
     marginTop: 6,
   },
   backBtn: {
-    flex: 1,
+    flex: 0.85,
     backgroundColor: 'rgba(0, 245, 255, 0.12)',
     borderRadius: 12,
     borderWidth: 1.4,
     borderColor: 'rgba(0, 245, 255, 0.6)',
-    paddingVertical: 14,
+    paddingVertical: 13,
+    paddingHorizontal: 8,
     alignItems: 'center',
     justifyContent: 'center',
     elevation: 2,
+    overflow: 'hidden',
   },
   backBtnText: {
     fontSize: 12,
@@ -333,35 +443,30 @@ const localStyles = StyleSheet.create({
     fontWeight: '900',
     color: '#00F5FF',
     letterSpacing: 1,
-  },
-  replayBtn: {
-    flex: 1.25,
-    borderRadius: 12,
-    borderWidth: 1.4,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    paddingVertical: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 2,
+    textAlign: 'center',
   },
   replayBtnText: {
     fontSize: 11,
     fontFamily: monoFont,
     fontWeight: '900',
-    letterSpacing: 0.8,
+    letterSpacing: 0.5,
+    textAlign: 'center',
   },
   retryBtn: {
-    flex: 1.4,
+    flex: 1.85,
     borderRadius: 12,
-    paddingVertical: 14,
+    paddingVertical: 13,
+    paddingHorizontal: 10,
     alignItems: 'center',
     justifyContent: 'center',
     elevation: 3,
+    overflow: 'hidden',
   },
   retryBtnText: {
     fontSize: 12,
     fontFamily: monoFont,
     fontWeight: '900',
-    letterSpacing: 1,
+    letterSpacing: 0.7,
+    textAlign: 'center',
   },
 });

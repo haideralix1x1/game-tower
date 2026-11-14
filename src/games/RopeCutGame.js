@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -7,13 +7,11 @@ import {
   PanResponder,
   useWindowDimensions,
   Platform,
-  Pressable,
   TouchableOpacity,
 } from 'react-native';
 import Svg, {
   Line,
   Circle,
-  Rect,
   G,
   Defs,
   LinearGradient,
@@ -21,7 +19,6 @@ import Svg, {
   Stop,
   Path,
 } from 'react-native-svg';
-import { COLORS } from '../../styles';
 import MiniGameHeader from '../components/MiniGameHeader';
 import GameResultModal from '../components/GameResultModal';
 import JuiceEngine from '../components/JuiceEngine';
@@ -276,7 +273,9 @@ function createSpiderLevel(lvl, arenaW, arenaH) {
 
 export default function RopeCutGame({ onBackToHub, onScoreUpdate, isPaused = false }) {
   const isPausedRef = useRef(isPaused);
-  isPausedRef.current = isPaused;
+  useEffect(() => {
+    isPausedRef.current = isPaused;
+  }, [isPaused]);
   const { width, height } = useWindowDimensions();
   const arenaWidth = width;
   const arenaHeight = height - 130;
@@ -317,23 +316,26 @@ export default function RopeCutGame({ onBackToHub, onScoreUpdate, isPaused = fal
   const [modalType, setModalType] = useState('VICTORY');
 
   const spiderRef = useRef(spider);
-  spiderRef.current = spider;
   const ropesRef = useRef(ropes);
-  ropesRef.current = ropes;
   const hooksRef = useRef(hooks);
-  hooksRef.current = hooks;
   const webAimRef = useRef(webAim);
-  webAimRef.current = webAim;
   const nestRef = useRef(nest);
-  nestRef.current = nest;
   const starsRef = useRef(stars);
-  starsRef.current = stars;
   const bouncersRef = useRef(bouncers);
-  bouncersRef.current = bouncers;
   const portalsRef = useRef(portals);
-  portalsRef.current = portals;
   const lasersRef = useRef(lasers);
-  lasersRef.current = lasers;
+
+  useEffect(() => {
+    spiderRef.current = spider;
+    ropesRef.current = ropes;
+    hooksRef.current = hooks;
+    webAimRef.current = webAim;
+    nestRef.current = nest;
+    starsRef.current = stars;
+    bouncersRef.current = bouncers;
+    portalsRef.current = portals;
+    lasersRef.current = lasers;
+  }, [spider, ropes, hooks, webAim, nest, stars, bouncers, portals, lasers]);
 
   const dragModeRef = useRef('NONE');
   const touchLastPosRef = useRef(null);
@@ -342,24 +344,6 @@ export default function RopeCutGame({ onBackToHub, onScoreUpdate, isPaused = fal
   const portalCooldownRef = useRef(0);
   const animFrameRef = useRef(null);
   const isPlayingRef = useRef(true);
-
-  // Load saved progress
-  useEffect(() => {
-    (async () => {
-      try {
-        const savedLvl = await AsyncStorage.getItem(STORAGE_LEVEL_KEY);
-        const savedScore = await AsyncStorage.getItem(STORAGE_BEST_KEY);
-        if (savedLvl !== null) {
-          const pLvl = parseInt(savedLvl, 10);
-          if (!isNaN(pLvl) && pLvl >= 1) setLevel(pLvl);
-        }
-        if (savedScore !== null) {
-          const pScore = parseInt(savedScore, 10);
-          if (!isNaN(pScore)) setBestScore(pScore);
-        }
-      } catch {}
-    })();
-  }, []);
 
   // Update best score
   const updateBest = useCallback(
@@ -471,102 +455,140 @@ export default function RopeCutGame({ onBackToHub, onScoreUpdate, isPaused = fal
       setLasers(cfg.lasers);
       lasersRef.current = cfg.lasers;
     },
-    [arenaWidth, arenaHeight]
+    [
+      arenaWidth,
+      arenaHeight,
+      setStarsCollected,
+      setModalVisible,
+      setCutTrail,
+      setWebAim,
+      setLevelTitle,
+      setSpider,
+      setRopes,
+      setHooks,
+      setNest,
+      setStars,
+      setBouncers,
+      setPortals,
+      setLasers,
+    ]
   );
 
+  // Load saved progress
   useEffect(() => {
-    initLevel(level);
-  }, [level, initLevel]);
+    (async () => {
+      let initialLvl = 1;
+      try {
+        const savedLvl = await AsyncStorage.getItem(STORAGE_LEVEL_KEY);
+        const savedScore = await AsyncStorage.getItem(STORAGE_BEST_KEY);
+        if (savedLvl !== null) {
+          const pLvl = parseInt(savedLvl, 10);
+          if (!isNaN(pLvl) && pLvl >= 1) {
+            initialLvl = pLvl;
+            setLevel(pLvl);
+          }
+        }
+        if (savedScore !== null) {
+          const pScore = parseInt(savedScore, 10);
+          if (!isNaN(pScore)) setBestScore(pScore);
+        }
+      } catch {}
+      initLevel(initialLvl);
+    })();
+  }, [initLevel]);
 
   // PanResponder to slice ropes or shoot webs
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => !isPausedRef.current && isPlayingRef.current,
-      onMoveShouldSetPanResponder: () => !isPausedRef.current && isPlayingRef.current,
-      onPanResponderGrant: (evt) => {
-        const { locationX, locationY } = evt.nativeEvent;
-        touchLastPosRef.current = { x: locationX, y: locationY };
+  const panResponder = useMemo(
+    () =>
+      // eslint-disable-next-line react-hooks/refs
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => !isPausedRef.current && isPlayingRef.current,
+        onMoveShouldSetPanResponder: () => !isPausedRef.current && isPlayingRef.current,
+        onPanResponderGrant: (evt) => {
+          const { locationX, locationY } = evt.nativeEvent;
+          touchLastPosRef.current = { x: locationX, y: locationY };
 
-        // 1. Direct Tap on Hook: Shoot web immediately!
-        const currentHooks = hooksRef.current;
-        const tappedHook = currentHooks.find((h) => Math.hypot(locationX - h.x, locationY - h.y) < 32);
-        if (tappedHook) {
-          shootWebToHook(tappedHook);
-          dragModeRef.current = 'NONE';
-          return;
-        }
-
-        // 2. Spider Drag: Aim web towards any hook!
-        const curSpider = spiderRef.current;
-        const distToSpider = Math.hypot(locationX - curSpider.x, locationY - curSpider.y);
-        if (distToSpider < 44) {
-          dragModeRef.current = 'WEB';
-          const aimObj = {
-            fromX: curSpider.x,
-            fromY: curSpider.y,
-            toX: locationX,
-            toY: locationY,
-            targetHook: null,
-          };
-          webAimRef.current = aimObj;
-          setWebAim(aimObj);
-          triggerLightHaptic();
-          return;
-        }
-
-        // 3. Otherwise: Swipe to slice/cut ropes
-        dragModeRef.current = 'CUT';
-        setCutTrail({ x1: locationX, y1: locationY, x2: locationX, y2: locationY });
-        cutRopesAtPoint({ x: locationX, y: locationY }, { x: locationX, y: locationY });
-      },
-      onPanResponderMove: (evt) => {
-        const { locationX, locationY } = evt.nativeEvent;
-        const p1 = touchLastPosRef.current || { x: locationX, y: locationY };
-        const p2 = { x: locationX, y: locationY };
-        touchLastPosRef.current = p2;
-
-        if (dragModeRef.current === 'WEB') {
-          const curSpider = spiderRef.current;
+          // 1. Direct Tap on Hook: Shoot web immediately!
           const currentHooks = hooksRef.current;
-          let bestHook = null;
-          let minDist = 75;
-          for (let i = 0; i < currentHooks.length; i++) {
-            const h = currentHooks[i];
-            const d = Math.hypot(p2.x - h.x, p2.y - h.y);
-            if (d < minDist) {
-              minDist = d;
-              bestHook = h;
+          const tappedHook = currentHooks.find((h) => Math.hypot(locationX - h.x, locationY - h.y) < 32);
+          if (tappedHook) {
+            shootWebToHook(tappedHook);
+            dragModeRef.current = 'NONE';
+            return;
+          }
+
+          // 2. Spider Drag: Aim web towards any hook!
+          const curSpider = spiderRef.current;
+          const distToSpider = Math.hypot(locationX - curSpider.x, locationY - curSpider.y);
+          if (distToSpider < 44) {
+            dragModeRef.current = 'WEB';
+            const aimObj = {
+              fromX: curSpider.x,
+              fromY: curSpider.y,
+              toX: locationX,
+              toY: locationY,
+              targetHook: null,
+            };
+            webAimRef.current = aimObj;
+            setWebAim(aimObj);
+            triggerLightHaptic();
+            return;
+          }
+
+          // 3. Otherwise: Swipe to slice/cut ropes
+          dragModeRef.current = 'CUT';
+          setCutTrail({ x1: locationX, y1: locationY, x2: locationX, y2: locationY });
+          cutRopesAtPoint({ x: locationX, y: locationY }, { x: locationX, y: locationY });
+        },
+        onPanResponderMove: (evt) => {
+          const { locationX, locationY } = evt.nativeEvent;
+          const p1 = touchLastPosRef.current || { x: locationX, y: locationY };
+          const p2 = { x: locationX, y: locationY };
+          touchLastPosRef.current = p2;
+
+          if (dragModeRef.current === 'WEB') {
+            const curSpider = spiderRef.current;
+            const currentHooks = hooksRef.current;
+            let bestHook = null;
+            let minDist = 75;
+            for (let i = 0; i < currentHooks.length; i++) {
+              const h = currentHooks[i];
+              const d = Math.hypot(p2.x - h.x, p2.y - h.y);
+              if (d < minDist) {
+                minDist = d;
+                bestHook = h;
+              }
+            }
+            const aimObj = {
+              fromX: curSpider.x,
+              fromY: curSpider.y,
+              toX: p2.x,
+              toY: p2.y,
+              targetHook: bestHook,
+            };
+            webAimRef.current = aimObj;
+            setWebAim(aimObj);
+          } else if (dragModeRef.current === 'CUT') {
+            setCutTrail({ x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y });
+            cutRopesAtPoint(p1, p2);
+          }
+        },
+        onPanResponderRelease: () => {
+          if (dragModeRef.current === 'WEB') {
+            const aim = webAimRef.current;
+            if (aim && aim.targetHook) {
+              shootWebToHook(aim.targetHook);
             }
           }
-          const aimObj = {
-            fromX: curSpider.x,
-            fromY: curSpider.y,
-            toX: p2.x,
-            toY: p2.y,
-            targetHook: bestHook,
-          };
-          webAimRef.current = aimObj;
-          setWebAim(aimObj);
-        } else if (dragModeRef.current === 'CUT') {
-          setCutTrail({ x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y });
-          cutRopesAtPoint(p1, p2);
-        }
-      },
-      onPanResponderRelease: () => {
-        if (dragModeRef.current === 'WEB') {
-          const aim = webAimRef.current;
-          if (aim && aim.targetHook) {
-            shootWebToHook(aim.targetHook);
-          }
-        }
-        dragModeRef.current = 'NONE';
-        touchLastPosRef.current = null;
-        setCutTrail(null);
-        setWebAim(null);
-        webAimRef.current = null;
-      },
-    })
-  ).current;
+          dragModeRef.current = 'NONE';
+          touchLastPosRef.current = null;
+          setCutTrail(null);
+          setWebAim(null);
+          webAimRef.current = null;
+        },
+      }),
+    [shootWebToHook, cutRopesAtPoint]
+  );
 
   // Level Win & Level Fail
   const handleWin = useCallback(() => {
