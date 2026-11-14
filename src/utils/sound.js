@@ -74,6 +74,13 @@ export const playPerfectSound = (_comboCount = 1) => {
   perfectPool.play();
 };
 
+export const playWordSolvedSound = () => {
+  perfectPool.play();
+  setTimeout(() => {
+    speedUpPool.play();
+  }, 75);
+};
+
 export const playSpeedUpSound = () => {
   speedUpPool.play();
 };

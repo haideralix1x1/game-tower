@@ -276,7 +276,13 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
       setBarriers(cfg.barriers || []);
       barriersRef.current = cfg.barriers || [];
 
-      const doorObj = { ...cfg.exitDoor, permanentlyUnlocked: false };
+      const doorObj = {
+        ...cfg.exitDoor,
+        permanentlyUnlocked: false,
+        isFalling: false,
+        vy: 0,
+        vx: 0,
+      };
       setExitDoor(doorObj);
       exitDoorRef.current = doorObj;
 
@@ -413,11 +419,14 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
     gravityInvertedRef.current = nextInv;
     setGravityInverted(nextInv);
 
-    // If on rail (Level 9), heavy door slides down rail!
+    // If on rail (Level 9), heavy door slides down rail with real physics!
     if (gravityTiltableRef.current) {
       const curDoor = { ...exitDoorRef.current };
-      curDoor.y = 254;
-      curDoor.x = 290;
+      curDoor.isFalling = true;
+      curDoor.targetY = 254;
+      curDoor.targetX = 290;
+      curDoor.vy = 0.8;
+      curDoor.vx = -1.0;
       exitDoorRef.current = curDoor;
       setExitDoor(curDoor);
     }
@@ -518,15 +527,18 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
             setWindowObj({ ...curWin });
             setWindActive(true);
             const curDoor = { ...exitDoorRef.current };
-            curDoor.y = 254;
-            curDoor.x = 290;
+            curDoor.isFalling = true;
+            curDoor.targetY = 254;
+            curDoor.targetX = 290;
+            curDoor.vy = 0.6;
+            curDoor.vx = -1.4;
             exitDoorRef.current = curDoor;
-            setExitDoor(curDoor);
+            setExitDoor({ ...curDoor });
             playSliceSound();
             triggerMediumHaptic();
             if (juiceRef.current) {
-              juiceRef.current.shake(12, 10);
-              juiceRef.current.burst(curWin.x, curWin.y, '#00F5FF', 16);
+              juiceRef.current.shake(14, 12);
+              juiceRef.current.burst(curWin.x, curWin.y, '#00F5FF', 18);
             }
             return;
           }
@@ -1074,8 +1086,8 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
         if (!d.dug) solids.push({ x: d.x, y: d.y, w: d.w, h: d.h });
       });
 
-      // Door as solid stepping platform if isPlatform
-      if (curDoor && curDoor.isPlatform) {
+      // Door as solid stepping platform if isPlatform (only once stationary)
+      if (curDoor && curDoor.isPlatform && !curDoor.isFalling) {
         solids.push({ x: curDoor.x, y: curDoor.y, w: curDoor.w, h: 8 });
       }
 
@@ -1225,14 +1237,25 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
         triggerMediumHaptic();
         playTapSound();
         if (curEq.remainingStomps === 0) {
-          curDoor.y = 254;
-          curDoor.x = 290;
+          curDoor.isFalling = true;
+          curDoor.targetY = 254;
+          curDoor.targetX = curDoor.x;
+          curDoor.vy = 1.0;
+          curDoor.vx = 0;
           curEq.settled = true;
           exitDoorRef.current = curDoor;
           setExitDoor({ ...curDoor });
           triggerPerfectHaptic(2);
           if (juiceRef.current) {
-            juiceRef.current.burst(curDoor.x + 14, curDoor.y + 20, '#FFE600', 18);
+            juiceRef.current.burst(curDoor.x + (curDoor.w || 28) / 2, curDoor.y + 20, '#FFE600', 18);
+          }
+        } else {
+          // Slide door down slightly on each intermediate stomp with dust & clank!
+          curDoor.y += 24;
+          exitDoorRef.current = curDoor;
+          setExitDoor({ ...curDoor });
+          if (juiceRef.current) {
+            juiceRef.current.burst(curDoor.x + (curDoor.w || 28) / 2, curDoor.y + (curDoor.h || 42), '#FFE600', 10);
           }
         }
         earthquakeRef.current = { ...curEq };
@@ -1501,6 +1524,64 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
         }
       }
 
+      // Dynamic Falling Door Physics with Gravity, Wind Drift & Floor Bounce
+      if (curDoor && curDoor.isFalling) {
+        curDoor.vy = (curDoor.vy || 0) + 0.52;
+        curDoor.vy = Math.min(curDoor.vy, 11);
+        curDoor.y += curDoor.vy;
+
+        if (curDoor.vx) {
+          curDoor.x += curDoor.vx;
+          curDoor.vx *= 0.94;
+        }
+
+        // Clamp inside chamber horizontal boundaries
+        curDoor.x = Math.max(14, Math.min(GAME_W - (curDoor.w || 28) - 14, curDoor.x));
+
+        // Determine ground/platform landing Y
+        let landingY = curDoor.targetY ?? 254;
+        for (let pl of curPlatforms) {
+          if (!pl.collapsed && pl.id !== 'floor') {
+            const midX = curDoor.x + (curDoor.w || 28) / 2;
+            if (midX >= pl.x - 2 && midX <= pl.x + pl.w + 2) {
+              const topPl = pl.y - (curDoor.h || 42);
+              if (topPl >= 40 && topPl < landingY && curDoor.y + (curDoor.h || 42) >= pl.y) {
+                landingY = topPl;
+                break;
+              }
+            }
+          }
+        }
+
+        if (curDoor.y >= landingY) {
+          curDoor.y = landingY;
+          if (curDoor.vy > 2.0) {
+            // Realistic elastic bounce
+            curDoor.vy = -curDoor.vy * 0.28;
+            playTapSound();
+            triggerMediumHaptic();
+            if (juiceRef.current) {
+              juiceRef.current.shake(10, 8);
+              juiceRef.current.burst(curDoor.x + (curDoor.w || 28) / 2, curDoor.y + (curDoor.h || 42), '#00F5FF', 14);
+            }
+          } else {
+            // Settle on ground firmly
+            curDoor.vy = 0;
+            curDoor.vx = 0;
+            curDoor.isFalling = false;
+            playPerfectSound(3);
+            triggerPerfectHaptic(2);
+            if (juiceRef.current) {
+              juiceRef.current.shake(8, 6);
+              juiceRef.current.burst(curDoor.x + (curDoor.w || 28) / 2, curDoor.y + (curDoor.h || 42) / 2, '#FFE600', 20);
+            }
+          }
+        }
+
+        exitDoorRef.current = curDoor;
+        setExitDoor({ ...curDoor });
+      }
+
       // 7. Check Exit Door Unlock Condition
       const allKeysCollected = curKeys.every((k) => k.taken);
       const allPlatesPressed = curPlates.length === 0 || curPlates.every((pl) => pl.pressed);
@@ -1533,7 +1614,7 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
       }
 
       // 8. Player Enters Exit Door
-      if (!curDoor.locked) {
+      if (!curDoor.locked && !curDoor.isFalling) {
         const inDoor =
           p.x + PLAYER_W > curDoor.x + 6 &&
           p.x < curDoor.x + curDoor.w - 6 &&
@@ -2164,6 +2245,18 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
 
               {/* Exit Door */}
               <G transform={`translate(${exitDoor.x}, ${exitDoor.y})`}>
+                {exitDoor.isFalling && (
+                  <Line
+                    x1={exitDoor.w / 2}
+                    y1={-12}
+                    x2={exitDoor.w / 2}
+                    y2={0}
+                    stroke="#00F5FF"
+                    strokeWidth={2.5}
+                    strokeDasharray="4 2"
+                    opacity={0.85}
+                  />
+                )}
                 <Rect
                   x={0}
                   y={0}

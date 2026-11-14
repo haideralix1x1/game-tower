@@ -29,6 +29,7 @@ import {
   playTapSound,
   playSliceSound,
   playPerfectSound,
+  playWordSolvedSound,
   playGameOverSound,
 } from '../utils/sound';
 
@@ -411,7 +412,7 @@ export default function WordScrambleGame({ onBackToHub, onScoreUpdate, isPaused 
       setFeedbackMsg(`+${pts} PTS! "${word}" FOUND!`);
 
       triggerPerfectHaptic(Math.min(5, word.length));
-      playPerfectSound(Math.min(5, word.length));
+      playWordSolvedSound();
 
       if (newScore > bestScoreRef.current) {
         setBestScore(newScore);
@@ -511,6 +512,7 @@ export default function WordScrambleGame({ onBackToHub, onScoreUpdate, isPaused 
   // Pattern Lock Swipe Gesture & Connection Trail State
   const [patternTrail, setPatternTrail] = useState([]);
   const [dragPointer, setDragPointer] = useState(null);
+  const [isPatternCelebrating, setIsPatternCelebrating] = useState(false);
   const patternTrailRef = useRef([]);
   const isDraggingPatternRef = useRef(false);
 
@@ -663,19 +665,54 @@ export default function WordScrambleGame({ onBackToHub, onScoreUpdate, isPaused 
         },
         onPanResponderRelease: () => {
           if (isDraggingPatternRef.current) {
-            const trail = patternTrailRef.current;
+            const trail = [...patternTrailRef.current];
             if (trail.length >= 2) {
               const word = trail.map((idx) => shuffledLettersRef.current[idx]).join('');
+              const isNewValid = isValidWord(word) && !foundWordsRef.current.includes(word);
+              if (isNewValid) {
+                // Glorious celebration flash on the pattern lines
+                setIsPatternCelebrating(true);
+
+                // Cascade burst of glowing particles along each letter node in the trail!
+                const dialX = dialBoundsRef.current?.x || (width - dialSize) / 2;
+                const dialY = dialBoundsRef.current?.y || (height * 0.6);
+                const sparkColors = ['#00F5FF', '#FFE600', '#39FF14', '#FF007F'];
+                trail.forEach((idx, i) => {
+                  const pt = getLetterCenter(idx);
+                  const nx = dialX + pt.x;
+                  const ny = dialY + pt.y;
+                  setTimeout(() => {
+                    juiceRef.current?.burst(nx, ny, sparkColors[i % sparkColors.length], 20);
+                  }, i * 40);
+                });
+
+                // Central celebratory burst on the dial
+                setTimeout(() => {
+                  juiceRef.current?.burst(dialX + dialSize / 2, dialY + dialSize / 2, '#FFE600', 32);
+                }, trail.length * 40);
+
+                setTimeout(() => {
+                  setIsPatternCelebrating(false);
+                  patternTrailRef.current = [];
+                  setPatternTrail([]);
+                  setSelectedIndices([]);
+                }, 300);
+              } else {
+                patternTrailRef.current = [];
+                setPatternTrail([]);
+                setSelectedIndices([]);
+              }
+
               if (submitWordValueRef.current) {
                 submitWordValueRef.current(word);
               }
             } else {
+              patternTrailRef.current = [];
+              setPatternTrail([]);
               setSelectedIndices([]);
             }
           }
           isDraggingPatternRef.current = false;
-          patternTrailRef.current = [];
-          setPatternTrail([]);
           setDragPointer(null);
         },
         onPanResponderTerminate: () => {
@@ -693,6 +730,9 @@ export default function WordScrambleGame({ onBackToHub, onScoreUpdate, isPaused 
       getClosestLetter,
       letterBtnSize,
       dialSize,
+      getLetterCenter,
+      height,
+      width,
     ]
   );
 
@@ -861,6 +901,10 @@ export default function WordScrambleGame({ onBackToHub, onScoreUpdate, isPaused 
                   <Stop offset="0%" stopColor="#00F5FF" stopOpacity="0.85" />
                   <Stop offset="100%" stopColor="#00F5FF" stopOpacity="0" />
                 </RadialGradient>
+                <RadialGradient id="nodeGlowGold" cx="50%" cy="50%" rx="50%" ry="50%">
+                  <Stop offset="0%" stopColor="#FFE600" stopOpacity="0.95" />
+                  <Stop offset="100%" stopColor="#FFE600" stopOpacity="0" />
+                </RadialGradient>
               </Defs>
 
               {/* Connected lines between selected pattern letters */}
@@ -868,6 +912,10 @@ export default function WordScrambleGame({ onBackToHub, onScoreUpdate, isPaused 
                 if (i === 0) return null;
                 const prev = getLetterCenter(patternTrail[i - 1]);
                 const curr = getLetterCenter(idx);
+                const glowColor = isPatternCelebrating ? '#FFE600' : '#00F5FF';
+                const glowWidth = isPatternCelebrating ? 18 : 14;
+                const coreColor = '#FFFFFF';
+                const coreWidth = isPatternCelebrating ? 5.5 : 4.5;
                 return (
                   <G key={`pat_seg_${i}`}>
                     {/* Outer Neon Glow Beam */}
@@ -876,10 +924,10 @@ export default function WordScrambleGame({ onBackToHub, onScoreUpdate, isPaused 
                       y1={prev.y}
                       x2={curr.x}
                       y2={curr.y}
-                      stroke="#00F5FF"
-                      strokeWidth={14}
+                      stroke={glowColor}
+                      strokeWidth={glowWidth}
                       strokeLinecap="round"
-                      opacity={0.32}
+                      opacity={isPatternCelebrating ? 0.65 : 0.32}
                     />
                     {/* Inner Core Bright Beam */}
                     <Line
@@ -887,10 +935,10 @@ export default function WordScrambleGame({ onBackToHub, onScoreUpdate, isPaused 
                       y1={prev.y}
                       x2={curr.x}
                       y2={curr.y}
-                      stroke="#FFFFFF"
-                      strokeWidth={4.5}
+                      stroke={coreColor}
+                      strokeWidth={coreWidth}
                       strokeLinecap="round"
-                      opacity={0.95}
+                      opacity={0.98}
                     />
                   </G>
                 );
@@ -942,8 +990,8 @@ export default function WordScrambleGame({ onBackToHub, onScoreUpdate, isPaused 
                 const pt = getLetterCenter(idx);
                 return (
                   <G key={`pat_node_${idx}`}>
-                    <Circle cx={pt.x} cy={pt.y} r={letterBtnSize * 0.52} fill="url(#nodeGlow)" />
-                    <Circle cx={pt.x} cy={pt.y} r={letterBtnSize * 0.44} stroke="#00F5FF" strokeWidth={2.5} fill="none" />
+                    <Circle cx={pt.x} cy={pt.y} r={letterBtnSize * (isPatternCelebrating ? 0.62 : 0.52)} fill={isPatternCelebrating ? "url(#nodeGlowGold)" : "url(#nodeGlow)"} />
+                    <Circle cx={pt.x} cy={pt.y} r={letterBtnSize * 0.44} stroke={isPatternCelebrating ? "#FFE600" : "#00F5FF"} strokeWidth={isPatternCelebrating ? 3.5 : 2.5} fill="none" />
                   </G>
                 );
               })}
