@@ -8,7 +8,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import Svg, { Path, Polygon, Circle, Rect, G, Ellipse, Line } from 'react-native-svg';
+import Svg, { Polygon, Circle, Ellipse, Line } from 'react-native-svg';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS } from '../../styles';
 import MiniGameHeader from '../components/MiniGameHeader';
@@ -44,7 +44,9 @@ const POWERUP_SLOWMO = 'SLOWMO';
 
 export default function NeonFlappyGame({ onBackToHub, onScoreUpdate, isPaused = false }) {
   const isPausedRef = useRef(isPaused);
-  isPausedRef.current = isPaused;
+  useEffect(() => {
+    isPausedRef.current = isPaused;
+  }, [isPaused]);
   const { width, height } = useWindowDimensions();
   const arenaWidth = Math.min(380, width - 24);
   const arenaHeight = Math.min(490, Math.max(350, height - 190));
@@ -74,8 +76,6 @@ export default function NeonFlappyGame({ onBackToHub, onScoreUpdate, isPaused = 
   const [score, setScore] = useState(0);
   const [bestScore, setBestScore] = useState(0);
   const [status, setStatus] = useState('READY');
-  const [hasShield, setHasShield] = useState(false);
-  const [activePowerUp, setActivePowerUp] = useState(null);
 
   const [frame, setFrame] = useState({
     droneY: arenaHeight * 0.45,
@@ -83,6 +83,7 @@ export default function NeonFlappyGame({ onBackToHub, onScoreUpdate, isPaused = 
     enemies: [],
     pickups: [],
     lasers: [],
+    particles: [],
     hasShield: false,
     activePowerUp: null,
   });
@@ -95,6 +96,8 @@ export default function NeonFlappyGame({ onBackToHub, onScoreUpdate, isPaused = 
     enemies: [],
     pickups: [],
     lasers: [],
+    particles: [],
+    particleTimer: 0,
     spawnTimer: 0,
     enemySpawnTimer: 0,
     laserCooldown: 0,
@@ -144,6 +147,8 @@ export default function NeonFlappyGame({ onBackToHub, onScoreUpdate, isPaused = 
       enemies: [],
       pickups: [],
       lasers: [],
+      particles: [],
+      particleTimer: 0,
       spawnTimer: 0,
       enemySpawnTimer: 0,
       laserCooldown: 0,
@@ -156,14 +161,13 @@ export default function NeonFlappyGame({ onBackToHub, onScoreUpdate, isPaused = 
     };
     setScore(0);
     setStatus('READY');
-    setHasShield(false);
-    setActivePowerUp(null);
     setFrame({
       droneY: arenaHeight * 0.45,
       pipes: [],
       enemies: [],
       pickups: [],
       lasers: [],
+      particles: [],
       hasShield: false,
       activePowerUp: null,
     });
@@ -182,6 +186,27 @@ export default function NeonFlappyGame({ onBackToHub, onScoreUpdate, isPaused = 
     eng.vy = -320;
     triggerLightHaptic();
     playTapSound();
+
+    // Burst of glowing plasma particles behind the jet plane on thrust tap
+    const burstColors = ['#FFFFFF', '#00F5FF', '#00F5D4', '#FF007F', '#FFE600'];
+    const pList = eng.particles ? [...eng.particles] : [];
+    for (let i = 0; i < 7; i++) {
+      const pColor = burstColors[Math.floor(Math.random() * burstColors.length)];
+      pList.push({
+        id: `tp_${Date.now()}_${Math.random()}`,
+        x: droneX - 10 + (Math.random() - 0.5) * 4,
+        y: eng.droneY + 13 + (Math.random() - 0.5) * 6,
+        vx: -130 - Math.random() * 100,
+        vy: (Math.random() - 0.5) * 70,
+        size: 4 + Math.random() * 4,
+        currentSize: 4 + Math.random() * 4,
+        color: pColor,
+        alpha: 1,
+        life: 0.35 + Math.random() * 0.25,
+        maxLife: 0.35 + Math.random() * 0.25,
+      });
+    }
+    eng.particles = pList.slice(-60);
 
     // Shoot blaster laser if active
     if (eng.blasterTimer > 0) {
@@ -249,7 +274,6 @@ export default function NeonFlappyGame({ onBackToHub, onScoreUpdate, isPaused = 
         if (eng.droneY <= 0 || eng.droneY + droneSize >= arenaHeight) {
           if (eng.shield) {
             eng.shield = false;
-            setHasShield(false);
             eng.vy = eng.droneY <= 0 ? 120 : -220;
             eng.droneY = Math.max(2, Math.min(arenaHeight - droneSize - 2, eng.droneY));
             triggerMediumHaptic();
@@ -266,6 +290,43 @@ export default function NeonFlappyGame({ onBackToHub, onScoreUpdate, isPaused = 
               juiceRef.current.flash(COLORS.danger);
             }
           }
+        }
+
+        // Continuous Exhaust Particle Stream from Behind Plane
+        eng.particleTimer = (eng.particleTimer || 0) + dt;
+        if (eng.particleTimer >= 0.03) {
+          eng.particleTimer = 0;
+          const trailColors = ['#00F5FF', '#00F5D4', '#FFFFFF', '#39FF14'];
+          const pColor = trailColors[Math.floor(Math.random() * trailColors.length)];
+          const pList = eng.particles || [];
+          pList.push({
+            id: `ep_${Date.now()}_${Math.random()}`,
+            x: droneX - 9 + (Math.random() - 0.5) * 3,
+            y: eng.droneY + 13 + (Math.random() - 0.5) * 4,
+            vx: -currentSpeed * 0.8 - 45 - Math.random() * 50,
+            vy: (Math.random() - 0.5) * 26 - (eng.vy * 0.05),
+            size: 3.5 + Math.random() * 3,
+            currentSize: 3.5 + Math.random() * 3,
+            color: pColor,
+            alpha: 0.95,
+            life: 0.38 + Math.random() * 0.22,
+            maxLife: 0.38 + Math.random() * 0.22,
+          });
+          eng.particles = pList.slice(-60);
+        }
+
+        // Update & Age Exhaust Particles
+        if (eng.particles && eng.particles.length > 0) {
+          eng.particles = eng.particles.filter((p) => {
+            p.life -= dt;
+            if (p.life <= 0) return false;
+            p.x += p.vx * dt;
+            p.y += p.vy * dt;
+            const progress = p.life / p.maxLife;
+            p.alpha = Math.max(0, Math.min(1, progress * 0.95));
+            p.currentSize = Math.max(1, p.size * (0.35 + 0.65 * progress));
+            return p.x > -25 && p.y > -20 && p.y < arenaHeight + 20;
+          });
         }
 
         // 1. Pipe Spawning & Gradual Scaling
@@ -408,7 +469,6 @@ export default function NeonFlappyGame({ onBackToHub, onScoreUpdate, isPaused = 
           if (colX && colY) {
             if (eng.shield) {
               eng.shield = false;
-              setHasShield(false);
               triggerMediumHaptic();
               playSpeedUpSound();
               juiceRef.current?.burst(en.x, en.y, '#00F5FF', 14);
@@ -450,7 +510,6 @@ export default function NeonFlappyGame({ onBackToHub, onScoreUpdate, isPaused = 
               juiceRef.current?.popup('💎 +15 SHARD!', 'ENERGY RESTORED', COLORS.matrixMint);
             } else if (pick.type === POWERUP_SHIELD) {
               eng.shield = true;
-              setHasShield(true);
               juiceRef.current?.popup('🛡️ CYBER SHIELD ARMED!', 'Absorbs 1 Collision', COLORS.cyan);
             } else if (pick.type === POWERUP_BLASTER) {
               eng.blasterTimer = 7.0;
@@ -491,7 +550,6 @@ export default function NeonFlappyGame({ onBackToHub, onScoreUpdate, isPaused = 
           if (inX && (hitTop || hitBottom)) {
             if (eng.shield) {
               eng.shield = false;
-              setHasShield(false);
               eng.droneY = p.topH + pipeGap / 2 - droneSize / 2;
               eng.vy = 0;
               triggerMediumHaptic();
@@ -536,9 +594,26 @@ export default function NeonFlappyGame({ onBackToHub, onScoreUpdate, isPaused = 
           enemies: [...eng.enemies],
           pickups: [...eng.pickups],
           lasers: [...eng.lasers],
+          particles: [...(eng.particles || [])],
           hasShield: eng.shield,
           activePowerUp: eng.blasterTimer > 0 ? '⚡ BLASTER' : eng.slowTimer > 0 ? '⏱️ SLOW-MO' : null,
         });
+      } else if (eng.particles && eng.particles.length > 0) {
+        // Dissipate lingering exhaust particles on game over
+        eng.particles = eng.particles.filter((p) => {
+          p.life -= rawDt;
+          if (p.life <= 0) return false;
+          p.x += p.vx * rawDt;
+          p.y += p.vy * rawDt;
+          const progress = p.life / p.maxLife;
+          p.alpha = Math.max(0, progress * 0.9);
+          p.currentSize = Math.max(1, p.size * (0.35 + 0.65 * progress));
+          return p.x > -25;
+        });
+        setFrame((prev) => ({
+          ...prev,
+          particles: [...(eng.particles || [])],
+        }));
       }
 
       rafId = requestAnimationFrame(loop);
@@ -693,6 +768,29 @@ export default function NeonFlappyGame({ onBackToHub, onScoreUpdate, isPaused = 
                     top: lz.y,
                   },
                 ]}
+              />
+            ))}
+
+            {/* Jet Exhaust Particle Trail Behind Plane */}
+            {frame.particles && frame.particles.map((p) => (
+              <View
+                key={p.id}
+                pointerEvents="none"
+                style={{
+                  position: 'absolute',
+                  left: p.x - p.currentSize / 2,
+                  top: p.y - p.currentSize / 2,
+                  width: p.currentSize,
+                  height: p.currentSize,
+                  borderRadius: p.currentSize / 2,
+                  backgroundColor: p.color,
+                  opacity: p.alpha,
+                  shadowColor: p.color,
+                  shadowOffset: { width: 0, height: 0 },
+                  shadowOpacity: 0.9,
+                  shadowRadius: 5,
+                  elevation: 2,
+                }}
               />
             ))}
 
