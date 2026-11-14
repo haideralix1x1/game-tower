@@ -1,8 +1,7 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
-  Pressable,
   StyleSheet,
   Platform,
   useWindowDimensions,
@@ -18,8 +17,8 @@ import Svg, {
   Defs,
   LinearGradient,
   Stop,
+  Ellipse,
 } from 'react-native-svg';
-import { COLORS } from '../../styles';
 import MiniGameHeader from '../components/MiniGameHeader';
 import JuiceEngine from '../components/JuiceEngine';
 import GameResultModal from '../components/GameResultModal';
@@ -59,128 +58,18 @@ const PLAYER_H = 28;
 const CRATE_SIZE = 26;
 
 /**
- * 100 Unique Interactive Unexpected Puzzle Escape Chambers
- * - Rooms 1-8: Hand-crafted introductory mechanic puzzles
- * - Rooms 9-100+: Procedural multi-mechanic puzzle chambers with escalating difficulty
+ * 100 Strictly Unique Hand-Crafted Puzzle Escape Chambers
+ * All 100 levels authored with escalating difficulty and zero repeated tricks.
  */
 function getRoomConfig(lvl) {
-  if (lvl > 8) {
-    return getGeneratedRoom(lvl);
-  }
-  const roomIndex = (lvl - 1) % 8;
-
-  // Defaults
-  let title = 'TUTORIAL VAULT';
-  let hint = 'FIND THE ESCAPE SOLUTION';
-  let playerStart = { x: 30, y: 260 };
-  let exitDoor = { x: 310, y: 254, w: 28, h: 42, locked: true, isDraggable: false };
-  let platforms = [
-    // Floor
-    { id: 'floor', x: 0, y: 300, w: 360, h: 40 },
-    // Outer walls
-    { id: 'w_left', x: 0, y: 0, w: 12, h: 300 },
-    { id: 'w_right', x: 348, y: 0, w: 12, h: 300 },
-    // Ceiling
-    { id: 'ceiling', x: 0, y: 0, w: 360, h: 12 },
-  ];
-  let crates = [];
-  let switches = [];
-  let keys = [];
-  let plates = [];
-  let hazards = [];
-  let barriers = [];
-  let plug = null;
-  let padlock = null;
-
-  if (roomIndex === 0) {
-    // Room 1: Unreachable Floating Key -> Drag it down!
-    title = 'CHAMBER 01: UNREACHABLE KEY';
-    hint = 'CANNOT JUMP TO KEY? DRAG IT DOWN WITH YOUR FINGER!';
-    // No platforms under the key! High floating key
-    keys.push({ id: 'k1', x: 190, y: 110, taken: false, color: '#FFD166', isDraggable: true });
-  } else if (roomIndex === 1) {
-    // Room 2: Movable Metal Slab blocks Laser
-    title = 'CHAMBER 02: LASER INTERCEPT';
-    hint = 'DRAG THE FLOATING METAL SLAB TO BLOCK THE LASER!';
-    platforms.push(
-      { id: 'mov_p1', x: 140, y: 120, w: 55, h: 16, isDraggable: true, color: '#FFE600' }
-    );
-    barriers.push({ id: 'b1', x: 230, y: 190, w: 8, h: 110, active: true, color: '#FF0055' });
-    switches.push({ id: 'sw1', x: 280, y: 270, active: false });
-  } else if (roomIndex === 2) {
-    // Room 3: Draggable Crates to climb high wall
-    title = 'CHAMBER 03: CRATE ELEVATION';
-    hint = 'DRAG & DROP THE CRATES TO BUILD ESCAPE STAIRS!';
-    platforms.push(
-      { id: 'plateau', x: 200, y: 190, w: 160, h: 110 }
-    );
-    exitDoor = { x: 310, y: 148, w: 28, h: 42, locked: true, isDraggable: false };
-    crates.push(
-      { id: 'c1', x: 50, y: 270, vx: 0, vy: 0, isDraggable: true },
-      { id: 'c2', x: 100, y: 270, vx: 0, vy: 0, isDraggable: true }
-    );
-    keys.push({ id: 'k1', x: 250, y: 155, taken: false, color: '#00F5FF', isDraggable: true });
-  } else if (roomIndex === 3) {
-    // Room 4: The Movable Exit Door!
-    title = 'CHAMBER 04: THE MOVABLE EXIT';
-    hint = 'DOOR IS TOO HIGH? GRAB AND DRAG THE DOOR DOWN!';
-    // Door is stranded near ceiling
-    exitDoor = { x: 310, y: 55, w: 28, h: 42, locked: true, isDraggable: true };
-    keys.push({ id: 'k1', x: 160, y: 275, taken: false, color: '#FFD166', isDraggable: true });
-  } else if (roomIndex === 4) {
-    // Room 5: Two-Finger Pressure Plate Override
-    title = 'CHAMBER 05: TWO-FINGER OVERRIDE';
-    hint = 'WALK ONTO PLATE A — HOLD YOUR FINGER ON PLATE B!';
-    plates.push(
-      { id: 'p1', x: 70, y: 295, w: 38, h: 6, pressed: false, pressedByFinger: false },
-      { id: 'p2', x: 220, y: 295, w: 38, h: 6, pressed: false, pressedByFinger: false }
-    );
-    exitDoor = { x: 310, y: 254, w: 28, h: 42, locked: true, requiresDualPlates: true };
-  } else if (roomIndex === 5) {
-    // Room 6: Spike Bridge Builder
-    title = 'CHAMBER 06: SPIKE BRIDGE BUILDER';
-    hint = 'DRAG THE MAGNETIC SLABS OVER THE SPIKE CHASM!';
-    hazards.push({ x: 90, y: 286, w: 160, h: 14, type: 'SPIKES' });
-    platforms.push(
-      { id: 'bridge_a', x: 70, y: 140, w: 65, h: 14, isDraggable: true, color: '#00F5D4' },
-      { id: 'bridge_b', x: 180, y: 140, w: 65, h: 14, isDraggable: true, color: '#00F5D4' }
-    );
-    keys.push({ id: 'k1', x: 290, y: 275, taken: false, color: '#39FF14', isDraggable: true });
-  } else if (roomIndex === 6) {
-    // Room 7: Pull the Power Plug!
-    title = 'CHAMBER 07: PULL THE PLUG';
-    hint = 'GATE LOCKED? DRAG & YANK THE POWER PLUG FROM WALL!';
-    barriers.push({ id: 'b1', x: 240, y: 200, w: 10, h: 100, active: true, color: '#FF0055' });
-    plug = { id: 'plug1', x: 65, y: 180, plugged: true };
-    exitDoor = { x: 310, y: 254, w: 28, h: 42, locked: false };
-  } else {
-    // Room 8: Rip the Padlock Off!
-    title = 'CHAMBER 08: RIP THE PADLOCK';
-    hint = 'NO KEYCARD FOUND? TOUCH & RIP PADLOCK OFF THE DOOR!';
-    exitDoor = { x: 310, y: 254, w: 28, h: 42, locked: true };
-    padlock = { id: 'pad1', x: 316, y: 268, onDoor: true };
-  }
-
-  return {
-    title,
-    hint,
-    playerStart,
-    exitDoor,
-    platforms,
-    crates,
-    switches,
-    keys,
-    plates,
-    hazards,
-    barriers,
-    plug,
-    padlock,
-  };
+  return getGeneratedRoom(lvl);
 }
 
 export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = false }) {
   const isPausedRef = useRef(isPaused);
-  isPausedRef.current = isPaused;
+  useEffect(() => {
+    isPausedRef.current = isPaused;
+  }, [isPaused]);
 
   const { width } = useWindowDimensions();
   const arenaScale = Math.min(1, (width - 24) / GAME_W);
@@ -212,6 +101,15 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
   const [plug, setPlug] = useState(null);
   const [padlock, setPadlock] = useState(null);
 
+  // New Interactive Chamber Puzzle Entities
+  const [springs, setSprings] = useState([]);
+  const [fans, setFans] = useState([]);
+  const [portals, setPortals] = useState([]);
+  const [battery, setBattery] = useState(null);
+  const [socket, setSocket] = useState(null);
+  const [receptors, setReceptors] = useState([]);
+  const [gravityInverted, setGravityInverted] = useState(false);
+
   const [modalVisible, setModalVisible] = useState(false);
   const [modalType, setModalType] = useState('VICTORY');
   const [failReason, setFailReason] = useState('');
@@ -222,48 +120,193 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
   const animFrameRef = useRef(null);
   const isPlayingRef = useRef(true);
   const draggedEntityRef = useRef(null);
+  const portalCooldownRef = useRef(0);
 
   // Sync refs for 60 FPS physics
   const playerRef = useRef(player);
-  playerRef.current = player;
   const cratesRef = useRef(crates);
-  cratesRef.current = crates;
   const platformsRef = useRef(platforms);
-  platformsRef.current = platforms;
   const switchesRef = useRef(switches);
-  switchesRef.current = switches;
   const keysRef = useRef(keys);
-  keysRef.current = keys;
   const platesRef = useRef(plates);
-  platesRef.current = plates;
   const hazardsRef = useRef(hazards);
-  hazardsRef.current = hazards;
   const barriersRef = useRef(barriers);
-  barriersRef.current = barriers;
   const exitDoorRef = useRef(exitDoor);
-  exitDoorRef.current = exitDoor;
   const plugRef = useRef(plug);
-  plugRef.current = plug;
   const padlockRef = useRef(padlock);
-  padlockRef.current = padlock;
+  const springsRef = useRef(springs);
+  const fansRef = useRef(fans);
+  const portalsRef = useRef(portals);
+  const batteryRef = useRef(battery);
+  const socketRef = useRef(socket);
+  const receptorsRef = useRef(receptors);
+  const gravityInvertedRef = useRef(gravityInverted);
+
+  // Sync refs in useEffect to cleanly comply with React rules
+  useEffect(() => {
+    playerRef.current = player;
+    cratesRef.current = crates;
+    platformsRef.current = platforms;
+    switchesRef.current = switches;
+    keysRef.current = keys;
+    platesRef.current = plates;
+    hazardsRef.current = hazards;
+    barriersRef.current = barriers;
+    exitDoorRef.current = exitDoor;
+    plugRef.current = plug;
+    padlockRef.current = padlock;
+    springsRef.current = springs;
+    fansRef.current = fans;
+    portalsRef.current = portals;
+    batteryRef.current = battery;
+    socketRef.current = socket;
+    receptorsRef.current = receptors;
+    gravityInvertedRef.current = gravityInverted;
+  }, [
+    player,
+    crates,
+    platforms,
+    switches,
+    keys,
+    plates,
+    hazards,
+    barriers,
+    exitDoor,
+    plug,
+    padlock,
+    springs,
+    fans,
+    portals,
+    battery,
+    socket,
+    receptors,
+    gravityInverted,
+  ]);
+
+  // Initialize room level
+  const initRoom = useCallback(
+    (lvl) => {
+      isPlayingRef.current = true;
+      setModalVisible(false);
+      inputLeftRef.current = false;
+      inputRightRef.current = false;
+      draggedEntityRef.current = null;
+      portalCooldownRef.current = 0;
+
+      const cfg = getRoomConfig(lvl);
+      setRoomTitle(cfg.title);
+      setRoomHint(cfg.hint || '');
+
+      const initP = {
+        x: cfg.playerStart.x,
+        y: cfg.playerStart.y,
+        vx: 0,
+        vy: 0,
+        facing: 1,
+        onGround: true,
+      };
+      setPlayer(initP);
+      playerRef.current = initP;
+
+      setPlatforms(cfg.platforms || []);
+      platformsRef.current = cfg.platforms || [];
+
+      setCrates(cfg.crates || []);
+      cratesRef.current = cfg.crates || [];
+
+      setSwitches(cfg.switches || []);
+      switchesRef.current = cfg.switches || [];
+
+      setKeys(cfg.keys || []);
+      keysRef.current = cfg.keys || [];
+
+      setPlates(cfg.plates || []);
+      platesRef.current = cfg.plates || [];
+
+      setHazards(cfg.hazards || []);
+      hazardsRef.current = cfg.hazards || [];
+
+      setBarriers(cfg.barriers || []);
+      barriersRef.current = cfg.barriers || [];
+
+      const doorObj = { ...cfg.exitDoor, permanentlyUnlocked: false };
+      setExitDoor(doorObj);
+      exitDoorRef.current = doorObj;
+
+      setPlug(cfg.plug || null);
+      plugRef.current = cfg.plug || null;
+
+      setPadlock(cfg.padlock || null);
+      padlockRef.current = cfg.padlock || null;
+
+      setSprings(cfg.springs || []);
+      springsRef.current = cfg.springs || [];
+
+      setFans(cfg.fans || []);
+      fansRef.current = cfg.fans || [];
+
+      setPortals(cfg.portals || []);
+      portalsRef.current = cfg.portals || [];
+
+      setBattery(cfg.battery || null);
+      batteryRef.current = cfg.battery || null;
+
+      setSocket(cfg.socket || null);
+      socketRef.current = cfg.socket || null;
+
+      setReceptors(cfg.receptors || []);
+      receptorsRef.current = cfg.receptors || [];
+
+      setGravityInverted(Boolean(cfg.gravityInverted));
+      gravityInvertedRef.current = Boolean(cfg.gravityInverted);
+    },
+    [
+      setRoomTitle,
+      setRoomHint,
+      setPlayer,
+      setPlatforms,
+      setCrates,
+      setSwitches,
+      setKeys,
+      setPlates,
+      setHazards,
+      setBarriers,
+      setExitDoor,
+      setPlug,
+      setPadlock,
+      setSprings,
+      setFans,
+      setPortals,
+      setBattery,
+      setSocket,
+      setReceptors,
+      setGravityInverted,
+      setModalVisible,
+    ]
+  );
 
   // Load level & best score
   useEffect(() => {
     (async () => {
+      let initialLvl = 1;
       try {
         const savedLvl = await AsyncStorage.getItem(STORAGE_LEVEL_KEY);
         const savedScore = await AsyncStorage.getItem(STORAGE_BEST_KEY);
         if (savedLvl !== null) {
           const pLvl = parseInt(savedLvl, 10);
-          if (!isNaN(pLvl) && pLvl >= 1) setLevel(pLvl);
+          if (!isNaN(pLvl) && pLvl >= 1) {
+            initialLvl = pLvl;
+            setLevel(pLvl);
+          }
         }
         if (savedScore !== null) {
           const pScore = parseInt(savedScore, 10);
           if (!isNaN(pScore)) setBestScore(pScore);
         }
       } catch {}
+      initRoom(initialLvl);
     })();
-  }, []);
+  }, [initRoom]);
 
   const updateBest = useCallback(
     async (nextScore) => {
@@ -278,68 +321,11 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
     [bestScore, onScoreUpdate]
   );
 
-  // Initialize room level
-  const initRoom = useCallback((lvl) => {
-    isPlayingRef.current = true;
-    setModalVisible(false);
-    inputLeftRef.current = false;
-    inputRightRef.current = false;
-    draggedEntityRef.current = null;
-
-    const cfg = getRoomConfig(lvl);
-    setRoomTitle(cfg.title);
-    setRoomHint(cfg.hint || '');
-
-    const initP = {
-      x: cfg.playerStart.x,
-      y: cfg.playerStart.y,
-      vx: 0,
-      vy: 0,
-      facing: 1,
-      onGround: true,
-    };
-    setPlayer(initP);
-    playerRef.current = initP;
-
-    setPlatforms(cfg.platforms);
-    platformsRef.current = cfg.platforms;
-
-    setCrates(cfg.crates);
-    cratesRef.current = cfg.crates;
-
-    setSwitches(cfg.switches);
-    switchesRef.current = cfg.switches;
-
-    setKeys(cfg.keys);
-    keysRef.current = cfg.keys;
-
-    setPlates(cfg.plates);
-    platesRef.current = cfg.plates;
-
-    setHazards(cfg.hazards);
-    hazardsRef.current = cfg.hazards;
-
-    setBarriers(cfg.barriers);
-    barriersRef.current = cfg.barriers;
-
-    const doorObj = { ...cfg.exitDoor, permanentlyUnlocked: false };
-    setExitDoor(doorObj);
-    exitDoorRef.current = doorObj;
-
-    setPlug(cfg.plug || null);
-    plugRef.current = cfg.plug || null;
-
-    setPadlock(cfg.padlock || null);
-    padlockRef.current = cfg.padlock || null;
-  }, []);
-
-  useEffect(() => {
-    initRoom(level);
-  }, [level, initRoom]);
-
   // Interactive Drag & Touch Puzzle Solver PanResponder
-  const arenaPanResponder = useRef(
-    PanResponder.create({
+  const arenaPanResponder = useMemo(
+    () =>
+      // eslint-disable-next-line react-hooks/refs
+      PanResponder.create({
       onStartShouldSetPanResponder: () => isPlayingRef.current && !isPausedRef.current,
       onMoveShouldSetPanResponder: () => isPlayingRef.current && !isPausedRef.current,
       onPanResponderGrant: (evt) => {
@@ -347,7 +333,7 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
         const tx = Math.max(0, Math.min(GAME_W, locationX / arenaScale));
         const ty = Math.max(0, Math.min(GAME_H, locationY / arenaScale));
 
-        // 1. Check Padlock (Room 8)
+        // 1. Check Padlock
         const curPadlock = padlockRef.current;
         if (curPadlock && curPadlock.onDoor) {
           if (Math.hypot(tx - curPadlock.x, ty - curPadlock.y) < 32) {
@@ -357,7 +343,7 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
           }
         }
 
-        // 2. Check Power Plug (Room 7)
+        // 2. Check Power Plug
         const curPlug = plugRef.current;
         if (curPlug && curPlug.plugged) {
           if (Math.hypot(tx - curPlug.x, ty - curPlug.y) < 34) {
@@ -393,7 +379,28 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
           }
         }
 
-        // 5. Check Draggable Platforms
+        // 5. Check Battery
+        const curBat = batteryRef.current;
+        if (curBat && !curBat.slotted) {
+          if (Math.hypot(tx - (curBat.x + curBat.w / 2), ty - (curBat.y + curBat.h / 2)) < 32) {
+            draggedEntityRef.current = { type: 'BATTERY', offsetX: curBat.x - tx, offsetY: curBat.y - ty };
+            triggerLightHaptic();
+            return;
+          }
+        }
+
+        // 6. Check Springs
+        const curSprings = springsRef.current;
+        for (let i = 0; i < curSprings.length; i++) {
+          const sp = curSprings[i];
+          if (sp.isDraggable && tx >= sp.x - 8 && tx <= sp.x + sp.w + 8 && ty >= sp.y - 8 && ty <= sp.y + sp.h + 8) {
+            draggedEntityRef.current = { type: 'SPRING', id: sp.id, offsetX: sp.x - tx, offsetY: sp.y - ty };
+            triggerLightHaptic();
+            return;
+          }
+        }
+
+        // 7. Check Draggable Platforms (including Mirror Slabs)
         const curPlatforms = platformsRef.current;
         for (let i = 0; i < curPlatforms.length; i++) {
           const p = curPlatforms[i];
@@ -406,7 +413,7 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
           }
         }
 
-        // 6. Check Crates
+        // 8. Check Crates (including Balloon Crates)
         const curCrates = cratesRef.current;
         for (let i = 0; i < curCrates.length; i++) {
           const c = curCrates[i];
@@ -417,7 +424,7 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
           }
         }
 
-        // 7. Check Pressure Plates (Finger-Press & Touch Override)
+        // 9. Check Pressure Plates (Finger-Press & Touch Override)
         const curPlates = platesRef.current;
         let platePressed = false;
         for (let i = 0; i < curPlates.length; i++) {
@@ -463,6 +470,33 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
               juiceRef.current?.burst(k.x, k.y, k.color || '#FFD166', 18);
               draggedEntityRef.current = null;
             }
+          }
+        } else if (dragged.type === 'BATTERY') {
+          const curBat = batteryRef.current;
+          if (curBat && !curBat.slotted) {
+            curBat.x = tx + (dragged.offsetX || 0);
+            curBat.y = ty + (dragged.offsetY || 0);
+            const curSock = socketRef.current;
+            if (curSock && Math.hypot(curBat.x - curSock.x, curBat.y - curSock.y) < 32) {
+              curBat.slotted = true;
+              curBat.x = curSock.x + 3;
+              curBat.y = curSock.y + 3;
+              setBattery({ ...curBat });
+              playSliceSound();
+              triggerPerfectHaptic(2);
+              juiceRef.current?.burst(curBat.x + curBat.w / 2, curBat.y + curBat.h / 2, '#39FF14', 16);
+              draggedEntityRef.current = null;
+              return;
+            }
+            setBattery({ ...curBat });
+          }
+        } else if (dragged.type === 'SPRING') {
+          const curSprings = springsRef.current;
+          const sp = curSprings.find((s) => s.id === dragged.id);
+          if (sp) {
+            sp.x = Math.max(12, Math.min(GAME_W - sp.w - 12, tx + (dragged.offsetX || 0)));
+            sp.y = Math.max(20, Math.min(288, ty + (dragged.offsetY || 0)));
+            setSprings([...curSprings]);
           }
         } else if (dragged.type === 'CRATE') {
           const curCrates = cratesRef.current;
@@ -538,22 +572,24 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
           setPlates([...curPlates]);
         }
       },
-    })
-  ).current;
+    }),
+    [arenaScale]
+  );
 
-  // Jump handler
+  // Jump handler (adapts to normal or inverted gravity)
   const handleJump = useCallback(() => {
     if (isPausedRef.current || !isPlayingRef.current) return;
     const p = playerRef.current;
     if (p.onGround) {
       playTapSound();
       triggerLightHaptic();
-      p.vy = JUMP_FORCE;
+      const gInv = Boolean(gravityInvertedRef.current);
+      p.vy = gInv ? -JUMP_FORCE : JUMP_FORCE;
       p.onGround = false;
       playerRef.current = { ...p };
       setPlayer({ ...p });
     }
-  }, []);
+  }, [setPlayer]);
 
   // Fail & Win handlers
   const handleFail = useCallback((reason) => {
@@ -615,16 +651,157 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
       }
 
       const p = { ...playerRef.current };
-      const curPlatforms = platformsRef.current;
+      const curPlatforms = platformsRef.current.map((pl) => ({ ...pl }));
       const curCrates = cratesRef.current.map((c) => ({ ...c }));
-      const curBarriers = barriersRef.current;
+      const curBarriers = barriersRef.current.map((b) => ({ ...b }));
       const curPlates = platesRef.current.map((pl) => ({ ...pl }));
       const curSwitches = switchesRef.current.map((sw) => ({ ...sw }));
       const curKeys = keysRef.current.map((k) => ({ ...k }));
       const curDoor = { ...exitDoorRef.current };
+      const curSprings = springsRef.current.map((s) => ({ ...s }));
+      const curFans = fansRef.current.map((f) => ({ ...f }));
+      const curPortals = portalsRef.current.map((por) => ({ ...por }));
+      const curBattery = batteryRef.current ? { ...batteryRef.current } : null;
+      const curReceptors = receptorsRef.current.map((r) => ({ ...r }));
+      const gInv = Boolean(gravityInvertedRef.current);
 
-      // Horizontal player input
-      let moveVx = 0;
+      // 0a. Moving Platforms Patrol & Carry Player
+      let platformCarrierDx = 0;
+      let platformsChanged = false;
+      for (let s of curPlatforms) {
+        if (s.speed && s.minX !== undefined && s.maxX !== undefined) {
+          const dir = s.dir || 1;
+          const prevX = s.x;
+          let nextX = s.x + dir * s.speed;
+          if (nextX >= s.maxX) {
+            nextX = s.maxX;
+            s.dir = -1;
+          } else if (nextX <= s.minX) {
+            nextX = s.minX;
+            s.dir = 1;
+          }
+          const dx = nextX - prevX;
+          s.x = nextX;
+          platformsChanged = true;
+
+          // If player is standing on this moving platform, carry them!
+          if (
+            p.onGround &&
+            p.x + PLAYER_W > s.x - 4 &&
+            p.x < s.x + s.w + 4 &&
+            Math.abs(p.y + PLAYER_H - s.y) <= 4
+          ) {
+            platformCarrierDx = dx;
+          }
+        }
+      }
+
+      // 0b. Crumbling Platform Collapse
+      for (let s of curPlatforms) {
+        if (s.isCrumbling && !s.collapsed) {
+          const isPlayerOn =
+            p.x + PLAYER_W > s.x &&
+            p.x < s.x + s.w &&
+            Math.abs(p.y + PLAYER_H - s.y) <= 4;
+          if (isPlayerOn) {
+            s.stepped = true;
+          }
+          if (s.stepped) {
+            s.crumbleTimer = (s.crumbleTimer || 0) + 1 / 60;
+            platformsChanged = true;
+            if (s.crumbleTimer > 0.65) {
+              s.collapsed = true;
+              triggerMediumHaptic();
+              playSliceSound();
+              if (juiceRef.current) {
+                juiceRef.current.burst(s.x + s.w / 2, s.y + s.h / 2, '#FB7185', 12);
+              }
+            }
+          }
+        }
+      }
+      if (platformsChanged) {
+        platformsRef.current = curPlatforms;
+        setPlatforms([...curPlatforms]);
+      }
+
+      // 0c. Timed Switches Countdown & Barrier Reset
+      let switchesUpdated = false;
+      for (let sw of curSwitches) {
+        if (sw.isTimed && sw.active && sw.timer > 0) {
+          sw.timer -= 1 / 60;
+          switchesUpdated = true;
+          if (sw.timer <= 0) {
+            sw.active = false;
+            sw.timer = 0;
+            curBarriers.forEach((b) => {
+              if (b.switchId === sw.id) b.active = true;
+            });
+            barriersRef.current = [...curBarriers];
+            setBarriers([...curBarriers]);
+            triggerMediumHaptic();
+          }
+        }
+      }
+      if (switchesUpdated) {
+        switchesRef.current = curSwitches;
+        setSwitches([...curSwitches]);
+      }
+
+      // 0d. Prism Deflection & Laser Receptors
+      let receptorsUpdated = false;
+      const mirrorPlatforms = curPlatforms.filter((pl) => pl.isMirror && !pl.collapsed);
+      for (let rec of curReceptors) {
+        const isMirrorDeflecting = mirrorPlatforms.some(
+          (m) =>
+            rec.beamX >= m.x - 6 &&
+            rec.beamX <= m.x + m.w + 6 &&
+            rec.beamY >= m.y - 6 &&
+            rec.beamY <= m.y + m.h + 6
+        );
+        const nextHit = isMirrorDeflecting;
+        if (rec.hit !== nextHit) {
+          rec.hit = nextHit;
+          receptorsUpdated = true;
+          if (nextHit) {
+            triggerPerfectHaptic(1);
+            playTapSound();
+            if (juiceRef.current) {
+              juiceRef.current.burst(rec.x + rec.w / 2, rec.y + rec.h / 2, '#00F5FF', 14);
+            }
+          }
+        }
+      }
+      if (receptorsUpdated) {
+        receptorsRef.current = curReceptors;
+        setReceptors([...curReceptors]);
+        curBarriers.forEach((b) => {
+          if (b.receptorId) {
+            const r = curReceptors.find((rec) => rec.id === b.receptorId);
+            b.active = r ? !r.hit : false;
+          }
+        });
+        barriersRef.current = [...curBarriers];
+        setBarriers([...curBarriers]);
+      }
+
+      // 0e. Battery Socket Barrier Deactivation
+      if (curBattery && curBattery.slotted) {
+        let batBarriersUpdated = false;
+        curBarriers.forEach((b) => {
+          if (b.byBattery && b.active) {
+            b.active = false;
+            batBarriersUpdated = true;
+          }
+        });
+        if (batBarriersUpdated) {
+          barriersRef.current = [...curBarriers];
+          setBarriers([...curBarriers]);
+        }
+      }
+
+      // Horizontal player input & platform carrier speed
+      let moveVx = platformCarrierDx;
       if (inputLeftRef.current) {
         moveVx -= MOVE_SPEED;
         p.facing = -1;
@@ -635,18 +812,25 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
       }
       p.vx = moveVx;
 
-      // Vertical gravity
-      p.vy += GRAVITY;
+      // Vertical gravity & fan updrafts
+      p.vy += gInv ? -GRAVITY : GRAVITY;
+      for (let f of curFans) {
+        if (f.active !== false) {
+          const inFanX = p.x + PLAYER_W > f.x && p.x < f.x + f.w;
+          const inFanY = p.y < f.y && p.y > f.y - 130;
+          if (inFanX && inFanY) {
+            p.vy = Math.max(-5.8, p.vy - 0.85);
+          }
+        }
+      }
 
-      // Solid collision obstacles: platforms + solid active barriers (if not a bridge or if bridge active)
-      const solids = [...curPlatforms];
+      // Solid collision obstacles: non-collapsed platforms + active barriers
+      const solids = curPlatforms.filter((s) => !s.collapsed);
       curBarriers.forEach((b) => {
         if (b.isBridge) {
-          // If bridge is activated by switch, it acts as a platform
           const swActive = curSwitches.some((s) => s.active);
           if (swActive) solids.push({ x: b.x, y: b.y, w: b.w, h: b.h });
         } else if (b.active) {
-          // Solid barrier
           solids.push({ x: b.x, y: b.y, w: b.w, h: b.h });
         }
       });
@@ -663,7 +847,6 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
           playerRectX.y < s.y + s.h &&
           playerRectX.y + playerRectX.h > s.y
         ) {
-          // Solid block
           if (p.vx > 0) nextPx = s.x - PLAYER_W;
           else if (p.vx < 0) nextPx = s.x + s.w;
         }
@@ -677,11 +860,9 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
           p.y < c.y + CRATE_SIZE &&
           p.y + PLAYER_H > c.y
         ) {
-          // Push crate horizontally
           const pushDir = p.vx > 0 ? 1 : -1;
           const targetCx = c.x + pushDir * MOVE_SPEED * 0.75;
 
-          // Check if crate hits solids
           let canPush = true;
           for (let s of solids) {
             if (
@@ -708,7 +889,7 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
       }
       p.x = nextPx;
 
-      // 2. Move Player Y & Solid collisions
+      // 2. Move Player Y & Solid collisions (Normal & Inverted Gravity)
       let nextPy = p.y + p.vy;
       let onFloor = false;
 
@@ -720,20 +901,29 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
           nextPy < s.y + s.h &&
           nextPy + PLAYER_H > s.y
         ) {
-          if (p.vy > 0) {
-            // Landing on solid floor
-            nextPy = s.y - PLAYER_H;
-            p.vy = 0;
-            onFloor = true;
-          } else if (p.vy < 0) {
-            // Hitting ceiling
-            nextPy = s.y + s.h;
-            p.vy = 0;
+          if (gInv) {
+            if (p.vy < 0) {
+              nextPy = s.y + s.h;
+              p.vy = 0;
+              onFloor = true;
+            } else if (p.vy > 0) {
+              nextPy = s.y - PLAYER_H;
+              p.vy = 0;
+            }
+          } else {
+            if (p.vy > 0) {
+              nextPy = s.y - PLAYER_H;
+              p.vy = 0;
+              onFloor = true;
+            } else if (p.vy < 0) {
+              nextPy = s.y + s.h;
+              p.vy = 0;
+            }
           }
         }
       }
 
-      // Check Crates Y (Can stand on top of crates!)
+      // Check Crates Y
       for (let c of curCrates) {
         if (
           p.x < c.x + CRATE_SIZE &&
@@ -741,24 +931,103 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
           nextPy < c.y + CRATE_SIZE &&
           nextPy + PLAYER_H > c.y
         ) {
-          if (p.vy > 0) {
-            nextPy = c.y - PLAYER_H;
-            p.vy = 0;
-            onFloor = true;
-          } else if (p.vy < 0) {
-            nextPy = c.y + CRATE_SIZE;
-            p.vy = 0;
+          if (gInv) {
+            if (p.vy < 0) {
+              nextPy = c.y + CRATE_SIZE;
+              p.vy = 0;
+              onFloor = true;
+            } else if (p.vy > 0) {
+              nextPy = c.y - PLAYER_H;
+              p.vy = 0;
+            }
+          } else {
+            if (p.vy > 0) {
+              nextPy = c.y - PLAYER_H;
+              p.vy = 0;
+              onFloor = true;
+            } else if (p.vy < 0) {
+              nextPy = c.y + CRATE_SIZE;
+              p.vy = 0;
+            }
           }
         }
       }
       p.y = nextPy;
       p.onGround = onFloor;
 
-      // 3. Crate Gravity & Floor Collisions (crates also STACK on top of each other)
+      // 2b. Spring Pad Bounce on Player
+      for (let sp of curSprings) {
+        const pCenterX = p.x + PLAYER_W / 2;
+        const inSpringX = pCenterX >= sp.x - 4 && pCenterX <= sp.x + sp.w + 4;
+        const inSpringY = Math.abs(p.y + PLAYER_H - sp.y) < 10;
+        if (inSpringX && inSpringY) {
+          p.vy = gInv ? 13.5 : -13.5;
+          p.onGround = false;
+          triggerMediumHaptic();
+          playTapSound();
+          if (juiceRef.current) {
+            juiceRef.current.burst(sp.x + sp.w / 2, sp.y, '#39FF14', 12);
+          }
+        }
+      }
+
+      // 2c. Portal Teleportation
+      if (portalCooldownRef.current > 0) {
+        portalCooldownRef.current -= 1;
+      } else {
+        const pCenterX = p.x + PLAYER_W / 2;
+        const pCenterY = p.y + PLAYER_H / 2;
+        for (let por of curPortals) {
+          const dist = Math.hypot(pCenterX - (por.x + 12), pCenterY - (por.y + 16));
+          if (dist < 22) {
+            const partner = curPortals.find((other) => other.id === por.partnerId);
+            if (partner) {
+              p.x = partner.x + (partner.exitOffsetX || 20);
+              p.y = partner.y + (partner.exitOffsetY || 0);
+              portalCooldownRef.current = 45;
+              triggerPerfectHaptic(2);
+              playSliceSound();
+              if (juiceRef.current) {
+                juiceRef.current.burst(partner.x + 12, partner.y + 16, partner.color || '#00F5FF', 18);
+              }
+              break;
+            }
+          }
+        }
+      }
+
+      // 3. Crate Gravity, Balloons & Floor Collisions
       const crateOrder = [...curCrates].sort((a, b) => b.y - a.y);
       for (let c of crateOrder) {
-        c.vy = (c.vy || 0) + GRAVITY;
+        if (c.isBalloon) {
+          c.vy = (c.vy || 0) - GRAVITY * 0.45;
+          c.vy = Math.max(-2.5, c.vy);
+        } else {
+          c.vy = (c.vy || 0) + (gInv ? -GRAVITY : GRAVITY);
+        }
+
+        // Fan wind on crates
+        for (let f of curFans) {
+          if (f.active !== false) {
+            if (c.x + CRATE_SIZE > f.x && c.x < f.x + f.w && c.y < f.y && c.y > f.y - 130) {
+              c.vy = Math.max(-4.5, (c.vy || 0) - 0.7);
+            }
+          }
+        }
+
         let nextCy = c.y + c.vy;
+
+        // Spring bounce on crates
+        for (let sp of curSprings) {
+          if (
+            c.x + CRATE_SIZE > sp.x &&
+            c.x < sp.x + sp.w &&
+            Math.abs(c.y + CRATE_SIZE - sp.y) < 8
+          ) {
+            c.vy = -10.5;
+            triggerLightHaptic();
+          }
+        }
 
         for (let s of solids) {
           if (
@@ -769,6 +1038,9 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
           ) {
             if (c.vy > 0) {
               nextCy = s.y - CRATE_SIZE;
+              c.vy = 0;
+            } else if (c.vy < 0) {
+              nextCy = s.y + s.h;
               c.vy = 0;
             }
           }
@@ -790,7 +1062,7 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
         c.y = nextCy;
       }
 
-      // 4. Pressure Plates Check (Triggered by player OR crates)
+      // 4. Pressure Plates Check
       let platesUpdated = false;
       for (let pl of curPlates) {
         const isPlayerOn =
@@ -823,7 +1095,7 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
         setPlates([...curPlates]);
       }
 
-      // 4b. Dynamic Pressure Plate Laser Gates (active unless plate is pressed)
+      // 4b. Dynamic Pressure Plate Laser Gates
       let barriersUpdated = false;
       curBarriers.forEach((b) => {
         if (b.plateIds && b.plateIds.length > 0) {
@@ -840,12 +1112,15 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
         setBarriers([...curBarriers]);
       }
 
-      // 5. Switches Interaction (Touched by player)
+      // 5. Switches Interaction
       for (let sw of curSwitches) {
         if (!sw.active) {
           const dist = Math.hypot(p.x + PLAYER_W / 2 - sw.x, p.y + PLAYER_H / 2 - sw.y);
           if (dist < 28) {
             sw.active = true;
+            if (sw.isTimed) {
+              sw.timer = sw.maxTimer || 4;
+            }
             playTapSound();
             triggerPerfectHaptic(2);
             if (juiceRef.current) {
@@ -855,11 +1130,10 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
             switchesRef.current = curSwitches;
             setSwitches([...curSwitches]);
 
-            // Deactivate laser barriers associated with switch
             curBarriers.forEach((b) => {
               if (b.switchId) {
                 if (b.switchId === sw.id) b.active = false;
-              } else if (!b.isBridge && !b.plateIds && !b.byPlug) {
+              } else if (!b.isBridge && !b.plateIds && !b.byPlug && !b.byBattery && !b.receptorId && !b.requiredColor) {
                 b.active = false;
               }
             });
@@ -869,7 +1143,7 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
         }
       }
 
-      // 6. Keys Collection
+      // 6. Keys Collection & Color Gates
       for (let k of curKeys) {
         if (!k.taken) {
           const dist = Math.hypot(p.x + PLAYER_W / 2 - k.x, p.y + PLAYER_H / 2 - k.y);
@@ -878,10 +1152,20 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
             playTapSound();
             triggerPerfectHaptic(1);
             if (juiceRef.current) {
-              juiceRef.current.burst(k.x, k.y, k.color, 14);
+              juiceRef.current.burst(k.x, k.y, k.color || '#FFE600', 14);
             }
             keysRef.current = [...curKeys];
             setKeys([...curKeys]);
+
+            if (k.color) {
+              curBarriers.forEach((b) => {
+                if (b.requiredColor === k.color) {
+                  b.active = false;
+                }
+              });
+              barriersRef.current = [...curBarriers];
+              setBarriers([...curBarriers]);
+            }
           }
         }
       }
@@ -892,10 +1176,17 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
       const allSwitchesActive = curSwitches.length === 0 || curSwitches.every((sw) => sw.active);
       const curPad = padlockRef.current;
       const padlockCleared = !curPad || !curPad.onDoor;
+      const batterySlotted = !curBattery || curBattery.slotted;
+      const allReceptorsHit = curReceptors.length === 0 || curReceptors.every((rec) => rec.hit);
 
       const isUnlocked =
         Boolean(curDoor.permanentlyUnlocked) ||
-        (allKeysCollected && allPlatesPressed && allSwitchesActive && padlockCleared);
+        (allKeysCollected &&
+          allPlatesPressed &&
+          allSwitchesActive &&
+          padlockCleared &&
+          batterySlotted &&
+          allReceptorsHit);
 
       if (isUnlocked && curDoor.locked) {
         curDoor.locked = false;
@@ -924,7 +1215,7 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
         }
       }
 
-      // 9. Hazard Collision (Spikes, Laser beams)
+      // 9. Hazard Collision
       for (let h of hazardsRef.current) {
         if (
           p.x + PLAYER_W > h.x &&
@@ -1073,29 +1364,178 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
               <Rect x={0} y={0} width={GAME_W} height={GAME_H} fill="#060810" />
 
               {/* Solid Platforms & Walls */}
-              {platforms.map((p, idx) => (
-                <G key={`plt_${idx}`}>
-                  <Rect
-                    x={p.x}
-                    y={p.y}
-                    width={p.w}
-                    height={p.h}
-                    fill="url(#wallGrad)"
-                    stroke="rgba(0, 245, 255, 0.4)"
-                    strokeWidth={1.5}
-                    rx={3}
-                  />
-                  {/* Top neon edge highlight */}
-                  <Line
-                    x1={p.x}
-                    y1={p.y}
-                    x2={p.x + p.w}
-                    y2={p.y}
-                    stroke="#00F5FF"
-                    strokeWidth={2}
-                  />
+              {platforms.map((p, idx) => {
+                if (p.collapsed) {
+                  return (
+                    <G key={`plt_${idx}`} opacity={0.25}>
+                      <Line x1={p.x} y1={p.y} x2={p.x + p.w / 2} y2={p.y + 6} stroke="#FB7185" strokeWidth={1} strokeDasharray="3 3" />
+                      <Line x1={p.x + p.w / 2} y1={p.y + 6} x2={p.x + p.w} y2={p.y} stroke="#FB7185" strokeWidth={1} strokeDasharray="3 3" />
+                    </G>
+                  );
+                }
+                const isMir = Boolean(p.isMirror);
+                const isCrum = Boolean(p.isCrumbling);
+                const strokeColor = isMir ? '#38BDF8' : isCrum ? '#FB7185' : p.color || 'rgba(0, 245, 255, 0.4)';
+                return (
+                  <G key={`plt_${idx}`}>
+                    <Rect
+                      x={p.x}
+                      y={p.y}
+                      width={p.w}
+                      height={p.h}
+                      fill={isMir ? '#0F2838' : 'url(#wallGrad)'}
+                      stroke={strokeColor}
+                      strokeWidth={1.5}
+                      strokeDasharray={isCrum ? '4 2' : undefined}
+                      rx={3}
+                    />
+                    {/* Top neon edge highlight */}
+                    <Line
+                      x1={p.x}
+                      y1={p.y}
+                      x2={p.x + p.w}
+                      y2={p.y}
+                      stroke={isMir ? '#A5F3FC' : isCrum ? '#FB7185' : '#00F5FF'}
+                      strokeWidth={2}
+                    />
+                    {/* Mirror prism sheen */}
+                    {isMir && (
+                      <Line
+                        x1={p.x + 4}
+                        y1={p.y + p.h - 4}
+                        x2={p.x + p.w - 4}
+                        y2={p.y + 4}
+                        stroke="#A5F3FC"
+                        strokeWidth={1}
+                        strokeDasharray="4 4"
+                      />
+                    )}
+                    {/* Draggable indicator dot */}
+                    {p.isDraggable && (
+                      <Circle cx={p.x + p.w / 2} cy={p.y + p.h / 2} r={2.5} fill="#FFE600" />
+                    )}
+                  </G>
+                );
+              })}
+
+              {/* Turbine Wind Fans */}
+              {fans.map((f) => (
+                <G key={f.id} transform={`translate(${f.x}, ${f.y})`}>
+                  {/* Upward wind airflow waves */}
+                  <Line x1={6} y1={-6} x2={6} y2={-90} stroke="#00F5FF" strokeWidth={1.5} strokeDasharray="6 6" opacity={0.65} />
+                  <Line x1={f.w / 2} y1={-10} x2={f.w / 2} y2={-115} stroke="#00F5FF" strokeWidth={1.5} strokeDasharray="8 6" opacity={0.85} />
+                  <Line x1={f.w - 6} y1={-6} x2={f.w - 6} y2={-90} stroke="#00F5FF" strokeWidth={1.5} strokeDasharray="6 6" opacity={0.65} />
+                  {/* Vent housing */}
+                  <Rect x={0} y={0} width={f.w} height={f.h} fill="#141E28" stroke="#00F5FF" strokeWidth={1.5} rx={3} />
+                  <Line x1={3} y1={f.h / 2} x2={f.w - 3} y2={f.h / 2} stroke="#00F5FF" strokeWidth={1.5} />
                 </G>
               ))}
+
+              {/* Bouncy Spring Pads */}
+              {springs.map((sp) => (
+                <G key={sp.id} transform={`translate(${sp.x}, ${sp.y})`}>
+                  <Rect x={0} y={sp.h - 4} width={sp.w} height={4} fill="#141E28" stroke="#39FF14" strokeWidth={1} rx={2} />
+                  <Path
+                    d={`M3,${sp.h - 4} L8,2 L14,${sp.h - 4} L20,2 L26,${sp.h - 4} L${sp.w - 3},2`}
+                    stroke="#39FF14"
+                    strokeWidth={2}
+                    fill="none"
+                  />
+                  <Rect x={0} y={0} width={sp.w} height={3} fill="#39FF14" rx={1.5} />
+                  {sp.isDraggable && (
+                    <Circle cx={sp.w / 2} cy={sp.h / 2} r={2.5} fill="#FFE600" />
+                  )}
+                </G>
+              ))}
+
+              {/* Portal Vortexes */}
+              {portals.map((por) => (
+                <G key={por.id} transform={`translate(${por.x}, ${por.y})`}>
+                  <Ellipse
+                    cx={12}
+                    cy={18}
+                    rx={12}
+                    ry={18}
+                    fill={por.color || '#00F5FF'}
+                    fillOpacity={0.25}
+                    stroke={por.color || '#00F5FF'}
+                    strokeWidth={2}
+                    strokeDasharray="4 2"
+                  />
+                  <Circle cx={12} cy={18} r={5} fill="#FFFFFF" opacity={0.8} />
+                </G>
+              ))}
+
+              {/* Laser Receptors and Prism Beams */}
+              {receptors.map((rec) => (
+                <G key={rec.id}>
+                  {/* Incident emitter beam */}
+                  <Line
+                    x1={rec.beamX}
+                    y1={0}
+                    x2={rec.beamX}
+                    y2={rec.beamY}
+                    stroke="#00F5FF"
+                    strokeWidth={2}
+                    strokeDasharray="3 3"
+                    opacity={0.8}
+                  />
+                  {/* Deflected beam reaching receptor when hit */}
+                  {rec.hit && (
+                    <Line
+                      x1={rec.beamX}
+                      y1={rec.beamY}
+                      x2={rec.x + rec.w / 2}
+                      y2={rec.y + rec.h / 2}
+                      stroke="#00F5FF"
+                      strokeWidth={3}
+                    />
+                  )}
+                  {/* Receptor box */}
+                  <G transform={`translate(${rec.x}, ${rec.y})`}>
+                    <Rect
+                      x={0}
+                      y={0}
+                      width={rec.w}
+                      height={rec.h}
+                      fill="#141E28"
+                      stroke={rec.hit ? '#00F5D4' : '#FF0055'}
+                      strokeWidth={2}
+                      rx={4}
+                    />
+                    <Circle cx={rec.w / 2} cy={rec.h / 2} r={rec.hit ? 6 : 4} fill={rec.hit ? '#00F5D4' : '#FF0055'} />
+                  </G>
+                </G>
+              ))}
+
+              {/* Battery Socket */}
+              {socket && (
+                <G transform={`translate(${socket.x}, ${socket.y})`}>
+                  <Rect
+                    x={0}
+                    y={0}
+                    width={socket.w}
+                    height={socket.h}
+                    fill="#0A0E17"
+                    stroke="#39FF14"
+                    strokeWidth={2}
+                    strokeDasharray="4 2"
+                    rx={4}
+                  />
+                  <Line x1={socket.w / 2 - 4} y1={socket.h / 2} x2={socket.w / 2 + 4} y2={socket.h / 2} stroke="#39FF14" strokeWidth={2} />
+                  <Line x1={socket.w / 2} y1={socket.h / 2 - 4} x2={socket.w / 2} y2={socket.h / 2 + 4} stroke="#39FF14" strokeWidth={2} />
+                </G>
+              )}
+
+              {/* Battery Cell */}
+              {battery && (
+                <G transform={`translate(${battery.x}, ${battery.y})`}>
+                  <Rect x={0} y={2} width={battery.w} height={battery.h - 2} fill="#141E28" stroke="#39FF14" strokeWidth={2} rx={3} />
+                  <Rect x={battery.w / 2 - 3} y={0} width={6} height={2} fill="#39FF14" rx={1} />
+                  <Rect x={3} y={5} width={battery.w - 6} height={battery.h - 8} fill={battery.slotted ? '#39FF14' : '#FFE600'} rx={2} />
+                  <Circle cx={battery.w / 2} cy={battery.h / 2 + 1} r={2.5} fill="#000000" />
+                </G>
+              )}
 
               {/* Spikes / Hazards */}
               {hazards.map((hz, idx) => {
@@ -1210,19 +1650,26 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
               {/* Pushable / Draggable Crates */}
               {crates.map((c) => (
                 <G key={c.id}>
+                  {/* Helium Balloon visual if floating crate */}
+                  {c.isBalloon && (
+                    <G>
+                      <Circle cx={c.x + CRATE_SIZE / 2} cy={c.y - 18} r={12} fill="#00F5FF" fillOpacity={0.4} stroke="#00F5FF" strokeWidth={1.5} />
+                      <Line x1={c.x + CRATE_SIZE / 2} y1={c.y - 6} x2={c.x + CRATE_SIZE / 2} y2={c.y} stroke="#00F5FF" strokeWidth={1} />
+                    </G>
+                  )}
                   <Rect
                     x={c.x}
                     y={c.y}
                     width={CRATE_SIZE}
                     height={CRATE_SIZE}
-                    fill="url(#crateGrad)"
-                    stroke="#F59E0B"
+                    fill={c.isBalloon ? '#0D2A3D' : 'url(#crateGrad)'}
+                    stroke={c.isBalloon ? '#00F5FF' : '#F59E0B'}
                     strokeWidth={2}
                     rx={4}
                   />
                   {/* Cross braces on crate */}
-                  <Line x1={c.x + 3} y1={c.y + 3} x2={c.x + CRATE_SIZE - 3} y2={c.y + CRATE_SIZE - 3} stroke="#FCD34D" strokeWidth={1.5} />
-                  <Line x1={c.x + CRATE_SIZE - 3} y1={c.y + 3} x2={c.x + 3} y2={c.y + CRATE_SIZE - 3} stroke="#FCD34D" strokeWidth={1.5} />
+                  <Line x1={c.x + 3} y1={c.y + 3} x2={c.x + CRATE_SIZE - 3} y2={c.y + CRATE_SIZE - 3} stroke={c.isBalloon ? '#38BDF8' : '#FCD34D'} strokeWidth={1.5} />
+                  <Line x1={c.x + CRATE_SIZE - 3} y1={c.y + 3} x2={c.x + 3} y2={c.y + CRATE_SIZE - 3} stroke={c.isBalloon ? '#38BDF8' : '#FCD34D'} strokeWidth={1.5} />
                   {/* Draggable center handle dot */}
                   <Circle cx={c.x + CRATE_SIZE / 2} cy={c.y + CRATE_SIZE / 2} r={3.5} fill="#FFFFFF" opacity={0.8} />
                 </G>
@@ -1283,7 +1730,13 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
               )}
 
               {/* Player Character */}
-              <G transform={`translate(${player.x}, ${player.y})`}>
+              <G
+                transform={
+                  gravityInverted
+                    ? `translate(${player.x}, ${player.y + PLAYER_H}) scale(1, -1)`
+                    : `translate(${player.x}, ${player.y})`
+                }
+              >
                 {/* Cyber Runner Body */}
                 <Rect
                   x={2}
