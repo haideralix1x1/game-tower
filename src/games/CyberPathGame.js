@@ -72,7 +72,7 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
     isPausedRef.current = isPaused;
   }, [isPaused]);
 
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const arenaScale = Math.min(1, (width - 24) / GAME_W);
 
   const juiceRef = useRef(null);
@@ -126,6 +126,10 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
   const [gravityRotateMode, setGravityRotateMode] = useState(false);
   const [gravityTiltable, setGravityTiltable] = useState(false);
   const [reversedControls, setReversedControls] = useState(false);
+  const [draggingHeartPos, setDraggingHeartPos] = useState(null);
+  const draggingHeartPosRef = useRef(null);
+  const arenaBoundsRef = useRef(null);
+  const arenaViewRef = useRef(null);
 
   const [modalVisible, setModalVisible] = useState(false);
   const [modalType, setModalType] = useState('VICTORY');
@@ -330,6 +334,8 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
       guardRef.current = cfg.guard ? { ...cfg.guard } : null;
 
       setHintHeartActive(Boolean(cfg.hintHeart));
+      setDraggingHeartPos(null);
+      draggingHeartPosRef.current = null;
       setHudKeyDraggableActive(Boolean(cfg.hudKeyDraggable));
 
       setGun(cfg.gun ? { ...cfg.gun } : null);
@@ -446,10 +452,79 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
       playPerfectSound(4);
       triggerPerfectHaptic(2);
       if (juiceRef.current) {
-        juiceRef.current.burst(curG.x + 10, curG.y + 10, '#39FF14', 20);
+        juiceRef.current.burst(curG.x + 10, curG.y + 10, '#39FF14', 24);
+        juiceRef.current.burst(curG.x + 10, curG.y + 10, '#FF0055', 18);
+        juiceRef.current.flash('#39FF14');
+        juiceRef.current.shake(10, 8);
       }
     }
   }, []);
+
+  // PanResponder to drag the HEART token from the hint banner directly onto the guard!
+  const heartPanResponder = useMemo(
+    () =>
+      // eslint-disable-next-line react-hooks/refs
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: () => true,
+        onPanResponderGrant: (evt) => {
+          triggerLightHaptic();
+          arenaViewRef.current?.measure((_x, _y, w, h, pageX, pageY) => {
+            if (pageX !== undefined && pageY !== undefined) {
+              arenaBoundsRef.current = { pageX, pageY, w, h };
+            }
+          });
+          const pos = { x: evt.nativeEvent.pageX, y: evt.nativeEvent.pageY };
+          draggingHeartPosRef.current = pos;
+          setDraggingHeartPos(pos);
+        },
+        onPanResponderMove: (evt) => {
+          const pos = { x: evt.nativeEvent.pageX, y: evt.nativeEvent.pageY };
+          draggingHeartPosRef.current = pos;
+          setDraggingHeartPos(pos);
+        },
+        onPanResponderRelease: (evt) => {
+          const pageX = evt.nativeEvent.pageX;
+          const pageY = evt.nativeEvent.pageY;
+          const bounds = arenaBoundsRef.current;
+          const curG = guardRef.current;
+
+          let droppedOnGuard = false;
+          if (curG && !curG.healed) {
+            if (bounds && bounds.w > 0) {
+              const arenaX = (pageX - bounds.pageX) / arenaScale;
+              const arenaY = (pageY - bounds.pageY) / arenaScale;
+              const dist = Math.hypot(arenaX - (curG.x + 11), arenaY - (curG.y + 11));
+              if (dist < 80) {
+                droppedOnGuard = true;
+              }
+            } else {
+              // Fallback: if dragged down into the chamber arena towards the guard
+              if (pageY > height * 0.28) {
+                droppedOnGuard = true;
+              }
+            }
+          }
+
+          if (droppedOnGuard) {
+            handleHealGuardWithHeart();
+          } else {
+            // Direct tap support if finger barely moved
+            if (Math.hypot(evt.nativeEvent.dx || 0, evt.nativeEvent.dy || 0) < 18) {
+              handleHealGuardWithHeart();
+            }
+          }
+
+          draggingHeartPosRef.current = null;
+          setDraggingHeartPos(null);
+        },
+        onPanResponderTerminate: () => {
+          draggingHeartPosRef.current = null;
+          setDraggingHeartPos(null);
+        },
+      }),
+    [arenaScale, handleHealGuardWithHeart, height]
+  );
 
   const handleUnlockWithHudKey = useCallback(() => {
     const curDoor = { ...exitDoorRef.current };
@@ -856,7 +931,7 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
     setFailReason(reason);
     setModalType('GAMEOVER');
     setModalVisible(true);
-  }, []);
+  }, [setFailReason, setModalType, setModalVisible]);
 
   const handleWin = useCallback(() => {
     isPlayingRef.current = false;
@@ -877,7 +952,7 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
     }
     setModalType('VICTORY');
     setModalVisible(true);
-  }, [level, score, updateBest]);
+  }, [level, score, updateBest, setModalType, setModalVisible]);
 
   const handleNextLevel = () => {
     const nextLvl = level + 1;
@@ -1776,23 +1851,47 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
 
           {/* Puzzle Hint Banner */}
           {roomHint ? (
-            <View style={[styles.hintBanner, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}>
-              <Text style={[styles.hintBannerText, { flex: 1 }]}>💡 {roomHint}</Text>
-              {hintHeartActive && (
-                <Pressable
-                  style={{
-                    backgroundColor: '#FF0055',
-                    paddingHorizontal: 8,
-                    paddingVertical: 4,
-                    borderRadius: 8,
-                    marginLeft: 6,
-                  }}
-                  onPress={handleHealGuardWithHeart}
-                >
-                  <Text style={{ fontSize: 11, color: '#FFFFFF', fontWeight: 'bold' }}>
-                    ❤️ HEAL SENTRY
-                  </Text>
-                </Pressable>
+            <View style={styles.hintBanner}>
+              {hintHeartActive && roomHint.toUpperCase().includes('HEART') ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <Text style={styles.hintBannerText}>💡 </Text>
+                  {(() => {
+                    const parts = roomHint.split(/HEART/i);
+                    return (
+                      <>
+                        <Text style={styles.hintBannerText}>{parts[0]}</Text>
+                        <View
+                          {...(guard && !guard.healed ? heartPanResponder.panHandlers : {})}
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            backgroundColor: guard && guard.healed ? 'rgba(16, 185, 129, 0.25)' : '#FF0055',
+                            paddingHorizontal: 7,
+                            paddingVertical: 2,
+                            borderRadius: 6,
+                            borderWidth: 1.5,
+                            borderColor: guard && guard.healed ? '#10B981' : '#FFFFFF',
+                            marginHorizontal: 3,
+                          }}
+                        >
+                          <Text
+                            style={{
+                              fontSize: 11,
+                              color: '#FFFFFF',
+                              fontWeight: '900',
+                              letterSpacing: 0.5,
+                            }}
+                          >
+                            ❤️ {guard && guard.healed ? 'HEALED' : 'HEART'}
+                          </Text>
+                        </View>
+                        <Text style={styles.hintBannerText}>{parts.slice(1).join('HEART')}</Text>
+                      </>
+                    );
+                  })()}
+                </View>
+              ) : (
+                <Text style={styles.hintBannerText}>💡 {roomHint}</Text>
               )}
             </View>
           ) : null}
@@ -1801,6 +1900,8 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
         {/* Room Arena with Interactive Touch/Drag */}
         <View style={styles.arenaWrapper}>
           <View
+            ref={arenaViewRef}
+            collapsable={false}
             style={[
               styles.arena,
               {
@@ -1809,6 +1910,13 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
                 transform: [{ scale: arenaScale }],
               },
             ]}
+            onLayout={() => {
+              arenaViewRef.current?.measure((_x, _y, w, h, pageX, pageY) => {
+                if (pageX !== undefined && pageY !== undefined) {
+                  arenaBoundsRef.current = { pageX, pageY, w, h };
+                }
+              });
+            }}
             {...arenaPanResponder.panHandlers}
           >
             <Svg width={GAME_W} height={GAME_H} style={StyleSheet.absoluteFill}>
@@ -2396,6 +2504,34 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
             <Text style={styles.jumpBtnText}>▲ JUMP</Text>
           </View>
         </View>
+
+        {/* Floating Dragged Heart from Hint Box */}
+        {draggingHeartPos && (
+          <View
+            pointerEvents="none"
+            style={{
+              position: 'absolute',
+              left: draggingHeartPos.x - 24,
+              top: draggingHeartPos.y - 24,
+              width: 48,
+              height: 48,
+              borderRadius: 24,
+              backgroundColor: 'rgba(255, 0, 85, 0.95)',
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderWidth: 2,
+              borderColor: '#FFFFFF',
+              shadowColor: '#FF0055',
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.8,
+              shadowRadius: 10,
+              elevation: 12,
+              zIndex: 99999,
+            }}
+          >
+            <Text style={{ fontSize: 24 }}>❤️</Text>
+          </View>
+        )}
 
         <GameResultModal
           visible={modalVisible}

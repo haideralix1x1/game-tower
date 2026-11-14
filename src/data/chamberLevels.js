@@ -647,7 +647,7 @@ const ALL_CHAMBER_LEVELS = {
   },
   "10": {
     "title": "CHAMBER 10: THE WOUNDED SENTRY",
-    "hint": "GIVE THE ❤️ FROM THIS HINT TO HEAL THE DYING GUARD!",
+    "hint": "THIS SECURITY GUARD SEEMS LIKE AN HEART PATIENT...",
     "playerStart": {
       "x": 30,
       "y": 260
@@ -3852,7 +3852,7 @@ const ALL_CHAMBER_LEVELS = {
   },
   "52": {
       "title": "CHAMBER 52: HEAL THE ANDROID",
-      "hint": "GIVE THE ❤️ FROM THIS HINT TO HEAL THE FALLEN ANDROID AND REVEAL THE KEY!",
+      "hint": "THIS SECURITY GUARD SEEMS LIKE AN HEART PATIENT...",
       "playerStart": {
           "x": 30,
           "y": 260
@@ -5035,7 +5035,7 @@ const ALL_CHAMBER_LEVELS = {
   },
   "67": {
       "title": "CHAMBER 67: REBOOT THE SENTRY",
-      "hint": "GIVE THE ❤️ FROM THIS HINT TO HEAL THE SENTRY AND GET THE GOLDEN KEY!",
+      "hint": "THIS SECURITY GUARD SEEMS LIKE AN HEART PATIENT...",
       "crates": [
           {
               "id": "c1",
@@ -6353,7 +6353,7 @@ const ALL_CHAMBER_LEVELS = {
   },
   "84": {
       "title": "CHAMBER 84: REBOOT THE SENTRY",
-      "hint": "GIVE THE ❤️ FROM THIS HINT TO HEAL THE SENTRY AND GET THE GOLDEN KEY!",
+      "hint": "THIS SECURITY GUARD SEEMS LIKE AN HEART PATIENT...",
       "crates": [
           {
               "id": "c1",
@@ -7604,7 +7604,7 @@ const ALL_CHAMBER_LEVELS = {
   },
   "100": {
       "title": "CHAMBER 100: MASTER CYBER FINALE",
-      "hint": "HEAL THE ANDROID FOR THE KEY, BLASTER TO DESTROY THE PADLOCK, AND CLAIM GLORY!",
+      "hint": "THIS SECURITY GUARD SEEMS LIKE AN HEART PATIENT... BLAST THE PADLOCK WITH THE GUN!",
       "playerStart": {
           "x": 30,
           "y": 260
