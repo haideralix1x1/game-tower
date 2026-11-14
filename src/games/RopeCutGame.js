@@ -22,6 +22,7 @@ import Svg, {
 import MiniGameHeader from '../components/MiniGameHeader';
 import GameResultModal from '../components/GameResultModal';
 import JuiceEngine from '../components/JuiceEngine';
+import LevelWarpModal from '../components/LevelWarpModal';
 import { playSliceSound, playTapSound, playGameOverSound, playPerfectSound } from '../utils/sound';
 import {
   triggerLightHaptic,
@@ -282,6 +283,7 @@ export default function RopeCutGame({ onBackToHub, onScoreUpdate, isPaused = fal
 
   const juiceRef = useRef(null);
   const [level, setLevel] = useState(1);
+  const [showLevelWarp, setShowLevelWarp] = useState(false);
   const [levelTitle, setLevelTitle] = useState('TWIN STRANDS');
   const [score, setScore] = useState(0);
   const [bestScore, setBestScore] = useState(0);
@@ -931,10 +933,22 @@ export default function RopeCutGame({ onBackToHub, onScoreUpdate, isPaused = fal
 
         {/* Top HUD: Stage Title, Stars & Always-Available Restart */}
         <View style={styles.topHud}>
-          <View style={styles.stageBox}>
-            <Text style={styles.stageNum}>STAGE {level}</Text>
+          <TouchableOpacity
+            style={styles.stageBox}
+            activeOpacity={0.75}
+            onPress={() => {
+              triggerLightHaptic();
+              setShowLevelWarp(true);
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={styles.stageNum}>STAGE {level}</Text>
+              <View style={styles.warpPill}>
+                <Text style={styles.warpPillText}>⚡ WARP ▼</Text>
+              </View>
+            </View>
             <Text style={styles.stageTitle}>{levelTitle}</Text>
-          </View>
+          </TouchableOpacity>
 
           <View style={styles.starsRow}>
             {[0, 1, 2].map((i) => (
@@ -1292,6 +1306,23 @@ export default function RopeCutGame({ onBackToHub, onScoreUpdate, isPaused = fal
           retryLabel="TRY AGAIN ⟳"
           onBackToHub={onBackToHub}
         />
+
+        {/* Temporary Level Warp Menu Dropdown (1 - 50) */}
+        <LevelWarpModal
+          visible={showLevelWarp}
+          currentLevel={level}
+          totalLevels={50}
+          accentColor="#00F5D4"
+          gameTitle="SPIDER ROPE SWING"
+          onSelectLevel={(lvlNum) => {
+            setLevel(lvlNum);
+            try {
+              AsyncStorage.setItem('ROPE_SPIDER_STAGE', String(lvlNum));
+            } catch {}
+            initLevel(lvlNum);
+          }}
+          onClose={() => setShowLevelWarp(false)}
+        />
       </View>
     </JuiceEngine>
   );
@@ -1321,6 +1352,18 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: '#00F5D4',
     letterSpacing: 1,
+  },
+  warpPill: {
+    backgroundColor: '#00F5D4',
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  warpPillText: {
+    fontFamily: monoFont,
+    fontSize: 7.5,
+    fontWeight: '900',
+    color: '#050512',
   },
   stageTitle: {
     fontFamily: monoFont,

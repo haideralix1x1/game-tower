@@ -17,6 +17,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import MiniGameHeader from '../components/MiniGameHeader';
 import JuiceEngine from '../components/JuiceEngine';
 import GameResultModal from '../components/GameResultModal';
+import LevelWarpModal from '../components/LevelWarpModal';
 import { isValidWord } from '../data/scrabbleDictionary';
 import {
   triggerLightHaptic,
@@ -177,6 +178,7 @@ export default function WordScrambleGame({ onBackToHub, onScoreUpdate, isPaused 
   const lastLettersRef = useRef(null);
 
   const [level, setLevel] = useState(1);
+  const [showLevelWarp, setShowLevelWarp] = useState(false);
   const [score, setScore] = useState(0);
   const [bestScore, setBestScore] = useState(0);
 
@@ -758,9 +760,16 @@ export default function WordScrambleGame({ onBackToHub, onScoreUpdate, isPaused 
 
         {/* Top HUD: Level, Countdown Timer & Goal Progress */}
         <View style={styles.hudRow}>
-          <View style={styles.levelBadge}>
-            <Text style={styles.levelBadgeText}>LEVEL {level}</Text>
-          </View>
+          <Pressable
+            style={({ pressed }) => [styles.levelBadge, pressed && { opacity: 0.75 }]}
+            onPress={() => {
+              triggerLightHaptic();
+              playTapSound();
+              setShowLevelWarp(true);
+            }}
+          >
+            <Text style={styles.levelBadgeText}>LEVEL {level} ⚡▼</Text>
+          </Pressable>
 
           {/* Glowing Countdown Timer */}
           <View style={[styles.timerBadge, timeLeft <= 10 && styles.timerBadgeUrgent]}>
@@ -1082,6 +1091,23 @@ export default function WordScrambleGame({ onBackToHub, onScoreUpdate, isPaused 
           replayLabel="PLAY AGAIN ⟳"
           retryLabel="TRY AGAIN ⟳"
           onBackToHub={onBackToHub}
+        />
+
+        {/* Temporary Level Warp Menu Dropdown (1 - 50) */}
+        <LevelWarpModal
+          visible={showLevelWarp}
+          currentLevel={level}
+          totalLevels={50}
+          accentColor="#00F5FF"
+          gameTitle="WORD SCRAMBLE"
+          onSelectLevel={(lvlNum) => {
+            setLevel(lvlNum);
+            try {
+              AsyncStorage.setItem(STORAGE_LEVEL_KEY, String(lvlNum));
+            } catch {}
+            startRound(lvlNum);
+          }}
+          onClose={() => setShowLevelWarp(false)}
         />
       </View>
     </JuiceEngine>

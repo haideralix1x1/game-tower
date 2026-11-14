@@ -19,10 +19,13 @@ import Svg, {
   LinearGradient,
   Stop,
   Ellipse,
+  Polygon,
+  Text as SvgText,
 } from 'react-native-svg';
 import MiniGameHeader from '../components/MiniGameHeader';
 import JuiceEngine from '../components/JuiceEngine';
 import GameResultModal from '../components/GameResultModal';
+import LevelWarpModal from '../components/LevelWarpModal';
 import {
   triggerLightHaptic,
   triggerMediumHaptic,
@@ -126,6 +129,7 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
   const [gravityRotateMode, setGravityRotateMode] = useState(false);
   const [gravityTiltable, setGravityTiltable] = useState(false);
   const [reversedControls, setReversedControls] = useState(false);
+  const [showLevelWarp, setShowLevelWarp] = useState(false);
   const [draggingHeartPos, setDraggingHeartPos] = useState(null);
   const draggingHeartPosRef = useRef(null);
   const arenaBoundsRef = useRef(null);
@@ -1798,10 +1802,22 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
         {/* Level & Objective HUD */}
         <View style={styles.topHudWrapper}>
           <View style={styles.topHudRow}>
-            <View style={styles.stageBox}>
-              <Text style={styles.stageNum}>ROOM {level}</Text>
-              <Text style={styles.stageTitle}>{roomTitle}</Text>
-            </View>
+            <Pressable
+              style={({ pressed }) => [styles.stageBox, pressed && { opacity: 0.75 }]}
+              onPress={() => {
+                triggerLightHaptic();
+                playTapSound();
+                setShowLevelWarp(true);
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={styles.stageNum}>ROOM {level}</Text>
+                <View style={styles.warpPill}>
+                  <Text style={styles.warpPillText}>⚡ WARP ▼</Text>
+                </View>
+              </View>
+              <Text style={styles.stageTitle} numberOfLines={1}>{roomTitle}</Text>
+            </Pressable>
 
             <View style={styles.statusRow}>
               {hudKeyDraggableActive && (
@@ -2299,15 +2315,94 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
                 </G>
               )}
 
-              {/* Wounded / Healed Guard (Room 10) */}
+              {/* Security Guard (Modeled directly after Player Runner with Distinct Officer Armor & Colors) */}
               {guard && (
-                <G transform={`translate(${guard.x}, ${guard.y})`}>
-                  <Rect x={0} y={guard.healed ? 6 : 14} width={22} height={guard.healed ? 22 : 12} fill={guard.healed ? "#10B981" : "#EF4444"} rx={4} />
-                  <Circle cx={11} cy={guard.healed ? 4 : 12} r={6} fill="#1F2937" stroke={guard.healed ? "#34D399" : "#F87171"} strokeWidth={1.5} />
-                  <G transform="translate(-25, -28)">
-                    <Rect x={0} y={0} width={76} height={18} fill="#1F2937" stroke={guard.healed ? "#34D399" : "#F87171"} strokeWidth={1} rx={4} />
-                    <Line x1={10} y1={4} x2={25} y2={4} stroke={guard.healed ? "#34D399" : "#F87171"} strokeWidth={2} />
-                    <Circle cx={40} cy={9} r={5} fill={guard.healed ? "#34D399" : "#F87171"} />
+                <G transform={`translate(${guard.x}, ${guard.healed ? guard.y : guard.y + 6})`}>
+                  {/* Cyber Runner Armor Body */}
+                  <Rect
+                    x={2}
+                    y={guard.healed ? 6 : 10}
+                    width={PLAYER_W - 4}
+                    height={guard.healed ? PLAYER_H - 12 : PLAYER_H - 16}
+                    fill={guard.healed ? '#059669' : '#991B1B'}
+                    stroke={guard.healed ? '#34D399' : '#EF4444'}
+                    strokeWidth={1.5}
+                    rx={4}
+                  />
+
+                  {/* Security Officer Gold Crest Badge on Armor */}
+                  <Polygon
+                    points={
+                      guard.healed
+                        ? `${PLAYER_W / 2},8 ${PLAYER_W / 2 + 3},11 ${PLAYER_W / 2},15 ${PLAYER_W / 2 - 3},11`
+                        : `${PLAYER_W / 2},12 ${PLAYER_W / 2 + 3},14 ${PLAYER_W / 2},18 ${PLAYER_W / 2 - 3},14`
+                    }
+                    fill="#FBBF24"
+                    stroke="#D97706"
+                    strokeWidth={0.8}
+                  />
+
+                  {/* Cyber Helmet */}
+                  <Circle
+                    cx={PLAYER_W / 2}
+                    cy={guard.healed ? 5 : 8}
+                    r={7}
+                    fill={guard.healed ? '#064E3B' : '#1E1B4B'}
+                    stroke={guard.healed ? '#34D399' : '#F43F5E'}
+                    strokeWidth={1.5}
+                  />
+
+                  {/* Helmet Visor */}
+                  <Rect
+                    x={2}
+                    y={guard.healed ? 3 : 6}
+                    width={7}
+                    height={4}
+                    fill={guard.healed ? '#00F5D4' : '#FB7185'}
+                    rx={2}
+                  />
+
+                  {/* Armor Legs */}
+                  {guard.healed ? (
+                    <>
+                      <Line x1={5} y1={PLAYER_H - 6} x2={5} y2={PLAYER_H} stroke="#059669" strokeWidth={3} strokeLinecap="round" />
+                      <Line x1={PLAYER_W - 5} y1={PLAYER_H - 6} x2={PLAYER_W - 5} y2={PLAYER_H} stroke="#059669" strokeWidth={3} strokeLinecap="round" />
+                    </>
+                  ) : (
+                    <>
+                      <Line x1={3} y1={PLAYER_H - 8} x2={10} y2={PLAYER_H - 2} stroke="#991B1B" strokeWidth={3} strokeLinecap="round" />
+                      <Line x1={10} y1={PLAYER_H - 2} x2={16} y2={PLAYER_H - 2} stroke="#991B1B" strokeWidth={3} strokeLinecap="round" />
+                    </>
+                  )}
+
+                  {/* Floating Guard HUD Speech / Vital Bubble */}
+                  <G transform="translate(-30, -28)">
+                    <Rect
+                      x={0}
+                      y={0}
+                      width={80}
+                      height={18}
+                      fill={guard.healed ? '#052E16' : '#1C0B12'}
+                      stroke={guard.healed ? '#10B981' : '#F43F5E'}
+                      strokeWidth={1.5}
+                      rx={5}
+                    />
+                    <Polygon
+                      points="36,18 40,23 44,18"
+                      fill={guard.healed ? '#052E16' : '#1C0B12'}
+                      stroke={guard.healed ? '#10B981' : '#F43F5E'}
+                      strokeWidth={1.2}
+                    />
+                    <SvgText
+                      x={40}
+                      y={12.5}
+                      fill={guard.healed ? '#A7F3D0' : '#FDA4AF'}
+                      fontSize={9}
+                      fontWeight="bold"
+                      textAnchor="middle"
+                    >
+                      {guard.healed ? 'KEY REVEALED!' : 'NEED A HEART...'}
+                    </SvgText>
                   </G>
                 </G>
               )}
@@ -2553,6 +2648,23 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
           retryLabel="RETRY VAULT ⟳"
           onBackToHub={onBackToHub}
         />
+
+        {/* Temporary Level Warp Menu Dropdown (1 - 100) */}
+        <LevelWarpModal
+          visible={showLevelWarp}
+          currentLevel={level}
+          totalLevels={100}
+          accentColor="#00F5FF"
+          gameTitle="CHAMBER ESCAPE"
+          onSelectLevel={(lvlNum) => {
+            setLevel(lvlNum);
+            try {
+              AsyncStorage.setItem(STORAGE_LEVEL_KEY, String(lvlNum));
+            } catch {}
+            initRoom(lvlNum);
+          }}
+          onClose={() => setShowLevelWarp(false)}
+        />
       </View>
     </JuiceEngine>
   );
@@ -2601,6 +2713,18 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: '#00F5FF',
     letterSpacing: 1,
+  },
+  warpPill: {
+    backgroundColor: '#00F5FF',
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  warpPillText: {
+    fontFamily: monoFont,
+    fontSize: 7.5,
+    fontWeight: '900',
+    color: '#060914',
   },
   stageTitle: {
     fontFamily: monoFont,

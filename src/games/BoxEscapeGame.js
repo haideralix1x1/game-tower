@@ -20,6 +20,7 @@ import Svg, {
 } from 'react-native-svg';
 import { COLORS } from '../../styles';
 import MiniGameHeader from '../components/MiniGameHeader';
+import LevelWarpModal from '../components/LevelWarpModal';
 import JuiceEngine from '../components/JuiceEngine';
 import GameResultModal from '../components/GameResultModal';
 import {
@@ -551,6 +552,7 @@ export default function BoxEscapeGame({
   const juiceRef = useRef(null);
 
   const [currentLevel, setCurrentLevel] = useState(1);
+  const [showLevelWarp, setShowLevelWarp] = useState(false);
   const [highScore, setHighScore] = useState(0);
   const [totalScore, setTotalScore] = useState(0);
 
@@ -931,12 +933,21 @@ export default function BoxEscapeGame({
 
         {/* Top Level Telemetry */}
         <View style={styles.telemetryBar}>
-          <View style={styles.telemetryPill}>
-            <Text style={styles.telemetryLabel}>LEVEL</Text>
+          <Pressable
+            style={({ pressed }) => [styles.telemetryPill, pressed && { opacity: 0.75 }]}
+            onPress={() => {
+              triggerLightHaptic();
+              setShowLevelWarp(true);
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Text style={styles.telemetryLabel}>LEVEL</Text>
+              <Text style={{ fontSize: 7, color: COLORS.cyan, fontWeight: 'bold' }}>⚡▼</Text>
+            </View>
             <Text style={[styles.telemetryVal, { color: COLORS.cyan }]}>
               {String(currentLevel).padStart(2, '0')}
             </Text>
-          </View>
+          </Pressable>
 
           <View style={styles.missionCenterTag}>
             <Text style={styles.missionName}>{levelConfig.name}</Text>
@@ -1747,6 +1758,23 @@ export default function BoxEscapeGame({
           onBackToHub={onBackToHub}
           buttonText="RE-RUN SYSTEM"
           subtitle={`ALL ${TOTAL_BOX_LEVELS} SECTORS COMPLETED!`}
+        />
+
+        {/* Temporary Level Warp Menu Dropdown (1 - 120) */}
+        <LevelWarpModal
+          visible={showLevelWarp}
+          currentLevel={currentLevel}
+          totalLevels={TOTAL_BOX_LEVELS}
+          accentColor={COLORS.cyan}
+          gameTitle="BOX ESCAPE"
+          onSelectLevel={(lvlNum) => {
+            setCurrentLevel(lvlNum);
+            try {
+              AsyncStorage.setItem('@game_tower:box_escape_level', String(lvlNum));
+            } catch {}
+            startLevel(lvlNum);
+          }}
+          onClose={() => setShowLevelWarp(false)}
         />
       </View>
     </JuiceEngine>

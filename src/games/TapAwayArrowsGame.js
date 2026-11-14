@@ -18,6 +18,7 @@ import Svg, {
 import MiniGameHeader from '../components/MiniGameHeader';
 import GameResultModal from '../components/GameResultModal';
 import JuiceEngine from '../components/JuiceEngine';
+import LevelWarpModal from '../components/LevelWarpModal';
 import {
   playTapSound,
   playSliceSound,
@@ -376,6 +377,7 @@ export default function TapAwayArrowsGame({
 
   const MAX_MISTAKES = 3;
   const [level, setLevel] = useState(1);
+  const [showLevelWarp, setShowLevelWarp] = useState(false);
   const [bestScore, setBestScore] = useState(0);
   const [mistakes, setMistakes] = useState(0);
   const [hintsRemaining, setHintsRemaining] = useState(MAX_HINTS_PER_ROUND);
@@ -890,6 +892,18 @@ export default function TapAwayArrowsGame({
             </Text>
           </View>
 
+          {/* Level Warp Button */}
+          <Pressable
+            style={({ pressed }) => [styles.warpBtn, pressed && { opacity: 0.75 }]}
+            onPress={() => {
+              triggerLightHaptic();
+              playTapSound();
+              setShowLevelWarp(true);
+            }}
+          >
+            <Text style={styles.warpBtnText}>⚡ L{level} ▼</Text>
+          </Pressable>
+
           {/* Hint Lightbulb on Right (Max 2 per round) */}
           <Pressable
             onPress={handleUseHint}
@@ -1104,6 +1118,23 @@ export default function TapAwayArrowsGame({
           retryLabel="RETRY LEVEL ⟳"
           onBackToHub={onBackToHub}
         />
+
+        {/* Temporary Level Warp Menu Dropdown (1 - 50) */}
+        <LevelWarpModal
+          visible={showLevelWarp}
+          currentLevel={level}
+          totalLevels={MAX_LEVEL}
+          accentColor="#00F5FF"
+          gameTitle="ARROW MAZE"
+          onSelectLevel={(lvlNum) => {
+            setLevel(lvlNum);
+            try {
+              AsyncStorage.setItem(STORAGE_LEVEL_KEY, String(lvlNum));
+            } catch {}
+            initLevel(lvlNum);
+          }}
+          onClose={() => setShowLevelWarp(false)}
+        />
       </View>
     </JuiceEngine>
   );
@@ -1165,6 +1196,21 @@ const styles = StyleSheet.create({
     color: '#00F5FF',
     textAlign: 'center',
     letterSpacing: 0.3,
+  },
+  warpBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: 'rgba(0, 245, 255, 0.15)',
+    borderWidth: 1.2,
+    borderColor: '#00F5FF',
+    marginRight: 6,
+  },
+  warpBtnText: {
+    fontFamily: monoFont,
+    fontSize: 9.5,
+    fontWeight: '900',
+    color: '#00F5FF',
   },
   hintBtn: {
     alignItems: 'center',

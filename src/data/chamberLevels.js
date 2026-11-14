@@ -3866,15 +3866,20 @@ const ALL_CHAMBER_LEVELS = {
       },
       "guard": {
           "x": 140,
-          "y": 255,
+          "y": 272,
           "healed": false
       },
       "hintHeart": true,
       "crates": [
           {
               "id": "c1",
-              "x": 80,
-              "y": 260
+              "x": 160,
+              "y": 274
+          },
+          {
+              "id": "c2",
+              "x": 186,
+              "y": 274
           }
       ],
       "platforms": [
@@ -3909,9 +3914,9 @@ const ALL_CHAMBER_LEVELS = {
           {
               "id": "mid_wall",
               "x": 210,
-              "y": 180,
+              "y": 220,
               "w": 14,
-              "h": 120
+              "h": 80
           }
       ],
       "springs": [],
@@ -5039,8 +5044,13 @@ const ALL_CHAMBER_LEVELS = {
       "crates": [
           {
               "id": "c1",
-              "x": 80,
-              "y": 260
+              "x": 166,
+              "y": 274
+          },
+          {
+              "id": "c2",
+              "x": 192,
+              "y": 274
           }
       ],
       "springs": [],
@@ -5062,7 +5072,7 @@ const ALL_CHAMBER_LEVELS = {
       },
       "guard": {
           "x": 150,
-          "y": 255,
+          "y": 272,
           "healed": false
       },
       "hintHeart": true,
@@ -5098,9 +5108,9 @@ const ALL_CHAMBER_LEVELS = {
           {
               "id": "wall",
               "x": 220,
-              "y": 180,
+              "y": 220,
               "w": 14,
-              "h": 120
+              "h": 80
           }
       ]
   },
@@ -6357,8 +6367,13 @@ const ALL_CHAMBER_LEVELS = {
       "crates": [
           {
               "id": "c1",
-              "x": 80,
-              "y": 260
+              "x": 166,
+              "y": 274
+          },
+          {
+              "id": "c2",
+              "x": 192,
+              "y": 274
           }
       ],
       "springs": [],
@@ -6380,7 +6395,7 @@ const ALL_CHAMBER_LEVELS = {
       },
       "guard": {
           "x": 150,
-          "y": 255,
+          "y": 272,
           "healed": false
       },
       "hintHeart": true,
@@ -6416,9 +6431,9 @@ const ALL_CHAMBER_LEVELS = {
           {
               "id": "wall",
               "x": 220,
-              "y": 180,
+              "y": 220,
               "w": 14,
-              "h": 120
+              "h": 80
           }
       ]
   },
@@ -7623,7 +7638,7 @@ const ALL_CHAMBER_LEVELS = {
       },
       "guard": {
           "x": 130,
-          "y": 255,
+          "y": 272,
           "healed": false
       },
       "hintHeart": true,

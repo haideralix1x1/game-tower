@@ -12,8 +12,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import MiniGameHeader from '../components/MiniGameHeader';
+import { COLORS } from '../../styles';
 import JuiceEngine from '../components/JuiceEngine';
 import GameResultModal from '../components/GameResultModal';
+import LevelWarpModal from '../components/LevelWarpModal';
 import {
   triggerLightHaptic,
   triggerMediumHaptic,
@@ -26,6 +28,7 @@ import {
   playSliceSound,
   playSpeedUpSound,
   playGameOverSound,
+  playPerfectSound,
 } from '../utils/sound';
 
 const STORAGE_KEY = '@game_tower:best_breaker_v5';
@@ -239,6 +242,7 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
   // Selected Mode
   const [mode, setMode] = useState('SINGLE_BRICKS');
   const [level, setLevel] = useState(1);
+  const [showLevelWarp, setShowLevelWarp] = useState(false);
   const [score, setScore] = useState(0);
   const [aiScore, setAiScore] = useState(0);
   const [bestScore, setBestScore] = useState(0);
@@ -613,6 +617,7 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
 
       // Halt balls during celebration
       for (const b of eng.balls) {
+        // eslint-disable-next-line react-hooks/immutability
         b.vx = 0;
         b.vy = 0;
       }
@@ -679,6 +684,7 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
       let releasedAny = false;
       for (const b of eng.balls) {
         if (b.caught) {
+          // eslint-disable-next-line react-hooks/immutability
           b.caught = false;
           b.caughtTimer = 0;
           const hitOffset = (b.x - (eng.paddleX + eng.paddleW / 2)) / (eng.paddleW / 2);
@@ -2022,14 +2028,20 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
                     <Text style={localStyles.levelNavBtnText}>◀</Text>
                   </Pressable>
 
-                  <View style={localStyles.levelCenterInfo}>
+                  <Pressable
+                    style={({ pressed }) => [localStyles.levelCenterInfo, pressed && { opacity: 0.75 }]}
+                    onPress={() => {
+                      triggerLightHaptic();
+                      setShowLevelWarp(true);
+                    }}
+                  >
                     <Text style={localStyles.heartLabel}>
-                      LVL {level}/{BRICK_DESIGNS.length}: {currentDesign.name} {currentDesign.icon}
+                      LVL {level}/{BRICK_DESIGNS.length}: {currentDesign.name} {currentDesign.icon} ⚡▼
                     </Text>
                     <Text style={localStyles.subInfoText}>
                       BRICKS: {renderState.bricks.filter((b) => b.type !== 'UNBREAKABLE').length} REMAINING
                     </Text>
-                  </View>
+                  </Pressable>
 
                   <Pressable
                     style={localStyles.levelNavBtn}
@@ -2400,6 +2412,19 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
             modalType === 'win' && mode === 'SINGLE_BRICKS' ? 'NEXT LEVEL ➔' : 'PLAY AGAIN'
           }
           onBackToHub={onBackToHub}
+        />
+
+        {/* Temporary Level Warp Menu Dropdown */}
+        <LevelWarpModal
+          visible={showLevelWarp}
+          currentLevel={level}
+          totalLevels={BRICK_DESIGNS.length}
+          accentColor="#00F5FF"
+          gameTitle="BRICK BREAKER"
+          onSelectLevel={(lvlNum) => {
+            resetGame('SINGLE_BRICKS', lvlNum);
+          }}
+          onClose={() => setShowLevelWarp(false)}
         />
       </View>
     </JuiceEngine>
