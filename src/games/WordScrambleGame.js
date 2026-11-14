@@ -14,7 +14,6 @@ import Svg, { Line, Circle, G, Defs, RadialGradient, Stop } from 'react-native-s
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { COLORS } from '../../styles';
 import MiniGameHeader from '../components/MiniGameHeader';
 import JuiceEngine from '../components/JuiceEngine';
 import GameResultModal from '../components/GameResultModal';
@@ -181,11 +180,7 @@ export default function WordScrambleGame({ onBackToHub, onScoreUpdate, isPaused 
   const [bestScore, setBestScore] = useState(0);
 
   // Round configuration & letter setup
-  const [roundConfig, setRoundConfig] = useState(() => {
-    const initialCfg = pickNewLetterSet(1, null);
-    lastLettersRef.current = initialCfg.letters;
-    return initialCfg;
-  });
+  const [roundConfig, setRoundConfig] = useState(() => pickNewLetterSet(1, null));
 
   const [shuffledLetters, setShuffledLetters] = useState(() => roundConfig.letters);
   const [selectedIndices, setSelectedIndices] = useState([]);
@@ -200,22 +195,31 @@ export default function WordScrambleGame({ onBackToHub, onScoreUpdate, isPaused 
   const [modalVisible, setModalVisible] = useState(false);
   const [modalType, setModalType] = useState('VICTORY'); // 'VICTORY' | 'GAME_OVER'
 
-  // Rotation animation for shuffle button
-  const shuffleSpin = useRef(new Animated.Value(0)).current;
+  // Rotation animation for shuffle button (useMemo avoids ref-during-render warning)
+  const shuffleSpin = useMemo(() => new Animated.Value(0), []);
 
   // Latest state refs to eliminate timer and pan responder stale closures
   const foundWordsRef = useRef(foundWords);
-  foundWordsRef.current = foundWords;
   const roundConfigRef = useRef(roundConfig);
-  roundConfigRef.current = roundConfig;
   const levelRef = useRef(level);
-  levelRef.current = level;
   const scoreRef = useRef(score);
-  scoreRef.current = score;
   const bestScoreRef = useRef(bestScore);
-  bestScoreRef.current = bestScore;
   const shuffledLettersRef = useRef(shuffledLetters);
-  shuffledLettersRef.current = shuffledLetters;
+
+  // Starts a fresh round with guaranteed DIFFERENT letters
+  const startRound = useCallback((lvl) => {
+    const nextCfg = pickNewLetterSet(lvl, lastLettersRef.current);
+    lastLettersRef.current = nextCfg.letters;
+
+    setRoundConfig(nextCfg);
+    setShuffledLetters(nextCfg.letters);
+    setSelectedIndices([]);
+    setFoundWords([]);
+    setFeedbackMsg(null);
+    setTimeLeft(nextCfg.roundTime);
+    setIsTimerRunning(true);
+    setModalVisible(false);
+  }, []);
 
   // Load saved level & score
   useEffect(() => {
@@ -236,22 +240,18 @@ export default function WordScrambleGame({ onBackToHub, onScoreUpdate, isPaused 
         }
       } catch {}
     })();
-  }, []);
+  }, [startRound]);
 
-  // Starts a fresh round with guaranteed DIFFERENT letters
-  const startRound = useCallback((lvl) => {
-    const nextCfg = pickNewLetterSet(lvl, lastLettersRef.current);
-    lastLettersRef.current = nextCfg.letters;
-
-    setRoundConfig(nextCfg);
-    setShuffledLetters(nextCfg.letters);
-    setSelectedIndices([]);
-    setFoundWords([]);
-    setFeedbackMsg(null);
-    setTimeLeft(nextCfg.roundTime);
-    setIsTimerRunning(true);
-    setModalVisible(false);
-  }, []);
+  // Sync latest state into refs cleanly outside render
+  useEffect(() => {
+    lastLettersRef.current = roundConfig.letters;
+    foundWordsRef.current = foundWords;
+    roundConfigRef.current = roundConfig;
+    levelRef.current = level;
+    scoreRef.current = score;
+    bestScoreRef.current = bestScore;
+    shuffledLettersRef.current = shuffledLetters;
+  }, [foundWords, roundConfig, level, score, bestScore, shuffledLetters]);
 
   // When time runs out: check if goal is met
   const handleTimeUp = useCallback(() => {
@@ -297,21 +297,6 @@ export default function WordScrambleGame({ onBackToHub, onScoreUpdate, isPaused 
   // Current word formed by selected letter indices
   const currentWord = selectedIndices.map((idx) => shuffledLetters[idx]).join('');
 
-  // Handle letter tap on dial
-  const handleTapLetter = (idx) => {
-    if (selectedIndices.includes(idx)) {
-      // Tap on already-selected letter -> remove it
-      setSelectedIndices((prev) => prev.filter((i) => i !== idx));
-      triggerLightHaptic();
-      playTapSound();
-      return;
-    }
-
-    triggerLightHaptic();
-    playTapSound();
-    setSelectedIndices((prev) => [...prev, idx]);
-  };
-
   // Backspace last tapped letter
   const handleBackspace = () => {
     if (selectedIndices.length === 0) return;
@@ -329,7 +314,7 @@ export default function WordScrambleGame({ onBackToHub, onScoreUpdate, isPaused 
   };
 
   // Shuffle letter order on the dial
-  const handleShuffle = () => {
+  const handleShuffle = useCallback(() => {
     triggerMediumHaptic();
     playSliceSound();
 
@@ -372,7 +357,7 @@ export default function WordScrambleGame({ onBackToHub, onScoreUpdate, isPaused 
 
     setShuffledLetters(newShuffledLetters);
     setSelectedIndices(newSelectedIndices);
-  };
+  }, [shuffledLetters, selectedIndices, shuffleSpin]);
 
   // Submit word helper (used by both Pattern Lock release & Submit button)
   const submitWordValue = useCallback(
@@ -488,12 +473,40 @@ export default function WordScrambleGame({ onBackToHub, onScoreUpdate, isPaused 
 
   const isGoalReached = foundWords.length >= roundConfig.goal;
 
+  // Handlers refs to avoid stale closures in gesture callbacks
+  const handleShuffleRef = useRef(handleShuffle);
+  const submitWordValueRef = useRef(submitWordValue);
+
+  useEffect(() => {
+    handleShuffleRef.current = handleShuffle;
+    submitWordValueRef.current = submitWordValue;
+  }, [handleShuffle, submitWordValue]);
+
   // Geometry for circular letter dial (scaled with safe area to avoid any overflow)
   const availableDialHeight = Math.max(160, Math.min(220, height * 0.28));
   const dialSize = Math.min(availableDialHeight, width - 64);
   const dialRadius = dialSize * 0.38;
   const letterCount = shuffledLetters.length;
   const letterBtnSize = Math.max(38, Math.min(50, Math.floor((dialSize * 2.6) / (letterCount + 2))));
+
+  // Dial layout measurement for exact, rock-solid touch coordinates
+  const dialRef = useRef(null);
+  const dialBoundsRef = useRef(null);
+
+  const measureDial = useCallback(() => {
+    if (dialRef.current && dialRef.current.measureInWindow) {
+      dialRef.current.measureInWindow((x, y, width, height) => {
+        if (width > 0 && height > 0) {
+          dialBoundsRef.current = { x, y, width, height };
+        }
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(measureDial, 60);
+    return () => clearTimeout(timer);
+  }, [dialSize, measureDial]);
 
   // Pattern Lock Swipe Gesture & Connection Trail State
   const [patternTrail, setPatternTrail] = useState([]);
@@ -513,19 +526,42 @@ export default function WordScrambleGame({ onBackToHub, onScoreUpdate, isPaused 
     [dialSize, dialRadius, letterCount]
   );
 
-  // Helper: hit test touch coords against letter buttons
-  const findLetterAt = useCallback(
+  // Helper: resolve touch coordinates relative to the dial container
+  const getDialCoords = useCallback((evt, gestureState) => {
+    if (dialBoundsRef.current && dialBoundsRef.current.width > 0) {
+      const pageX = evt.nativeEvent?.pageX ?? gestureState?.moveX ?? gestureState?.x0;
+      const pageY = evt.nativeEvent?.pageY ?? gestureState?.moveY ?? gestureState?.y0;
+      if (pageX != null && pageY != null) {
+        return {
+          x: pageX - dialBoundsRef.current.x,
+          y: pageY - dialBoundsRef.current.y,
+        };
+      }
+    }
+    return {
+      x: evt.nativeEvent?.locationX ?? 0,
+      y: evt.nativeEvent?.locationY ?? 0,
+    };
+  }, []);
+
+  // Helper: find the single strictly closest letter node and its exact distance
+  const getClosestLetter = useCallback(
     (tx, ty) => {
-      const hitRadius = letterBtnSize * 0.72;
+      let closestIdx = -1;
+      let minDistance = Infinity;
+
       for (let i = 0; i < letterCount; i++) {
         const pt = getLetterCenter(i);
-        if (Math.hypot(tx - pt.x, ty - pt.y) <= hitRadius) {
-          return i;
+        const dist = Math.hypot(tx - pt.x, ty - pt.y);
+        if (dist < minDistance) {
+          minDistance = dist;
+          closestIdx = i;
         }
       }
-      return -1;
+
+      return { index: closestIdx, distance: minDistance };
     },
-    [getLetterCenter, letterBtnSize, letterCount]
+    [getLetterCenter, letterCount]
   );
 
   // Helper: test if touch is in center shuffle button
@@ -533,7 +569,7 @@ export default function WordScrambleGame({ onBackToHub, onScoreUpdate, isPaused 
     (tx, ty) => {
       const cx = dialSize / 2;
       const cy = dialSize / 2;
-      return Math.hypot(tx - cx, ty - cy) < dialSize * 0.18;
+      return Math.hypot(tx - cx, ty - cy) <= dialSize * 0.18;
     },
     [dialSize]
   );
@@ -541,49 +577,85 @@ export default function WordScrambleGame({ onBackToHub, onScoreUpdate, isPaused 
   // Mobile Lockscreen Pattern PanResponder on the Dial
   const dialPanResponder = useMemo(
     () =>
+      // eslint-disable-next-line react-hooks/refs
       PanResponder.create({
         onStartShouldSetPanResponder: () => true,
         onMoveShouldSetPanResponder: () => true,
-        onPanResponderGrant: (evt) => {
-          const { locationX, locationY } = evt.nativeEvent;
-          if (isInsideCenterShuffle(locationX, locationY)) {
-            handleShuffle();
+        onPanResponderTerminationRequest: () => false,
+        onPanResponderGrant: (evt, gestureState) => {
+          measureDial();
+          const { x: touchX, y: touchY } = getDialCoords(evt, gestureState);
+
+          if (isInsideCenterShuffle(touchX, touchY)) {
+            if (handleShuffleRef.current) handleShuffleRef.current();
             return;
           }
 
-          const touchedIdx = findLetterAt(locationX, locationY);
-          if (touchedIdx !== -1) {
+          const { index: closestIdx, distance } = getClosestLetter(touchX, touchY);
+          // Initial touch-down snap radius (comfortable target on letter node)
+          const grantSnapRadius = letterBtnSize * 0.58;
+          if (closestIdx !== -1 && distance <= grantSnapRadius) {
             isDraggingPatternRef.current = true;
-            patternTrailRef.current = [touchedIdx];
-            setPatternTrail([touchedIdx]);
-            setSelectedIndices([touchedIdx]);
-            setDragPointer({ x: locationX, y: locationY });
+            patternTrailRef.current = [closestIdx];
+            setPatternTrail([closestIdx]);
+            setSelectedIndices([closestIdx]);
+            setDragPointer({
+              x: Math.max(0, Math.min(dialSize, touchX)),
+              y: Math.max(0, Math.min(dialSize, touchY)),
+            });
             triggerLightHaptic();
             playTapSound();
           }
         },
-        onPanResponderMove: (evt) => {
-          if (!isDraggingPatternRef.current) return;
-          const { locationX, locationY } = evt.nativeEvent;
-          setDragPointer({ x: locationX, y: locationY });
+        onPanResponderMove: (evt, gestureState) => {
+          const { x: touchX, y: touchY } = getDialCoords(evt, gestureState);
 
-          const touchedIdx = findLetterAt(locationX, locationY);
-          if (touchedIdx !== -1) {
-            const trail = patternTrailRef.current;
-            const len = trail.length;
-            // Android lockscreen style: backtrack if dragging back to second-to-last node
-            if (len >= 2 && trail[len - 2] === touchedIdx) {
-              trail.pop();
-              patternTrailRef.current = [...trail];
-              setPatternTrail([...trail]);
-              setSelectedIndices([...trail]);
+          if (!isDraggingPatternRef.current) {
+            // Started touch slightly outside letter, smoothly start as soon as it enters a letter
+            const { index: closestIdx, distance } = getClosestLetter(touchX, touchY);
+            if (closestIdx !== -1 && distance <= letterBtnSize * 0.48) {
+              isDraggingPatternRef.current = true;
+              patternTrailRef.current = [closestIdx];
+              setPatternTrail([closestIdx]);
+              setSelectedIndices([closestIdx]);
+              setDragPointer({
+                x: Math.max(0, Math.min(dialSize, touchX)),
+                y: Math.max(0, Math.min(dialSize, touchY)),
+              });
               triggerLightHaptic();
-            } else if (!trail.includes(touchedIdx)) {
-              // New letter in pattern
-              trail.push(touchedIdx);
-              patternTrailRef.current = [...trail];
-              setPatternTrail([...trail]);
-              setSelectedIndices([...trail]);
+              playTapSound();
+            }
+            return;
+          }
+
+          setDragPointer({
+            x: Math.max(0, Math.min(dialSize, touchX)),
+            y: Math.max(0, Math.min(dialSize, touchY)),
+          });
+
+          const { index: closestIdx, distance } = getClosestLetter(touchX, touchY);
+          if (closestIdx === -1) return;
+
+          const trail = patternTrailRef.current;
+          const existingIndex = trail.indexOf(closestIdx);
+
+          if (existingIndex !== -1) {
+            // Already in trail: backtrack if dragging back to an ancestor node
+            if (existingIndex < trail.length - 1 && distance <= letterBtnSize * 0.52) {
+              const newTrail = trail.slice(0, existingIndex + 1);
+              patternTrailRef.current = newTrail;
+              setPatternTrail(newTrail);
+              setSelectedIndices(newTrail);
+              triggerLightHaptic();
+            }
+          } else {
+            // New letter node: connect ONLY when finger enters its perimeter (prevent accidental jumps)
+            const connectRadius = letterBtnSize * 0.46;
+            if (distance <= connectRadius) {
+              const newTrail = [...trail, closestIdx];
+              patternTrailRef.current = newTrail;
+              setPatternTrail(newTrail);
+              setSelectedIndices(newTrail);
               triggerLightHaptic();
               playTapSound();
             }
@@ -594,7 +666,11 @@ export default function WordScrambleGame({ onBackToHub, onScoreUpdate, isPaused 
             const trail = patternTrailRef.current;
             if (trail.length >= 2) {
               const word = trail.map((idx) => shuffledLettersRef.current[idx]).join('');
-              submitWordValue(word);
+              if (submitWordValueRef.current) {
+                submitWordValueRef.current(word);
+              }
+            } else {
+              setSelectedIndices([]);
             }
           }
           isDraggingPatternRef.current = false;
@@ -602,8 +678,22 @@ export default function WordScrambleGame({ onBackToHub, onScoreUpdate, isPaused 
           setPatternTrail([]);
           setDragPointer(null);
         },
+        onPanResponderTerminate: () => {
+          isDraggingPatternRef.current = false;
+          patternTrailRef.current = [];
+          setPatternTrail([]);
+          setSelectedIndices([]);
+          setDragPointer(null);
+        },
       }),
-    [findLetterAt, isInsideCenterShuffle, submitWordValue]
+    [
+      measureDial,
+      getDialCoords,
+      isInsideCenterShuffle,
+      getClosestLetter,
+      letterBtnSize,
+      dialSize,
+    ]
   );
 
   return (
@@ -743,12 +833,14 @@ export default function WordScrambleGame({ onBackToHub, onScoreUpdate, isPaused 
         {/* Circular Letter Dial with Mobile Lockscreen Pattern Swiping */}
         <View style={styles.dialArena}>
           <View
+            ref={dialRef}
+            onLayout={measureDial}
             style={[styles.dialRing, { width: dialSize, height: dialSize }]}
             {...dialPanResponder.panHandlers}
           >
-            {/* Center Shuffle Button */}
-            <Pressable
-              onPress={handleShuffle}
+            {/* Center Shuffle Button (pointerEvents="none" so gesture coordinates never jump) */}
+            <View
+              pointerEvents="none"
               style={[styles.centerShuffleBtn, { width: dialSize * 0.34, height: dialSize * 0.34 }]}
             >
               <Animated.Text
@@ -760,7 +852,7 @@ export default function WordScrambleGame({ onBackToHub, onScoreUpdate, isPaused 
                 🔀
               </Animated.Text>
               <Text style={styles.shuffleLabel}>SHUFFLE</Text>
-            </Pressable>
+            </View>
 
             {/* Mobile Lockscreen Pattern SVG Connection Lines */}
             <Svg width={dialSize} height={dialSize} style={StyleSheet.absoluteFill} pointerEvents="none">
