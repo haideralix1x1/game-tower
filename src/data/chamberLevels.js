@@ -69,15 +69,7 @@ const ALL_CHAMBER_LEVELS = {
     ],
     "plates": [],
     "hazards": [],
-    "barriers": [],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": false
+    "barriers": []
   },
   "2": {
     "title": "CHAMBER 02: LASER INTERCEPT",
@@ -91,8 +83,7 @@ const ALL_CHAMBER_LEVELS = {
       "y": 254,
       "w": 28,
       "h": 42,
-      "locked": true,
-      "isDraggable": false
+      "locked": true
     },
     "platforms": [
       {
@@ -156,19 +147,11 @@ const ALL_CHAMBER_LEVELS = {
         "active": true,
         "color": "#FF0055"
       }
-    ],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": false
+    ]
   },
   "3": {
     "title": "CHAMBER 03: CRATE ELEVATION",
-    "hint": "DRAG & DROP THE CRATES TO BUILD ESCAPE STAIRS!",
+    "hint": "PUSH & ARRANGE CRATES INTO STAIRS TO REACH THE HIGH DOOR!",
     "playerStart": {
       "x": 30,
       "y": 260
@@ -178,7 +161,184 @@ const ALL_CHAMBER_LEVELS = {
       "y": 148,
       "w": 28,
       "h": 42,
-      "locked": true,
+      "locked": false
+    },
+    "platforms": [
+      {
+        "id": "floor",
+        "x": 0,
+        "y": 300,
+        "w": 360,
+        "h": 40
+      },
+      {
+        "id": "w_left",
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "w_right",
+        "x": 348,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "ceiling",
+        "x": 0,
+        "y": 0,
+        "w": 360,
+        "h": 12
+      },
+      {
+        "id": "high_ledge",
+        "x": 280,
+        "y": 190,
+        "w": 68,
+        "h": 16
+      }
+    ],
+    "crates": [
+      {
+        "id": "c1",
+        "x": 140,
+        "y": 270
+      },
+      {
+        "id": "c2",
+        "x": 200,
+        "y": 270
+      }
+    ],
+    "springs": [],
+    "switches": [],
+    "keys": [],
+    "plates": [],
+    "hazards": [],
+    "barriers": []
+  },
+  "4": {
+    "title": "CHAMBER 04: SUBTERRANEAN SHOVEL",
+    "hint": "GRAB THE SHOVEL AND DIG AWAY THE DIRT TO CARVE A TUNNEL TO THE DOOR!",
+    "playerStart": {
+      "x": 30,
+      "y": 260
+    },
+    "exitDoor": {
+      "x": 310,
+      "y": 254,
+      "w": 28,
+      "h": 42,
+      "locked": false
+    },
+    "platforms": [
+      {
+        "id": "floor",
+        "x": 0,
+        "y": 300,
+        "w": 360,
+        "h": 40
+      },
+      {
+        "id": "w_left",
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "w_right",
+        "x": 348,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "ceiling",
+        "x": 0,
+        "y": 0,
+        "w": 360,
+        "h": 12
+      },
+      {
+        "id": "divider_top",
+        "x": 180,
+        "y": 0,
+        "w": 18,
+        "h": 180
+      }
+    ],
+    "shovel": {
+      "x": 80,
+      "y": 270,
+      "taken": false,
+      "isDraggable": true
+    },
+    "dirtBlocks": [
+      {
+        "id": "d1",
+        "x": 175,
+        "y": 180,
+        "w": 28,
+        "h": 28,
+        "dug": false
+      },
+      {
+        "id": "d2",
+        "x": 175,
+        "y": 208,
+        "w": 28,
+        "h": 28,
+        "dug": false
+      },
+      {
+        "id": "d3",
+        "x": 175,
+        "y": 236,
+        "w": 28,
+        "h": 28,
+        "dug": false
+      },
+      {
+        "id": "d4",
+        "x": 175,
+        "y": 264,
+        "w": 28,
+        "h": 28,
+        "dug": false
+      },
+      {
+        "id": "d5",
+        "x": 175,
+        "y": 292,
+        "w": 28,
+        "h": 12,
+        "dug": false
+      }
+    ],
+    "crates": [],
+    "springs": [],
+    "switches": [],
+    "keys": [],
+    "plates": [],
+    "hazards": [],
+    "barriers": []
+  },
+  "5": {
+    "title": "CHAMBER 05: EARTHQUAKE STOMP",
+    "hint": "JUMP & STOMP THE GROUND TO SHAKE THE BEAM UNTIL THE DOOR DROPS!",
+    "playerStart": {
+      "x": 40,
+      "y": 260
+    },
+    "exitDoor": {
+      "x": 270,
+      "y": 78,
+      "w": 28,
+      "h": 42,
+      "locked": false,
       "isDraggable": false
     },
     "platforms": [
@@ -211,68 +371,48 @@ const ALL_CHAMBER_LEVELS = {
         "h": 12
       },
       {
-        "id": "plateau",
-        "x": 200,
-        "y": 190,
-        "w": 160,
-        "h": 110
+        "id": "beam",
+        "x": 250,
+        "y": 120,
+        "w": 98,
+        "h": 14
       }
     ],
-    "crates": [
-      {
-        "id": "c1",
-        "x": 50,
-        "y": 270,
-        "vx": 0,
-        "vy": 0,
-        "isDraggable": true
-      },
-      {
-        "id": "c2",
-        "x": 100,
-        "y": 270,
-        "vx": 0,
-        "vy": 0,
-        "isDraggable": true
-      }
-    ],
+    "earthquake": {
+      "target": "door",
+      "remainingStomps": 3,
+      "offset": 0,
+      "settled": false
+    },
+    "crates": [],
     "springs": [],
     "switches": [],
-    "keys": [
+    "keys": [],
+    "plates": [],
+    "hazards": [
       {
-        "id": "k1",
-        "x": 250,
-        "y": 155,
-        "taken": false,
-        "color": "#00F5FF",
-        "isDraggable": true
+        "id": "h1",
+        "x": 130,
+        "y": 286,
+        "w": 110,
+        "h": 14
       }
     ],
-    "plates": [],
-    "hazards": [],
-    "barriers": [],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": false
+    "barriers": []
   },
-  "4": {
-    "title": "CHAMBER 04: THE MOVABLE EXIT",
-    "hint": "DOOR IS TOO HIGH? GRAB AND DRAG THE DOOR DOWN!",
+  "6": {
+    "title": "CHAMBER 06: CEILING DOOR DESCENT",
+    "hint": "THE EXIT DOOR IS SUSPENDED IN MID-AIR. DRAG IT DOWN TO THE FLOOR!",
     "playerStart": {
       "x": 30,
       "y": 260
     },
     "exitDoor": {
-      "x": 310,
+      "x": 290,
       "y": 55,
       "w": 28,
       "h": 42,
-      "locked": true,
+      "locked": false,
       "isDraggable": true
     },
     "platforms": [
@@ -308,31 +448,206 @@ const ALL_CHAMBER_LEVELS = {
     "crates": [],
     "springs": [],
     "switches": [],
-    "keys": [
-      {
-        "id": "k1",
-        "x": 160,
-        "y": 275,
-        "taken": false,
-        "color": "#FFD166",
-        "isDraggable": true
-      }
-    ],
+    "keys": [],
     "plates": [],
     "hazards": [],
-    "barriers": [],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": false
+    "barriers": []
   },
-  "5": {
-    "title": "CHAMBER 05: TWO-FINGER OVERRIDE",
-    "hint": "WALK ONTO PLATE A — HOLD YOUR FINGER ON PLATE B!",
+  "7": {
+    "title": "CHAMBER 07: DOOR AS A STEPPING STONE",
+    "hint": "DRAG THE DOOR DOWN, JUMP ON TOP OF IT AS A PLATFORM TO REACH THE HIGH KEY!",
+    "playerStart": {
+      "x": 30,
+      "y": 260
+    },
+    "exitDoor": {
+      "x": 290,
+      "y": 65,
+      "w": 32,
+      "h": 44,
+      "locked": true,
+      "isDraggable": true,
+      "isPlatform": true
+    },
+    "platforms": [
+      {
+        "id": "floor",
+        "x": 0,
+        "y": 300,
+        "w": 360,
+        "h": 40
+      },
+      {
+        "id": "w_left",
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "w_right",
+        "x": 348,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "ceiling",
+        "x": 0,
+        "y": 0,
+        "w": 360,
+        "h": 12
+      }
+    ],
+    "keys": [
+      {
+        "id": "high_k",
+        "x": 190,
+        "y": 140,
+        "taken": false,
+        "color": "#FFD166",
+        "isDraggable": false
+      }
+    ],
+    "crates": [],
+    "springs": [],
+    "switches": [],
+    "plates": [],
+    "hazards": [],
+    "barriers": []
+  },
+  "8": {
+    "title": "CHAMBER 08: GUST THROUGH THE WINDOW",
+    "hint": "TAP OPEN THE SHUTTERED WINDOW TO LET THE HEAVY WIND BLOW THE DOOR DOWN!",
+    "playerStart": {
+      "x": 30,
+      "y": 260
+    },
+    "exitDoor": {
+      "x": 290,
+      "y": 78,
+      "w": 28,
+      "h": 42,
+      "locked": false,
+      "isDraggable": false
+    },
+    "platforms": [
+      {
+        "id": "floor",
+        "x": 0,
+        "y": 300,
+        "w": 360,
+        "h": 40
+      },
+      {
+        "id": "w_left",
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "w_right",
+        "x": 348,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "ceiling",
+        "x": 0,
+        "y": 0,
+        "w": 360,
+        "h": 12
+      },
+      {
+        "id": "shelf",
+        "x": 260,
+        "y": 120,
+        "w": 88,
+        "h": 12
+      }
+    ],
+    "windowObj": {
+      "x": 265,
+      "y": 45,
+      "w": 34,
+      "h": 42,
+      "open": false
+    },
+    "crates": [],
+    "springs": [],
+    "switches": [],
+    "keys": [],
+    "plates": [],
+    "hazards": [],
+    "barriers": []
+  },
+  "9": {
+    "title": "CHAMBER 09: GRAVITATIONAL RAIL SLIDE",
+    "hint": "TILT / ROTATE GRAVITY SO THE HEAVY DOOR SLIDES DOWN ITS INCLINED RAIL!",
+    "playerStart": {
+      "x": 30,
+      "y": 260
+    },
+    "exitDoor": {
+      "x": 290,
+      "y": 60,
+      "w": 28,
+      "h": 42,
+      "locked": false,
+      "onRail": true
+    },
+    "platforms": [
+      {
+        "id": "floor",
+        "x": 0,
+        "y": 300,
+        "w": 360,
+        "h": 40
+      },
+      {
+        "id": "w_left",
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "w_right",
+        "x": 348,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "ceiling",
+        "x": 0,
+        "y": 0,
+        "w": 360,
+        "h": 12
+      },
+      {
+        "id": "rail_track",
+        "x": 270,
+        "y": 102,
+        "w": 78,
+        "h": 10,
+        "isRail": true
+      }
+    ],
+    "gravityTiltable": true,
+    "crates": [],
+    "springs": [],
+    "switches": [],
+    "keys": [],
+    "plates": [],
+    "hazards": [],
+    "barriers": []
+  },
+  "10": {
+    "title": "CHAMBER 10: THE WOUNDED SENTRY",
+    "hint": "GIVE THE ❤️ FROM THIS HINT TO HEAL THE DYING GUARD!",
     "playerStart": {
       "x": 30,
       "y": 260
@@ -374,44 +689,24 @@ const ALL_CHAMBER_LEVELS = {
         "h": 12
       }
     ],
+    "guard": {
+      "x": 160,
+      "y": 272,
+      "healed": false,
+      "speech": "NEED... A ❤️..."
+    },
+    "hintHeart": true,
+    "keys": [],
     "crates": [],
     "springs": [],
     "switches": [],
-    "keys": [],
-    "plates": [
-      {
-        "id": "p1",
-        "x": 70,
-        "y": 295,
-        "w": 38,
-        "h": 6,
-        "pressed": false,
-        "pressedByFinger": false
-      },
-      {
-        "id": "p2",
-        "x": 220,
-        "y": 295,
-        "w": 38,
-        "h": 6,
-        "pressed": false,
-        "pressedByFinger": false
-      }
-    ],
+    "plates": [],
     "hazards": [],
-    "barriers": [],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": false
+    "barriers": []
   },
-  "6": {
-    "title": "CHAMBER 06: SPIKE BRIDGE BUILDER",
-    "hint": "DRAG THE MAGNETIC SLABS OVER THE SPIKE CHASM!",
+  "11": {
+    "title": "CHAMBER 11: STEAL THE HUD KEY",
+    "hint": "NO KEY IN SIGHT? GRAB THE 🔑 ICON DIRECTLY FROM THE TOP HUD COUNTER!",
     "playerStart": {
       "x": 30,
       "y": 260
@@ -421,8 +716,65 @@ const ALL_CHAMBER_LEVELS = {
       "y": 254,
       "w": 28,
       "h": 42,
-      "locked": true,
-      "isDraggable": false
+      "locked": true
+    },
+    "platforms": [
+      {
+        "id": "floor",
+        "x": 0,
+        "y": 300,
+        "w": 360,
+        "h": 40
+      },
+      {
+        "id": "w_left",
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "w_right",
+        "x": 348,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "ceiling",
+        "x": 0,
+        "y": 0,
+        "w": 360,
+        "h": 12
+      }
+    ],
+    "hudKeyDraggable": true,
+    "keys": [],
+    "crates": [],
+    "springs": [],
+    "switches": [],
+    "plates": [],
+    "hazards": [],
+    "barriers": []
+  },
+  "12": {
+    "title": "CHAMBER 12: LASER BREACH BLASTER",
+    "hint": "PICK UP THE CYBER BLASTER AND FIRE A LASER BOLT TO SHATTER THE DOOR PADLOCK!",
+    "playerStart": {
+      "x": 30,
+      "y": 260
+    },
+    "exitDoor": {
+      "x": 310,
+      "y": 254,
+      "w": 28,
+      "h": 42,
+      "locked": true
+    },
+    "padlock": {
+      "x": 324,
+      "y": 275,
+      "onDoor": true
     },
     "platforms": [
       {
@@ -454,60 +806,159 @@ const ALL_CHAMBER_LEVELS = {
         "h": 12
       },
       {
-        "id": "bridge_a",
-        "x": 70,
-        "y": 140,
-        "w": 65,
-        "h": 14,
-        "isDraggable": true,
-        "color": "#00F5D4"
+        "id": "pedestal",
+        "x": 120,
+        "y": 260,
+        "w": 32,
+        "h": 40
+      }
+    ],
+    "gun": {
+      "x": 128,
+      "y": 242,
+      "taken": false
+    },
+    "keys": [],
+    "crates": [],
+    "springs": [],
+    "switches": [],
+    "plates": [],
+    "hazards": [],
+    "barriers": []
+  },
+  "13": {
+    "title": "CHAMBER 13: INVERT THE SPIKE BED",
+    "hint": "ROTATE THE SPIKE BED 180° TO TURN IT INTO A SAFE FLAT BRIDGE, THEN DRAG IT OVER!",
+    "playerStart": {
+      "x": 30,
+      "y": 260
+    },
+    "exitDoor": {
+      "x": 310,
+      "y": 254,
+      "w": 28,
+      "h": 42,
+      "locked": false
+    },
+    "platforms": [
+      {
+        "id": "floor_left",
+        "x": 0,
+        "y": 300,
+        "w": 100,
+        "h": 40
       },
       {
-        "id": "bridge_b",
-        "x": 180,
-        "y": 140,
-        "w": 65,
-        "h": 14,
-        "isDraggable": true,
-        "color": "#00F5D4"
+        "id": "floor_right",
+        "x": 260,
+        "y": 300,
+        "w": 100,
+        "h": 40
+      },
+      {
+        "id": "w_left",
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "w_right",
+        "x": 348,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "ceiling",
+        "x": 0,
+        "y": 0,
+        "w": 360,
+        "h": 12
+      }
+    ],
+    "rotatableSpikes": {
+      "id": "spk1",
+      "x": 120,
+      "y": 278,
+      "w": 96,
+      "h": 22,
+      "rotated": false,
+      "isDraggable": true
+    },
+    "hazards": [
+      {
+        "id": "pit_lava",
+        "x": 100,
+        "y": 310,
+        "w": 160,
+        "h": 30
       }
     ],
     "crates": [],
     "springs": [],
     "switches": [],
-    "keys": [
-      {
-        "id": "k1",
-        "x": 290,
-        "y": 275,
-        "taken": false,
-        "color": "#39FF14",
-        "isDraggable": true
-      }
-    ],
+    "keys": [],
     "plates": [],
-    "hazards": [
+    "barriers": []
+  },
+  "14": {
+    "title": "CHAMBER 14: ROTATE TO FIX GRAVITY",
+    "hint": "GRAVITY IS UPSIDE-DOWN! ROTATE YOUR DEVICE OR TAP THE ROTATE BUTTON TO FIX IT!",
+    "playerStart": {
+      "x": 180,
+      "y": 40
+    },
+    "exitDoor": {
+      "x": 310,
+      "y": 254,
+      "w": 28,
+      "h": 42,
+      "locked": false
+    },
+    "platforms": [
       {
-        "x": 90,
-        "y": 286,
-        "w": 160,
-        "h": 14,
-        "type": "SPIKES"
+        "id": "floor",
+        "x": 0,
+        "y": 300,
+        "w": 360,
+        "h": 40
+      },
+      {
+        "id": "w_left",
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "w_right",
+        "x": 348,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "ceiling",
+        "x": 0,
+        "y": 0,
+        "w": 360,
+        "h": 12
       }
     ],
-    "barriers": [],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": false
+    "gravityRotateMode": true,
+    "gravityInverted": true,
+    "crates": [],
+    "springs": [],
+    "switches": [],
+    "keys": [],
+    "plates": [],
+    "hazards": [],
+    "barriers": []
   },
-  "7": {
-    "title": "CHAMBER 07: PULL THE PLUG",
-    "hint": "GATE LOCKED? DRAG & YANK THE POWER PLUG FROM WALL!",
+  "15": {
+    "title": "CHAMBER 15: PULL THE POWER PLUG",
+    "hint": "DRAG THE GIANT POWER PLUG OUT OF THE WALL TO DISABLE THE ELECTRIC GRID!",
     "playerStart": {
       "x": 30,
       "y": 260
@@ -549,745 +1000,99 @@ const ALL_CHAMBER_LEVELS = {
         "h": 12
       }
     ],
-    "crates": [],
-    "springs": [],
-    "switches": [],
-    "keys": [],
-    "plates": [],
-    "hazards": [],
+    "plug": {
+      "x": 70,
+      "y": 178,
+      "plugged": true
+    },
     "barriers": [
       {
-        "id": "b1",
-        "x": 240,
-        "y": 200,
+        "id": "b_plug",
+        "x": 210,
+        "y": 150,
         "w": 10,
-        "h": 100,
+        "h": 150,
         "active": true,
-        "color": "#FF0055",
         "byPlug": true
       }
     ],
-    "plug": {
-      "id": "plug1",
-      "x": 65,
-      "y": 180,
-      "plugged": true
-    },
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": false
-  },
-  "8": {
-    "title": "CHAMBER 08: RIP THE PADLOCK",
-    "hint": "NO KEYCARD FOUND? TOUCH & RIP PADLOCK OFF THE DOOR!",
-    "playerStart": {
-      "x": 30,
-      "y": 260
-    },
-    "exitDoor": {
-      "x": 310,
-      "y": 254,
-      "w": 28,
-      "h": 42,
-      "locked": true
-    },
-    "platforms": [
-      {
-        "id": "floor",
-        "x": 0,
-        "y": 300,
-        "w": 360,
-        "h": 40
-      },
-      {
-        "id": "w_left",
-        "x": 0,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "w_right",
-        "x": 348,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "ceiling",
-        "x": 0,
-        "y": 0,
-        "w": 360,
-        "h": 12
-      }
-    ],
     "crates": [],
     "springs": [],
     "switches": [],
     "keys": [],
     "plates": [],
-    "hazards": [],
-    "barriers": [],
-    "plug": null,
-    "padlock": {
-      "id": "pad1",
-      "x": 316,
-      "y": 268,
-      "onDoor": true
-    },
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": false
-  },
-  "9": {
-    "title": "CHAMBER 09: BOUNCY SPRING PAD",
-    "hint": "DRAG THE GREEN SPRING PAD UNDER FEET TO SUPER-JUMP!",
-    "playerStart": {
-      "x": 30,
-      "y": 260
-    },
-    "exitDoor": {
-      "x": 310,
-      "y": 254,
-      "w": 28,
-      "h": 42,
-      "locked": true,
-      "isDraggable": false
-    },
-    "platforms": [
-      {
-        "id": "floor",
-        "x": 0,
-        "y": 300,
-        "w": 360,
-        "h": 40
-      },
-      {
-        "id": "w_left",
-        "x": 0,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "w_right",
-        "x": 348,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "ceiling",
-        "x": 0,
-        "y": 0,
-        "w": 360,
-        "h": 12
-      },
-      {
-        "id": "high_wall",
-        "x": 180,
-        "y": 130,
-        "w": 20,
-        "h": 170
-      }
-    ],
-    "crates": [],
-    "springs": [
-      {
-        "id": "sp1",
-        "x": 100,
-        "y": 288,
-        "w": 34,
-        "h": 12,
-        "isDraggable": true
-      }
-    ],
-    "switches": [],
-    "keys": [
-      {
-        "id": "k1",
-        "x": 280,
-        "y": 265,
-        "taken": false,
-        "color": "#00F5FF",
-        "isDraggable": false
-      }
-    ],
-    "plates": [],
-    "hazards": [],
-    "barriers": [],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": false
-  },
-  "10": {
-    "title": "CHAMBER 10: HELIUM BALLOON",
-    "hint": "RELEASE THE FLOATING BALLOON CRATE TO PRESS CEILING PLATE!",
-    "playerStart": {
-      "x": 30,
-      "y": 260
-    },
-    "exitDoor": {
-      "x": 310,
-      "y": 254,
-      "w": 28,
-      "h": 42,
-      "locked": true,
-      "isDraggable": false
-    },
-    "platforms": [
-      {
-        "id": "floor",
-        "x": 0,
-        "y": 300,
-        "w": 360,
-        "h": 40
-      },
-      {
-        "id": "w_left",
-        "x": 0,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "w_right",
-        "x": 348,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "ceiling",
-        "x": 0,
-        "y": 0,
-        "w": 360,
-        "h": 12
-      }
-    ],
-    "crates": [
-      {
-        "id": "c_bal",
-        "x": 120,
-        "y": 260,
-        "isBalloon": true,
-        "isDraggable": true
-      }
-    ],
-    "springs": [],
-    "switches": [],
-    "keys": [],
-    "plates": [
-      {
-        "id": "cp1",
-        "x": 170,
-        "y": 12,
-        "w": 42,
-        "h": 6,
-        "pressed": false,
-        "isCeiling": true
-      }
-    ],
-    "hazards": [],
-    "barriers": [
-      {
-        "id": "b1",
-        "x": 250,
-        "y": 180,
-        "w": 8,
-        "h": 120,
-        "active": true,
-        "plateIds": [
-          "cp1"
-        ]
-      }
-    ],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": false
-  },
-  "11": {
-    "title": "CHAMBER 11: BATTERY SOCKET",
-    "hint": "DRAG THE GLOWING BATTERY CELL INTO THE WALL GENERATOR!",
-    "playerStart": {
-      "x": 30,
-      "y": 260
-    },
-    "exitDoor": {
-      "x": 310,
-      "y": 254,
-      "w": 28,
-      "h": 42,
-      "locked": true,
-      "isDraggable": false
-    },
-    "platforms": [
-      {
-        "id": "floor",
-        "x": 0,
-        "y": 300,
-        "w": 360,
-        "h": 40
-      },
-      {
-        "id": "w_left",
-        "x": 0,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "w_right",
-        "x": 348,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "ceiling",
-        "x": 0,
-        "y": 0,
-        "w": 360,
-        "h": 12
-      }
-    ],
-    "crates": [],
-    "springs": [],
-    "switches": [],
-    "keys": [],
-    "plates": [],
-    "hazards": [],
-    "barriers": [
-      {
-        "id": "b1",
-        "x": 210,
-        "y": 180,
-        "w": 8,
-        "h": 120,
-        "active": true,
-        "byBattery": true
-      }
-    ],
-    "plug": null,
-    "padlock": null,
-    "battery": {
-      "id": "bat1",
-      "x": 90,
-      "y": 270,
-      "w": 22,
-      "h": 22,
-      "slotted": false
-    },
-    "socket": {
-      "id": "sock1",
-      "x": 260,
-      "y": 260,
-      "w": 28,
-      "h": 28
-    },
-    "receptors": [],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": false
-  },
-  "12": {
-    "title": "CHAMBER 12: PRISM DEFLECTION",
-    "hint": "DRAG THE 45° MIRROR TO BEND THE LASER INTO THE RECEPTOR!",
-    "playerStart": {
-      "x": 30,
-      "y": 260
-    },
-    "exitDoor": {
-      "x": 310,
-      "y": 254,
-      "w": 28,
-      "h": 42,
-      "locked": true,
-      "isDraggable": false
-    },
-    "platforms": [
-      {
-        "id": "floor",
-        "x": 0,
-        "y": 300,
-        "w": 360,
-        "h": 40
-      },
-      {
-        "id": "w_left",
-        "x": 0,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "w_right",
-        "x": 348,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "ceiling",
-        "x": 0,
-        "y": 0,
-        "w": 360,
-        "h": 12
-      },
-      {
-        "id": "mir1",
-        "x": 90,
-        "y": 120,
-        "w": 32,
-        "h": 32,
-        "isMirror": true,
-        "isDraggable": true,
-        "color": "#A5F3FC"
-      }
-    ],
-    "crates": [],
-    "springs": [],
-    "switches": [],
-    "keys": [],
-    "plates": [],
-    "hazards": [],
-    "barriers": [
-      {
-        "id": "b1",
-        "x": 260,
-        "y": 180,
-        "w": 8,
-        "h": 120,
-        "active": true,
-        "receptorId": "rec1"
-      }
-    ],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [
-      {
-        "id": "rec1",
-        "x": 180,
-        "y": 268,
-        "w": 24,
-        "h": 24,
-        "beamX": 180,
-        "beamY": 100,
-        "hit": false
-      }
-    ],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": false
-  },
-  "13": {
-    "title": "CHAMBER 13: TIMED SPRINT GATE",
-    "hint": "HIT TIMED SWITCH — SPRINT BEFORE GATE RE-SEALS IN 4S!",
-    "playerStart": {
-      "x": 30,
-      "y": 260
-    },
-    "exitDoor": {
-      "x": 310,
-      "y": 254,
-      "w": 28,
-      "h": 42,
-      "locked": true,
-      "isDraggable": false
-    },
-    "platforms": [
-      {
-        "id": "floor",
-        "x": 0,
-        "y": 300,
-        "w": 360,
-        "h": 40
-      },
-      {
-        "id": "w_left",
-        "x": 0,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "w_right",
-        "x": 348,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "ceiling",
-        "x": 0,
-        "y": 0,
-        "w": 360,
-        "h": 12
-      }
-    ],
-    "crates": [],
-    "springs": [],
-    "switches": [
-      {
-        "id": "sw_time",
-        "x": 50,
-        "y": 268,
-        "isTimed": true,
-        "timer": 0,
-        "maxTimer": 4.2,
-        "active": false
-      }
-    ],
-    "keys": [],
-    "plates": [],
-    "hazards": [],
-    "barriers": [
-      {
-        "id": "b1",
-        "x": 220,
-        "y": 180,
-        "w": 8,
-        "h": 120,
-        "active": true,
-        "switchId": "sw_time"
-      }
-    ],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": false
-  },
-  "14": {
-    "title": "CHAMBER 14: MOVING PATROL LIFT",
-    "hint": "RIDE THE AUTOMATED HOVER LIFT ACROSS THE DEEP PIT!",
-    "playerStart": {
-      "x": 30,
-      "y": 260
-    },
-    "exitDoor": {
-      "x": 310,
-      "y": 254,
-      "w": 28,
-      "h": 42,
-      "locked": true,
-      "isDraggable": false
-    },
-    "platforms": [
-      {
-        "id": "floor",
-        "x": 0,
-        "y": 300,
-        "w": 360,
-        "h": 40
-      },
-      {
-        "id": "w_left",
-        "x": 0,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "w_right",
-        "x": 348,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "ceiling",
-        "x": 0,
-        "y": 0,
-        "w": 360,
-        "h": 12
-      },
-      {
-        "id": "mov_p",
-        "x": 80,
-        "y": 270,
-        "w": 50,
-        "h": 14,
-        "minX": 75,
-        "maxX": 210,
-        "speed": 1.5,
-        "dir": 1,
-        "color": "#00F5FF"
-      }
-    ],
-    "crates": [],
-    "springs": [],
-    "switches": [],
-    "keys": [
-      {
-        "id": "k1",
-        "x": 290,
-        "y": 265,
-        "taken": false,
-        "color": "#39FF14",
-        "isDraggable": false
-      }
-    ],
-    "plates": [],
-    "hazards": [
-      {
-        "x": 70,
-        "y": 286,
-        "w": 180,
-        "h": 14,
-        "type": "SPIKES"
-      }
-    ],
-    "barriers": [],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": false
-  },
-  "15": {
-    "title": "CHAMBER 15: CRUMBLING TILES",
-    "hint": "DO NOT STOP! STEPPING ON TILES CAUSES THEM TO COLLAPSE!",
-    "playerStart": {
-      "x": 30,
-      "y": 260
-    },
-    "exitDoor": {
-      "x": 310,
-      "y": 254,
-      "w": 28,
-      "h": 42,
-      "locked": true,
-      "isDraggable": false
-    },
-    "platforms": [
-      {
-        "id": "floor",
-        "x": 0,
-        "y": 300,
-        "w": 360,
-        "h": 40
-      },
-      {
-        "id": "w_left",
-        "x": 0,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "w_right",
-        "x": 348,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "ceiling",
-        "x": 0,
-        "y": 0,
-        "w": 360,
-        "h": 12
-      },
-      {
-        "id": "cr1",
-        "x": 80,
-        "y": 265,
-        "w": 40,
-        "h": 12,
-        "isCrumbling": true,
-        "color": "#FB7185"
-      },
-      {
-        "id": "cr2",
-        "x": 145,
-        "y": 265,
-        "w": 40,
-        "h": 12,
-        "isCrumbling": true,
-        "color": "#FB7185"
-      },
-      {
-        "id": "cr3",
-        "x": 210,
-        "y": 265,
-        "w": 40,
-        "h": 12,
-        "isCrumbling": true,
-        "color": "#FB7185"
-      }
-    ],
-    "crates": [],
-    "springs": [],
-    "switches": [],
-    "keys": [
-      {
-        "id": "k1",
-        "x": 290,
-        "y": 265,
-        "taken": false,
-        "color": "#00F5FF",
-        "isDraggable": false
-      }
-    ],
-    "plates": [],
-    "hazards": [
-      {
-        "x": 60,
-        "y": 286,
-        "w": 200,
-        "h": 14,
-        "type": "SPIKES"
-      }
-    ],
-    "barriers": [],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": false
+    "hazards": []
   },
   "16": {
-    "title": "CHAMBER 16: TURBINE WIND VENT",
-    "hint": "STAND IN THE WIND STREAM TO FLOAT UP TO HIGH EXIT!",
+    "title": "CHAMBER 16: RIP THE PADLOCK",
+    "hint": "TEAR THE GIANT PADLOCK OFF THE DOOR WITH A HARD FINGER SWIPE!",
     "playerStart": {
       "x": 30,
       "y": 260
     },
     "exitDoor": {
-      "x": 290,
-      "y": 98,
+      "x": 310,
+      "y": 254,
       "w": 28,
       "h": 42,
       "locked": true
+    },
+    "padlock": {
+      "x": 324,
+      "y": 275,
+      "onDoor": true
+    },
+    "platforms": [
+      {
+        "id": "floor",
+        "x": 0,
+        "y": 300,
+        "w": 360,
+        "h": 40
+      },
+      {
+        "id": "w_left",
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "w_right",
+        "x": 348,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "ceiling",
+        "x": 0,
+        "y": 0,
+        "w": 360,
+        "h": 12
+      }
+    ],
+    "crates": [],
+    "springs": [],
+    "switches": [],
+    "keys": [],
+    "plates": [],
+    "hazards": [],
+    "barriers": []
+  },
+  "17": {
+    "title": "CHAMBER 17: BOUNCY SPRING PAD",
+    "hint": "DRAG THE BOUNCY SPRING PAD UNDER THE HIGH LEDGE TO LEAP TO THE EXIT!",
+    "playerStart": {
+      "x": 30,
+      "y": 260
+    },
+    "exitDoor": {
+      "x": 310,
+      "y": 118,
+      "w": 28,
+      "h": 42,
+      "locked": false
     },
     "platforms": [
       {
@@ -1320,138 +1125,32 @@ const ALL_CHAMBER_LEVELS = {
       },
       {
         "id": "ledge",
-        "x": 240,
-        "y": 140,
-        "w": 110,
-        "h": 160
-      }
-    ],
-    "crates": [],
-    "springs": [],
-    "switches": [],
-    "keys": [
-      {
-        "id": "k1",
         "x": 270,
-        "y": 105,
-        "taken": false,
-        "color": "#FFD166",
-        "isDraggable": false
+        "y": 160,
+        "w": 78,
+        "h": 16
       }
     ],
-    "plates": [],
-    "hazards": [],
-    "barriers": [],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [],
-    "fans": [
+    "springs": [
       {
-        "id": "fan1",
-        "x": 150,
-        "y": 292,
-        "w": 38,
+        "id": "sp1",
+        "x": 80,
+        "y": 288,
+        "w": 32,
         "h": 12,
-        "active": true
-      }
-    ],
-    "gravityInverted": false
-  },
-  "17": {
-    "title": "CHAMBER 17: COLOR KEYCARDS",
-    "hint": "RED KEY UNLOCKS RED GATE TO RETRIEVE CYAN EXIT KEY!",
-    "playerStart": {
-      "x": 30,
-      "y": 260
-    },
-    "exitDoor": {
-      "x": 310,
-      "y": 254,
-      "w": 28,
-      "h": 42,
-      "locked": true,
-      "isDraggable": false
-    },
-    "platforms": [
-      {
-        "id": "floor",
-        "x": 0,
-        "y": 300,
-        "w": 360,
-        "h": 40
-      },
-      {
-        "id": "w_left",
-        "x": 0,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "w_right",
-        "x": 348,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "ceiling",
-        "x": 0,
-        "y": 0,
-        "w": 360,
-        "h": 12
+        "isDraggable": true
       }
     ],
     "crates": [],
-    "springs": [],
     "switches": [],
-    "keys": [
-      {
-        "id": "k_red",
-        "x": 70,
-        "y": 265,
-        "taken": false,
-        "color": "#FF0055",
-        "isDraggable": true
-      },
-      {
-        "id": "k_cyan",
-        "x": 190,
-        "y": 265,
-        "taken": false,
-        "color": "#00F5FF",
-        "isDraggable": false
-      }
-    ],
+    "keys": [],
     "plates": [],
     "hazards": [],
-    "barriers": [
-      {
-        "id": "b_red",
-        "x": 130,
-        "y": 180,
-        "w": 8,
-        "h": 120,
-        "active": true,
-        "color": "#FF0055",
-        "requiredColor": "#FF0055"
-      }
-    ],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": false
+    "barriers": []
   },
   "18": {
-    "title": "CHAMBER 18: PISTON CRUSHER JAM",
-    "hint": "PUSH THE INDESTRUCTIBLE CRATE UNDER CRUSHER TO JAM IT!",
+    "title": "CHAMBER 18: HELIUM BALLOON CRATE",
+    "hint": "TAP THE BALLOON TO POP IT SO THE HEAVY CRATE DROPS ONTO THE PRESSURE PLATE!",
     "playerStart": {
       "x": 30,
       "y": 260
@@ -1461,8 +1160,7 @@ const ALL_CHAMBER_LEVELS = {
       "y": 254,
       "w": 28,
       "h": 42,
-      "locked": true,
-      "isDraggable": false
+      "locked": false
     },
     "platforms": [
       {
@@ -1496,48 +1194,43 @@ const ALL_CHAMBER_LEVELS = {
     ],
     "crates": [
       {
-        "id": "c1",
-        "x": 80,
-        "y": 260,
-        "isDraggable": true
+        "id": "c_bal",
+        "x": 170,
+        "y": 80,
+        "isBalloon": true
+      }
+    ],
+    "plates": [
+      {
+        "id": "pl1",
+        "x": 165,
+        "y": 295,
+        "w": 36,
+        "h": 6,
+        "pressed": false
+      }
+    ],
+    "barriers": [
+      {
+        "id": "b_pl",
+        "x": 240,
+        "y": 160,
+        "w": 8,
+        "h": 140,
+        "active": true,
+        "plateIds": [
+          "pl1"
+        ]
       }
     ],
     "springs": [],
     "switches": [],
-    "keys": [
-      {
-        "id": "k1",
-        "x": 280,
-        "y": 265,
-        "taken": false,
-        "color": "#39FF14",
-        "isDraggable": false
-      }
-    ],
-    "plates": [],
-    "hazards": [
-      {
-        "id": "crush1",
-        "x": 190,
-        "y": 180,
-        "w": 34,
-        "h": 100,
-        "type": "SPIKES"
-      }
-    ],
-    "barriers": [],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": false
+    "keys": [],
+    "hazards": []
   },
   "19": {
-    "title": "CHAMBER 19: PORTAL WARP",
-    "hint": "STEP INTO BLUE PORTAL TO WARP BEHIND THE LASER BARRIER!",
+    "title": "CHAMBER 19: BATTERY INSERTION",
+    "hint": "DRAG THE CYBER AA BATTERY INTO THE WALL SOCKET TO POWER THE ESCAPE DOOR!",
     "playerStart": {
       "x": 30,
       "y": 260
@@ -1545,96 +1238,6 @@ const ALL_CHAMBER_LEVELS = {
     "exitDoor": {
       "x": 310,
       "y": 254,
-      "w": 28,
-      "h": 42,
-      "locked": true,
-      "isDraggable": false
-    },
-    "platforms": [
-      {
-        "id": "floor",
-        "x": 0,
-        "y": 300,
-        "w": 360,
-        "h": 40
-      },
-      {
-        "id": "w_left",
-        "x": 0,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "w_right",
-        "x": 348,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "ceiling",
-        "x": 0,
-        "y": 0,
-        "w": 360,
-        "h": 12
-      }
-    ],
-    "crates": [],
-    "springs": [],
-    "switches": [],
-    "keys": [],
-    "plates": [],
-    "hazards": [],
-    "barriers": [
-      {
-        "id": "b1",
-        "x": 170,
-        "y": 0,
-        "w": 10,
-        "h": 300,
-        "active": true,
-        "color": "#FF0055"
-      }
-    ],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [
-      {
-        "id": "p_blue",
-        "x": 90,
-        "y": 250,
-        "partnerId": "p_org",
-        "color": "#00F5FF",
-        "exitOffsetX": 25,
-        "exitOffsetY": 0
-      },
-      {
-        "id": "p_org",
-        "x": 250,
-        "y": 250,
-        "partnerId": "p_blue",
-        "color": "#FF9E00",
-        "exitOffsetX": 25,
-        "exitOffsetY": 0
-      }
-    ],
-    "fans": [],
-    "gravityInverted": false
-  },
-  "20": {
-    "title": "CHAMBER 20: CEILING WALK",
-    "hint": "GRAVITY INVERTED! WALK ON CEILING TO REACH THE UPSIDE-DOWN EXIT!",
-    "playerStart": {
-      "x": 30,
-      "y": 260
-    },
-    "exitDoor": {
-      "x": 300,
-      "y": 14,
       "w": 28,
       "h": 42,
       "locked": true
@@ -1669,320 +1272,30 @@ const ALL_CHAMBER_LEVELS = {
         "h": 12
       }
     ],
-    "crates": [],
-    "springs": [],
-    "switches": [],
-    "keys": [
-      {
-        "id": "k1",
-        "x": 170,
-        "y": 40,
-        "taken": false,
-        "color": "#FFD166",
-        "isDraggable": true
-      }
-    ],
-    "plates": [],
-    "hazards": [],
-    "barriers": [],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": true
-  },
-  "21": {
-    "title": "CHAMBER 21: SPRING TO CEILING PLATE",
-    "hint": "BOUNCE CRATE WITH SPRING PAD TO HIT CEILING PLATE!",
-    "playerStart": {
-      "x": 30,
-      "y": 260
-    },
-    "exitDoor": {
-      "x": 310,
-      "y": 254,
-      "w": 28,
-      "h": 42,
-      "locked": true,
-      "isDraggable": false
-    },
-    "platforms": [
-      {
-        "id": "floor",
-        "x": 0,
-        "y": 300,
-        "w": 360,
-        "h": 40
-      },
-      {
-        "id": "w_left",
-        "x": 0,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "w_right",
-        "x": 348,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "ceiling",
-        "x": 0,
-        "y": 0,
-        "w": 360,
-        "h": 12
-      }
-    ],
-    "crates": [
-      {
-        "id": "c1",
-        "x": 70,
-        "y": 260,
-        "isDraggable": true
-      }
-    ],
-    "springs": [
-      {
-        "id": "sp1",
-        "x": 170,
-        "y": 288,
-        "w": 34,
-        "h": 12,
-        "isDraggable": true
-      }
-    ],
-    "switches": [],
-    "keys": [],
-    "plates": [
-      {
-        "id": "cp1",
-        "x": 180,
-        "y": 12,
-        "w": 42,
-        "h": 6,
-        "pressed": false,
-        "isCeiling": true
-      }
-    ],
-    "hazards": [],
-    "barriers": [
-      {
-        "id": "b1",
-        "x": 250,
-        "y": 180,
-        "w": 8,
-        "h": 120,
-        "active": true,
-        "plateIds": [
-          "cp1"
-        ]
-      }
-    ],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": false
-  },
-  "22": {
-    "title": "CHAMBER 22: BALLOON SLAB SHIELD",
-    "hint": "FLOATING BALLOON LIFTS METAL SLAB TO BLOCK OVERHEAD LASER!",
-    "playerStart": {
-      "x": 30,
-      "y": 260
-    },
-    "exitDoor": {
-      "x": 310,
-      "y": 254,
-      "w": 28,
-      "h": 42,
-      "locked": true,
-      "isDraggable": false
-    },
-    "platforms": [
-      {
-        "id": "floor",
-        "x": 0,
-        "y": 300,
-        "w": 360,
-        "h": 40
-      },
-      {
-        "id": "w_left",
-        "x": 0,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "w_right",
-        "x": 348,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "ceiling",
-        "x": 0,
-        "y": 0,
-        "w": 360,
-        "h": 12
-      },
-      {
-        "id": "slab",
-        "x": 150,
-        "y": 210,
-        "w": 55,
-        "h": 14,
-        "isDraggable": true,
-        "color": "#00F5FF"
-      }
-    ],
-    "crates": [
-      {
-        "id": "c_bal",
-        "x": 160,
-        "y": 260,
-        "isBalloon": true,
-        "isDraggable": true
-      }
-    ],
-    "springs": [],
-    "switches": [],
-    "keys": [
-      {
-        "id": "k1",
-        "x": 280,
-        "y": 265,
-        "taken": false,
-        "color": "#FFD166",
-        "isDraggable": true
-      }
-    ],
-    "plates": [],
-    "hazards": [],
-    "barriers": [
-      {
-        "id": "b_top",
-        "x": 170,
-        "y": 12,
-        "w": 8,
-        "h": 180,
-        "active": true
-      }
-    ],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": false
-  },
-  "23": {
-    "title": "CHAMBER 23: BATTERY ACROSS CHASM",
-    "hint": "BRIDGE SPIKE PIT WITH SLABS TO CARRY BATTERY TO SOCKET!",
-    "playerStart": {
-      "x": 30,
-      "y": 260
-    },
-    "exitDoor": {
-      "x": 310,
-      "y": 254,
-      "w": 28,
-      "h": 42,
-      "locked": true,
-      "requiresBattery": true
-    },
-    "platforms": [
-      {
-        "id": "floor",
-        "x": 0,
-        "y": 300,
-        "w": 360,
-        "h": 40
-      },
-      {
-        "id": "w_left",
-        "x": 0,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "w_right",
-        "x": 348,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "ceiling",
-        "x": 0,
-        "y": 0,
-        "w": 360,
-        "h": 12
-      },
-      {
-        "id": "s1",
-        "x": 60,
-        "y": 120,
-        "w": 65,
-        "h": 14,
-        "isDraggable": true,
-        "color": "#00F5D4"
-      }
-    ],
-    "crates": [],
-    "springs": [],
-    "switches": [],
-    "keys": [],
-    "plates": [],
-    "hazards": [
-      {
-        "x": 100,
-        "y": 286,
-        "w": 120,
-        "h": 14,
-        "type": "SPIKES"
-      }
-    ],
-    "barriers": [],
-    "plug": null,
-    "padlock": null,
     "battery": {
-      "id": "bat1",
-      "x": 40,
-      "y": 270,
-      "w": 22,
-      "h": 22,
+      "x": 70,
+      "y": 274,
+      "w": 24,
+      "h": 16,
       "slotted": false
     },
     "socket": {
-      "id": "sock1",
-      "x": 270,
-      "y": 260,
-      "w": 28,
-      "h": 28
+      "x": 250,
+      "y": 270,
+      "w": 30,
+      "h": 22
     },
-    "receptors": [],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": false
+    "crates": [],
+    "springs": [],
+    "switches": [],
+    "keys": [],
+    "plates": [],
+    "hazards": [],
+    "barriers": []
   },
-  "24": {
-    "title": "CHAMBER 24: MIRROR ON MOVING LIFT",
-    "hint": "RIDE HOVER PLATFORM CARRYING MIRROR TO ALIGN WITH RECEPTOR!",
+  "20": {
+    "title": "CHAMBER 20: PRISM DEFLECTION",
+    "hint": "DRAG THE PRISM MIRROR INTO THE EMITTER BEAM TO DEFLECT IT TO THE SENSOR!",
     "playerStart": {
       "x": 30,
       "y": 260
@@ -1992,8 +1305,7 @@ const ALL_CHAMBER_LEVELS = {
       "y": 254,
       "w": 28,
       "h": 42,
-      "locked": true,
-      "isDraggable": false
+      "locked": false
     },
     "platforms": [
       {
@@ -2025,68 +1337,48 @@ const ALL_CHAMBER_LEVELS = {
         "h": 12
       },
       {
-        "id": "mov_p",
-        "x": 60,
-        "y": 270,
-        "w": 55,
-        "h": 14,
-        "minX": 50,
-        "maxX": 190,
-        "speed": 1.4,
-        "dir": 1,
-        "color": "#00F5FF"
-      },
-      {
-        "id": "mir1",
+        "id": "mirror_p",
         "x": 80,
         "y": 150,
-        "w": 32,
-        "h": 32,
-        "isMirror": true,
+        "w": 46,
+        "h": 14,
         "isDraggable": true,
-        "color": "#A5F3FC"
+        "isMirror": true
       }
     ],
-    "crates": [],
-    "springs": [],
-    "switches": [],
-    "keys": [],
-    "plates": [],
-    "hazards": [],
+    "receptors": [
+      {
+        "id": "rec1",
+        "x": 270,
+        "y": 260,
+        "w": 22,
+        "h": 22,
+        "beamX": 180,
+        "beamY": 180,
+        "hit": false
+      }
+    ],
     "barriers": [
       {
-        "id": "b1",
+        "id": "b_rec",
         "x": 230,
-        "y": 180,
+        "y": 160,
         "w": 8,
-        "h": 120,
+        "h": 140,
         "active": true,
         "receptorId": "rec1"
       }
     ],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [
-      {
-        "id": "rec1",
-        "x": 260,
-        "y": 268,
-        "w": 24,
-        "h": 24,
-        "beamX": 160,
-        "beamY": 120,
-        "hit": false
-      }
-    ],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": false
+    "crates": [],
+    "springs": [],
+    "switches": [],
+    "keys": [],
+    "plates": [],
+    "hazards": []
   },
-  "25": {
-    "title": "CHAMBER 25: CRUMBLING SPRINT",
-    "hint": "HIT TIMED SWITCH, THEN SPRINT ACROSS COLLAPSING TILES!",
+  "21": {
+    "title": "CHAMBER 21: PORTAL WARP",
+    "hint": "ENTER THE ORANGE PORTAL TO WARP OUT OF THE BLUE PORTAL BEHIND THE WALL!",
     "playerStart": {
       "x": 30,
       "y": 260
@@ -2096,8 +1388,7 @@ const ALL_CHAMBER_LEVELS = {
       "y": 254,
       "w": 28,
       "h": 42,
-      "locked": true,
-      "isDraggable": false
+      "locked": false
     },
     "platforms": [
       {
@@ -2129,71 +1420,44 @@ const ALL_CHAMBER_LEVELS = {
         "h": 12
       },
       {
-        "id": "cr1",
-        "x": 110,
-        "y": 265,
-        "w": 38,
-        "h": 12,
-        "isCrumbling": true,
-        "color": "#FB7185"
+        "id": "divider",
+        "x": 180,
+        "y": 100,
+        "w": 16,
+        "h": 200
+      }
+    ],
+    "portals": [
+      {
+        "id": "p_in",
+        "x": 120,
+        "y": 250,
+        "color": "#FF6600",
+        "partnerId": "p_out",
+        "exitOffsetX": 25,
+        "exitOffsetY": 0
       },
       {
-        "id": "cr2",
-        "x": 170,
-        "y": 265,
-        "w": 38,
-        "h": 12,
-        "isCrumbling": true,
-        "color": "#FB7185"
+        "id": "p_out",
+        "x": 230,
+        "y": 250,
+        "color": "#00F5FF",
+        "partnerId": "p_in",
+        "exitOffsetX": -25,
+        "exitOffsetY": 0
       }
     ],
     "crates": [],
     "springs": [],
-    "switches": [
-      {
-        "id": "sw_time",
-        "x": 40,
-        "y": 268,
-        "isTimed": true,
-        "timer": 0,
-        "maxTimer": 3.8,
-        "active": false
-      }
-    ],
+    "switches": [],
     "keys": [],
     "plates": [],
-    "hazards": [
-      {
-        "x": 90,
-        "y": 286,
-        "w": 140,
-        "h": 14,
-        "type": "SPIKES"
-      }
-    ],
-    "barriers": [
-      {
-        "id": "b1",
-        "x": 250,
-        "y": 180,
-        "w": 8,
-        "h": 120,
-        "active": true,
-        "switchId": "sw_time"
-      }
-    ],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": false
+    "hazards": [],
+    "barriers": []
   },
-  "26": {
-    "title": "CHAMBER 26: WIND FAN CRATE PUSH",
-    "hint": "TURN ON FAN TO BLOW CRATE HORIZONTALLY ONTO FLOOR PLATE!",
+  "22": {
+    "title": "CHAMBER 22: TIMED SPRINT GATE",
+    "hint": "TRIGGER THE TIMED BUTTON AND SPRINT BEFORE THE 4-SECOND BLAST GATE CLOSES!",
     "playerStart": {
       "x": 30,
       "y": 260
@@ -2203,8 +1467,349 @@ const ALL_CHAMBER_LEVELS = {
       "y": 254,
       "w": 28,
       "h": 42,
-      "locked": true,
-      "isDraggable": false
+      "locked": false
+    },
+    "platforms": [
+      {
+        "id": "floor",
+        "x": 0,
+        "y": 300,
+        "w": 360,
+        "h": 40
+      },
+      {
+        "id": "w_left",
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "w_right",
+        "x": 348,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "ceiling",
+        "x": 0,
+        "y": 0,
+        "w": 360,
+        "h": 12
+      }
+    ],
+    "switches": [
+      {
+        "id": "sw_timed",
+        "x": 60,
+        "y": 275,
+        "active": false,
+        "isTimed": true,
+        "timer": 0,
+        "maxTimer": 4
+      }
+    ],
+    "barriers": [
+      {
+        "id": "b_timed",
+        "x": 200,
+        "y": 160,
+        "w": 10,
+        "h": 140,
+        "active": true,
+        "switchId": "sw_timed"
+      }
+    ],
+    "crates": [],
+    "springs": [],
+    "keys": [],
+    "plates": [],
+    "hazards": []
+  },
+  "23": {
+    "title": "CHAMBER 23: CRUMBLING STONE TILES",
+    "hint": "SPRINT ACROSS THE CRUMBLING TILES WITHOUT STOPPING BEFORE THEY SHATTER!",
+    "playerStart": {
+      "x": 30,
+      "y": 260
+    },
+    "exitDoor": {
+      "x": 310,
+      "y": 254,
+      "w": 28,
+      "h": 42,
+      "locked": false
+    },
+    "platforms": [
+      {
+        "id": "floor_left",
+        "x": 0,
+        "y": 300,
+        "w": 70,
+        "h": 40
+      },
+      {
+        "id": "floor_right",
+        "x": 280,
+        "y": 300,
+        "w": 80,
+        "h": 40
+      },
+      {
+        "id": "w_left",
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "w_right",
+        "x": 348,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "ceiling",
+        "x": 0,
+        "y": 0,
+        "w": 360,
+        "h": 12
+      },
+      {
+        "id": "c1",
+        "x": 80,
+        "y": 290,
+        "w": 42,
+        "h": 12,
+        "isCrumbling": true
+      },
+      {
+        "id": "c2",
+        "x": 130,
+        "y": 290,
+        "w": 42,
+        "h": 12,
+        "isCrumbling": true
+      },
+      {
+        "id": "c3",
+        "x": 180,
+        "y": 290,
+        "w": 42,
+        "h": 12,
+        "isCrumbling": true
+      },
+      {
+        "id": "c4",
+        "x": 230,
+        "y": 290,
+        "w": 42,
+        "h": 12,
+        "isCrumbling": true
+      }
+    ],
+    "hazards": [
+      {
+        "id": "pit",
+        "x": 70,
+        "y": 320,
+        "w": 210,
+        "h": 20
+      }
+    ],
+    "crates": [],
+    "springs": [],
+    "switches": [],
+    "keys": [],
+    "plates": [],
+    "barriers": []
+  },
+  "24": {
+    "title": "CHAMBER 24: TURBINE AIR VENT",
+    "hint": "STEP ONTO THE TURBINE AIR VENT TO RIDE THE HIGH-PRESSURE UPDRAFT TO THE EXIT!",
+    "playerStart": {
+      "x": 30,
+      "y": 260
+    },
+    "exitDoor": {
+      "x": 310,
+      "y": 98,
+      "w": 28,
+      "h": 42,
+      "locked": false
+    },
+    "platforms": [
+      {
+        "id": "floor",
+        "x": 0,
+        "y": 300,
+        "w": 360,
+        "h": 40
+      },
+      {
+        "id": "w_left",
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "w_right",
+        "x": 348,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "ceiling",
+        "x": 0,
+        "y": 0,
+        "w": 360,
+        "h": 12
+      },
+      {
+        "id": "high_roof",
+        "x": 260,
+        "y": 140,
+        "w": 88,
+        "h": 16
+      }
+    ],
+    "fans": [
+      {
+        "id": "fan1",
+        "x": 140,
+        "y": 288,
+        "w": 40,
+        "h": 12,
+        "active": true
+      }
+    ],
+    "crates": [],
+    "springs": [],
+    "switches": [],
+    "keys": [],
+    "plates": [],
+    "hazards": [],
+    "barriers": []
+  },
+  "25": {
+    "title": "CHAMBER 25: KEYCARD COLOR ORDER",
+    "hint": "COLLECT THE RED, THEN GREEN, THEN BLUE KEYCARDS IN STRICT ORDER!",
+    "playerStart": {
+      "x": 30,
+      "y": 260
+    },
+    "exitDoor": {
+      "x": 310,
+      "y": 254,
+      "w": 28,
+      "h": 42,
+      "locked": false
+    },
+    "platforms": [
+      {
+        "id": "floor",
+        "x": 0,
+        "y": 300,
+        "w": 360,
+        "h": 40
+      },
+      {
+        "id": "w_left",
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "w_right",
+        "x": 348,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "ceiling",
+        "x": 0,
+        "y": 0,
+        "w": 360,
+        "h": 12
+      }
+    ],
+    "keys": [
+      {
+        "id": "k_red",
+        "x": 70,
+        "y": 275,
+        "color": "#FF0055",
+        "taken": false
+      },
+      {
+        "id": "k_grn",
+        "x": 140,
+        "y": 275,
+        "color": "#39FF14",
+        "taken": false
+      },
+      {
+        "id": "k_blu",
+        "x": 210,
+        "y": 275,
+        "color": "#00F5FF",
+        "taken": false
+      }
+    ],
+    "barriers": [
+      {
+        "id": "b_r",
+        "x": 110,
+        "y": 180,
+        "w": 8,
+        "h": 120,
+        "active": true,
+        "requiredColor": "#FF0055"
+      },
+      {
+        "id": "b_g",
+        "x": 180,
+        "y": 180,
+        "w": 8,
+        "h": 120,
+        "active": true,
+        "requiredColor": "#39FF14"
+      },
+      {
+        "id": "b_b",
+        "x": 260,
+        "y": 180,
+        "w": 8,
+        "h": 120,
+        "active": true,
+        "requiredColor": "#00F5FF"
+      }
+    ],
+    "crates": [],
+    "springs": [],
+    "switches": [],
+    "plates": [],
+    "hazards": []
+  },
+  "26": {
+    "title": "CHAMBER 26: PISTON CRUSHER JAM",
+    "hint": "PUSH THE HEAVY TITANIUM CRATE UNDER THE CRUSHER PISTON TO JAM THE GEARS!",
+    "playerStart": {
+      "x": 30,
+      "y": 260
+    },
+    "exitDoor": {
+      "x": 310,
+      "y": 254,
+      "w": 28,
+      "h": 42,
+      "locked": false
     },
     "platforms": [
       {
@@ -2238,60 +1843,42 @@ const ALL_CHAMBER_LEVELS = {
     ],
     "crates": [
       {
-        "id": "c1",
-        "x": 120,
-        "y": 260,
-        "isDraggable": true
+        "id": "anvil",
+        "x": 90,
+        "y": 270
+      }
+    ],
+    "plates": [
+      {
+        "id": "pl_jam",
+        "x": 170,
+        "y": 295,
+        "w": 40,
+        "h": 6,
+        "pressed": false
+      }
+    ],
+    "barriers": [
+      {
+        "id": "b_crusher",
+        "x": 220,
+        "y": 160,
+        "w": 12,
+        "h": 140,
+        "active": true,
+        "plateIds": [
+          "pl_jam"
+        ]
       }
     ],
     "springs": [],
     "switches": [],
     "keys": [],
-    "plates": [
-      {
-        "id": "p1",
-        "x": 260,
-        "y": 295,
-        "w": 38,
-        "h": 6,
-        "pressed": false
-      }
-    ],
-    "hazards": [],
-    "barriers": [
-      {
-        "id": "b1",
-        "x": 220,
-        "y": 180,
-        "w": 8,
-        "h": 120,
-        "active": true,
-        "plateIds": [
-          "p1"
-        ]
-      }
-    ],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [],
-    "fans": [
-      {
-        "id": "fan1",
-        "x": 60,
-        "y": 292,
-        "w": 38,
-        "h": 12,
-        "active": true
-      }
-    ],
-    "gravityInverted": false
+    "hazards": []
   },
   "27": {
-    "title": "CHAMBER 27: PORTAL KEYCARD LAUNCH",
-    "hint": "DROP FLOATING KEY INTO PORTAL TO RECEIVE IT AT THE DOOR!",
+    "title": "CHAMBER 27: SWIPE ROPE CUT",
+    "hint": "SWIPE YOUR FINGER ACROSS THE SUSPENSION ROPE TO DROP THE DRAWBRIDGE!",
     "playerStart": {
       "x": 30,
       "y": 260
@@ -2301,8 +1888,94 @@ const ALL_CHAMBER_LEVELS = {
       "y": 254,
       "w": 28,
       "h": 42,
-      "locked": true,
-      "isDraggable": false
+      "locked": false
+    },
+    "platforms": [
+      {
+        "id": "floor_left",
+        "x": 0,
+        "y": 300,
+        "w": 90,
+        "h": 40
+      },
+      {
+        "id": "floor_right",
+        "x": 250,
+        "y": 300,
+        "w": 110,
+        "h": 40
+      },
+      {
+        "id": "w_left",
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "w_right",
+        "x": 348,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "ceiling",
+        "x": 0,
+        "y": 0,
+        "w": 360,
+        "h": 12
+      },
+      {
+        "id": "bridge_draw",
+        "x": 90,
+        "y": 180,
+        "w": 160,
+        "h": 14,
+        "isBridge": true,
+        "hanging": true
+      }
+    ],
+    "ropes": [
+      {
+        "id": "rope1",
+        "x1": 170,
+        "y1": 12,
+        "x2": 170,
+        "y2": 180,
+        "cut": false,
+        "targetBridgeId": "bridge_draw"
+      }
+    ],
+    "hazards": [
+      {
+        "id": "pit",
+        "x": 90,
+        "y": 320,
+        "w": 160,
+        "h": 20
+      }
+    ],
+    "crates": [],
+    "springs": [],
+    "switches": [],
+    "keys": [],
+    "plates": [],
+    "barriers": []
+  },
+  "28": {
+    "title": "CHAMBER 28: TORCH MELTS ICE KEY",
+    "hint": "DRAG THE FLAMING TORCH OVER THE FROZEN ICE BLOCK TO RELEASE THE KEY!",
+    "playerStart": {
+      "x": 30,
+      "y": 260
+    },
+    "exitDoor": {
+      "x": 310,
+      "y": 254,
+      "w": 28,
+      "h": 42,
+      "locked": true
     },
     "platforms": [
       {
@@ -2334,76 +2007,860 @@ const ALL_CHAMBER_LEVELS = {
         "h": 12
       }
     ],
-    "crates": [],
-    "springs": [],
-    "switches": [
-      {
-        "id": "sw1",
-        "x": 230,
-        "y": 268,
-        "active": false
-      }
-    ],
+    "torch": {
+      "x": 80,
+      "y": 270,
+      "isDraggable": true
+    },
+    "iceBlock": {
+      "x": 180,
+      "y": 260,
+      "w": 34,
+      "h": 36,
+      "melted": false
+    },
     "keys": [
       {
-        "id": "k1",
-        "x": 80,
-        "y": 60,
+        "id": "k_ice",
+        "x": 197,
+        "y": 278,
         "taken": false,
         "color": "#FFD166",
-        "isDraggable": true
+        "inIce": true
       }
     ],
+    "crates": [],
+    "springs": [],
+    "switches": [],
     "plates": [],
     "hazards": [],
-    "barriers": [
-      {
-        "id": "b_mid",
-        "x": 180,
-        "y": 0,
-        "w": 10,
-        "h": 300,
-        "active": true
-      }
-    ],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [
-      {
-        "id": "p1",
-        "x": 80,
-        "y": 120,
-        "partnerId": "p2",
-        "color": "#00F5FF",
-        "exitOffsetX": 20,
-        "exitOffsetY": 0
-      },
-      {
-        "id": "p2",
-        "x": 260,
-        "y": 240,
-        "partnerId": "p1",
-        "color": "#FF9E00",
-        "exitOffsetX": 20,
-        "exitOffsetY": 0
-      }
-    ],
-    "fans": [],
-    "gravityInverted": false
+    "barriers": []
   },
-  "28": {
-    "title": "CHAMBER 28: INVERTED POWER PLUG",
-    "hint": "FLIP GRAVITY TO WALK CEILING, THEN YANK INVERTED PLUG!",
+  "29": {
+    "title": "CHAMBER 29: HORSESHOE MAGNET",
+    "hint": "DRAG THE POWERFUL MAGNET ALONG THE WALL TO PULL THE KEY OUT OF THE CAGE!",
     "playerStart": {
       "x": 30,
       "y": 260
     },
     "exitDoor": {
-      "x": 300,
-      "y": 14,
+      "x": 310,
+      "y": 254,
+      "w": 28,
+      "h": 42,
+      "locked": true
+    },
+    "platforms": [
+      {
+        "id": "floor",
+        "x": 0,
+        "y": 300,
+        "w": 360,
+        "h": 40
+      },
+      {
+        "id": "w_left",
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "w_right",
+        "x": 348,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "ceiling",
+        "x": 0,
+        "y": 0,
+        "w": 360,
+        "h": 12
+      },
+      {
+        "id": "cage_top",
+        "x": 190,
+        "y": 190,
+        "w": 60,
+        "h": 10
+      },
+      {
+        "id": "cage_bar1",
+        "x": 190,
+        "y": 200,
+        "w": 6,
+        "h": 100
+      },
+      {
+        "id": "cage_bar2",
+        "x": 244,
+        "y": 200,
+        "w": 6,
+        "h": 100
+      }
+    ],
+    "magnet": {
+      "x": 80,
+      "y": 270,
+      "isDraggable": true
+    },
+    "keys": [
+      {
+        "id": "k_iron",
+        "x": 218,
+        "y": 270,
+        "taken": false,
+        "color": "#FFD166",
+        "isMagnetic": true
+      }
+    ],
+    "crates": [],
+    "springs": [],
+    "switches": [],
+    "plates": [],
+    "hazards": [],
+    "barriers": []
+  },
+  "30": {
+    "title": "CHAMBER 30: SLIDING GARAGE WALL",
+    "hint": "GRAB THE BOTTOM HANDLE OF THE PARTITION WALL AND DRAG IT UPWARD!",
+    "playerStart": {
+      "x": 30,
+      "y": 260
+    },
+    "exitDoor": {
+      "x": 310,
+      "y": 254,
+      "w": 28,
+      "h": 42,
+      "locked": false
+    },
+    "platforms": [
+      {
+        "id": "floor",
+        "x": 0,
+        "y": 300,
+        "w": 360,
+        "h": 40
+      },
+      {
+        "id": "w_left",
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "w_right",
+        "x": 348,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "ceiling",
+        "x": 0,
+        "y": 0,
+        "w": 360,
+        "h": 12
+      },
+      {
+        "id": "garage_door",
+        "x": 180,
+        "y": 140,
+        "w": 18,
+        "h": 160,
+        "isDraggable": true,
+        "color": "#FFE600"
+      }
+    ],
+    "crates": [],
+    "springs": [],
+    "switches": [],
+    "keys": [],
+    "plates": [],
+    "hazards": [],
+    "barriers": []
+  },
+  "31": {
+    "title": "CHAMBER 31: BIZARRO REVERSED CONTROLS",
+    "hint": "CONTROLS ARE INVERTED! LEFT IS RIGHT, RIGHT IS LEFT — ADAPT AND ESCAPE!",
+    "playerStart": {
+      "x": 30,
+      "y": 260
+    },
+    "exitDoor": {
+      "x": 310,
+      "y": 254,
+      "w": 28,
+      "h": 42,
+      "locked": false
+    },
+    "platforms": [
+      {
+        "id": "floor",
+        "x": 0,
+        "y": 300,
+        "w": 360,
+        "h": 40
+      },
+      {
+        "id": "w_left",
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "w_right",
+        "x": 348,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "ceiling",
+        "x": 0,
+        "y": 0,
+        "w": 360,
+        "h": 12
+      }
+    ],
+    "reversedControls": true,
+    "hazards": [
+      {
+        "id": "mid_spikes",
+        "x": 140,
+        "y": 288,
+        "w": 60,
+        "h": 12
+      }
+    ],
+    "crates": [],
+    "springs": [],
+    "switches": [],
+    "keys": [],
+    "plates": [],
+    "barriers": []
+  },
+  "32": {
+    "title": "CHAMBER 32: CORD IN THE DARK",
+    "hint": "THE ROOM IS PITCH BLACK! PULL DOWN THE HANGING CORD TO TURN ON THE LIGHTS!",
+    "playerStart": {
+      "x": 30,
+      "y": 260
+    },
+    "exitDoor": {
+      "x": 310,
+      "y": 254,
+      "w": 28,
+      "h": 42,
+      "locked": false
+    },
+    "platforms": [
+      {
+        "id": "floor",
+        "x": 0,
+        "y": 300,
+        "w": 360,
+        "h": 40
+      },
+      {
+        "id": "w_left",
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "w_right",
+        "x": 348,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "ceiling",
+        "x": 0,
+        "y": 0,
+        "w": 360,
+        "h": 12
+      }
+    ],
+    "darkRoom": true,
+    "lightCord": {
+      "x": 180,
+      "y": 80,
+      "pulled": false
+    },
+    "crates": [],
+    "springs": [],
+    "switches": [],
+    "keys": [],
+    "plates": [],
+    "hazards": [],
+    "barriers": []
+  },
+  "33": {
+    "title": "CHAMBER 33: SLEEPING SENTRY",
+    "hint": "TAP THE AUDIO BUTTON TO MUTE YOUR FOOTSTEPS BEFORE WALKING PAST THE BEAST!",
+    "playerStart": {
+      "x": 30,
+      "y": 260
+    },
+    "exitDoor": {
+      "x": 310,
+      "y": 254,
+      "w": 28,
+      "h": 42,
+      "locked": false
+    },
+    "platforms": [
+      {
+        "id": "floor",
+        "x": 0,
+        "y": 300,
+        "w": 360,
+        "h": 40
+      },
+      {
+        "id": "w_left",
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "w_right",
+        "x": 348,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "ceiling",
+        "x": 0,
+        "y": 0,
+        "w": 360,
+        "h": 12
+      }
+    ],
+    "sleepingMonster": {
+      "x": 170,
+      "y": 250,
+      "w": 45,
+      "h": 50,
+      "asleep": true
+    },
+    "crates": [],
+    "springs": [],
+    "switches": [],
+    "keys": [],
+    "plates": [],
+    "hazards": [],
+    "barriers": []
+  },
+  "34": {
+    "title": "CHAMBER 34: MAGNIFYING GLASS",
+    "hint": "DRAG THE MAGNIFYING GLASS OVER THE MICROSCOPIC KEY TO SCALE IT UP!",
+    "playerStart": {
+      "x": 30,
+      "y": 260
+    },
+    "exitDoor": {
+      "x": 310,
+      "y": 254,
+      "w": 28,
+      "h": 42,
+      "locked": true
+    },
+    "platforms": [
+      {
+        "id": "floor",
+        "x": 0,
+        "y": 300,
+        "w": 360,
+        "h": 40
+      },
+      {
+        "id": "w_left",
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "w_right",
+        "x": 348,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "ceiling",
+        "x": 0,
+        "y": 0,
+        "w": 360,
+        "h": 12
+      }
+    ],
+    "magnifyingGlass": {
+      "x": 80,
+      "y": 270,
+      "isDraggable": true
+    },
+    "keys": [
+      {
+        "id": "k_micro",
+        "x": 200,
+        "y": 288,
+        "taken": false,
+        "color": "#FFD166",
+        "scale": 0.3
+      }
+    ],
+    "crates": [],
+    "springs": [],
+    "switches": [],
+    "plates": [],
+    "hazards": [],
+    "barriers": []
+  },
+  "35": {
+    "title": "CHAMBER 35: PAINT THE DOOR GREEN",
+    "hint": "DIP THE BRUSH IN NEON GREEN PAINT AND COAT THE GRAY FAKE DOOR!",
+    "playerStart": {
+      "x": 30,
+      "y": 260
+    },
+    "exitDoor": {
+      "x": 310,
+      "y": 254,
+      "w": 28,
+      "h": 42,
+      "locked": true,
+      "isUnpainted": true
+    },
+    "platforms": [
+      {
+        "id": "floor",
+        "x": 0,
+        "y": 300,
+        "w": 360,
+        "h": 40
+      },
+      {
+        "id": "w_left",
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "w_right",
+        "x": 348,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "ceiling",
+        "x": 0,
+        "y": 0,
+        "w": 360,
+        "h": 12
+      }
+    ],
+    "paintCan": {
+      "x": 90,
+      "y": 274,
+      "color": "#00F5D4"
+    },
+    "paintBrush": {
+      "x": 130,
+      "y": 270,
+      "isDraggable": true,
+      "dipped": false
+    },
+    "crates": [],
+    "springs": [],
+    "switches": [],
+    "keys": [],
+    "plates": [],
+    "hazards": [],
+    "barriers": []
+  },
+  "36": {
+    "title": "CHAMBER 36: TWO-FINGER OVERRIDE",
+    "hint": "TOUCH BOTH DISTANT PRESSURE PLATES AT THE EXACT SAME TIME WITH TWO FINGERS!",
+    "playerStart": {
+      "x": 30,
+      "y": 260
+    },
+    "exitDoor": {
+      "x": 310,
+      "y": 254,
+      "w": 28,
+      "h": 42,
+      "locked": false
+    },
+    "platforms": [
+      {
+        "id": "floor",
+        "x": 0,
+        "y": 300,
+        "w": 360,
+        "h": 40
+      },
+      {
+        "id": "w_left",
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "w_right",
+        "x": 348,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "ceiling",
+        "x": 0,
+        "y": 0,
+        "w": 360,
+        "h": 12
+      }
+    ],
+    "plates": [
+      {
+        "id": "pl_touch1",
+        "x": 80,
+        "y": 295,
+        "w": 32,
+        "h": 6,
+        "pressed": false
+      },
+      {
+        "id": "pl_touch2",
+        "x": 240,
+        "y": 295,
+        "w": 32,
+        "h": 6,
+        "pressed": false
+      }
+    ],
+    "barriers": [
+      {
+        "id": "b_dual",
+        "x": 180,
+        "y": 160,
+        "w": 10,
+        "h": 140,
+        "active": true,
+        "dualPlates": [
+          "pl_touch1",
+          "pl_touch2"
+        ]
+      }
+    ],
+    "crates": [],
+    "springs": [],
+    "switches": [],
+    "keys": [],
+    "hazards": []
+  },
+  "37": {
+    "title": "CHAMBER 37: FIRE SPRINKLER LEVER",
+    "hint": "PULL DOWN THE CEILING FIRE LEVER TO ACTIVATE SPRINKLERS AND DOUSE THE FIRE!",
+    "playerStart": {
+      "x": 30,
+      "y": 260
+    },
+    "exitDoor": {
+      "x": 310,
+      "y": 254,
+      "w": 28,
+      "h": 42,
+      "locked": false
+    },
+    "platforms": [
+      {
+        "id": "floor",
+        "x": 0,
+        "y": 300,
+        "w": 360,
+        "h": 40
+      },
+      {
+        "id": "w_left",
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "w_right",
+        "x": 348,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "ceiling",
+        "x": 0,
+        "y": 0,
+        "w": 360,
+        "h": 12
+      }
+    ],
+    "switches": [
+      {
+        "id": "sw_sprinkler",
+        "x": 80,
+        "y": 120,
+        "active": false,
+        "isSprinkler": true
+      }
+    ],
+    "hazards": [
+      {
+        "id": "fire_wall",
+        "x": 190,
+        "y": 200,
+        "w": 30,
+        "h": 100,
+        "isFire": true
+      }
+    ],
+    "crates": [],
+    "springs": [],
+    "keys": [],
+    "plates": [],
+    "barriers": []
+  },
+  "38": {
+    "title": "CHAMBER 38: PENCIL ERASER TOOL",
+    "hint": "RUB THE ERASER TOOL OVER THE DRAWN BRICK WALL TO WIPE IT OUT COMPLETELY!",
+    "playerStart": {
+      "x": 30,
+      "y": 260
+    },
+    "exitDoor": {
+      "x": 310,
+      "y": 254,
+      "w": 28,
+      "h": 42,
+      "locked": false
+    },
+    "platforms": [
+      {
+        "id": "floor",
+        "x": 0,
+        "y": 300,
+        "w": 360,
+        "h": 40
+      },
+      {
+        "id": "w_left",
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "w_right",
+        "x": 348,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "ceiling",
+        "x": 0,
+        "y": 0,
+        "w": 360,
+        "h": 12
+      },
+      {
+        "id": "drawn_wall",
+        "x": 180,
+        "y": 160,
+        "w": 20,
+        "h": 140,
+        "isErasable": true
+      }
+    ],
+    "eraser": {
+      "x": 80,
+      "y": 270,
+      "isDraggable": true
+    },
+    "crates": [],
+    "springs": [],
+    "switches": [],
+    "keys": [],
+    "plates": [],
+    "hazards": [],
+    "barriers": []
+  },
+  "39": {
+    "title": "CHAMBER 39: PULLEY SCALE HOIST",
+    "hint": "PUSH THE HEAVY CRATE ONTO THE RIGHT SCALE PAN TO HOIST THE LEFT PAN WITH YOU!",
+    "playerStart": {
+      "x": 50,
+      "y": 250
+    },
+    "exitDoor": {
+      "x": 70,
+      "y": 88,
+      "w": 28,
+      "h": 42,
+      "locked": false
+    },
+    "platforms": [
+      {
+        "id": "floor",
+        "x": 0,
+        "y": 300,
+        "w": 360,
+        "h": 40
+      },
+      {
+        "id": "w_left",
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "w_right",
+        "x": 348,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "ceiling",
+        "x": 0,
+        "y": 0,
+        "w": 360,
+        "h": 12
+      },
+      {
+        "id": "pan_left",
+        "x": 30,
+        "y": 280,
+        "w": 60,
+        "h": 12,
+        "isScalePan": true,
+        "partnerPan": "pan_right"
+      },
+      {
+        "id": "pan_right",
+        "x": 240,
+        "y": 160,
+        "w": 70,
+        "h": 12,
+        "isScalePan": true,
+        "partnerPan": "pan_left"
+      },
+      {
+        "id": "door_shelf",
+        "x": 50,
+        "y": 130,
+        "w": 68,
+        "h": 14
+      }
+    ],
+    "crates": [
+      {
+        "id": "heavy_weight",
+        "x": 260,
+        "y": 130
+      }
+    ],
+    "springs": [],
+    "switches": [],
+    "keys": [],
+    "plates": [],
+    "hazards": [],
+    "barriers": []
+  },
+  "40": {
+    "title": "CHAMBER 40: PAUSE MENU SECRET",
+    "hint": "THE DOOR IS LOCKED WITH A 4-DIGIT CODE! CHECK INSIDE THE PAUSE MENU FOR IT!",
+    "playerStart": {
+      "x": 30,
+      "y": 260
+    },
+    "exitDoor": {
+      "x": 310,
+      "y": 254,
+      "w": 28,
+      "h": 42,
+      "locked": true,
+      "keypadCode": "4096"
+    },
+    "platforms": [
+      {
+        "id": "floor",
+        "x": 0,
+        "y": 300,
+        "w": 360,
+        "h": 40
+      },
+      {
+        "id": "w_left",
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "w_right",
+        "x": 348,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "ceiling",
+        "x": 0,
+        "y": 0,
+        "w": 360,
+        "h": 12
+      }
+    ],
+    "keypad": {
+      "x": 280,
+      "y": 260,
+      "w": 20,
+      "h": 26
+    },
+    "crates": [],
+    "springs": [],
+    "switches": [],
+    "keys": [],
+    "plates": [],
+    "hazards": [],
+    "barriers": []
+  },
+  "41": {
+    "title": "CHAMBER 41: DRAG THE EXIT EMOJI",
+    "hint": "NO DOOR INSIDE? DRAG THE 🚪 EMOJI FROM THE TOP TITLE BANNER INTO THE ROOM!",
+    "puzzleType": "EMOJI_DOOR",
+    "playerStart": {
+      "x": 30,
+      "y": 260
+    },
+    "exitDoor": {
+      "x": 310,
+      "y": 254,
       "w": 28,
       "h": 42,
       "locked": false
@@ -2444,113 +2901,13 @@ const ALL_CHAMBER_LEVELS = {
     "keys": [],
     "plates": [],
     "hazards": [],
-    "barriers": [
-      {
-        "id": "b1",
-        "x": 240,
-        "y": 12,
-        "w": 10,
-        "h": 160,
-        "active": true,
-        "byPlug": true
-      }
-    ],
-    "plug": {
-      "id": "plug1",
-      "x": 80,
-      "y": 60,
-      "plugged": true
-    },
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": true
-  },
-  "29": {
-    "title": "CHAMBER 29: BOUNCE TO DRAGGABLE KEY",
-    "hint": "LAUNCH OFF SPRING PAD TO REACH HIGH FLOATING KEYCARD!",
-    "playerStart": {
-      "x": 30,
-      "y": 260
-    },
-    "exitDoor": {
-      "x": 310,
-      "y": 254,
-      "w": 28,
-      "h": 42,
-      "locked": true,
-      "isDraggable": false
-    },
-    "platforms": [
-      {
-        "id": "floor",
-        "x": 0,
-        "y": 300,
-        "w": 360,
-        "h": 40
-      },
-      {
-        "id": "w_left",
-        "x": 0,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "w_right",
-        "x": 348,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "ceiling",
-        "x": 0,
-        "y": 0,
-        "w": 360,
-        "h": 12
-      }
-    ],
-    "crates": [],
-    "springs": [
-      {
-        "id": "sp1",
-        "x": 130,
-        "y": 288,
-        "w": 34,
-        "h": 12,
-        "isDraggable": true
-      }
-    ],
-    "switches": [],
-    "keys": [
-      {
-        "id": "k1",
-        "x": 145,
-        "y": 60,
-        "taken": false,
-        "color": "#FFD166",
-        "isDraggable": true
-      }
-    ],
-    "plates": [],
-    "hazards": [],
     "barriers": [],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": false
+    "emojiDoor": true
   },
-  "30": {
-    "title": "CHAMBER 30: PADLOCK BEHIND LASERS",
-    "hint": "YANK WALL PLUG TO DISABLE LASER, THEN RIP OFF PADLOCK!",
+  "42": {
+    "title": "CHAMBER 42: BLOW AWAY DEBRIS",
+    "hint": "SWIPE RAPIDLY BACK AND FORTH OVER THE DUST PILE TO UNCOVER THE HIDDEN TRAPDOOR!",
+    "puzzleType": "DEBRIS_SWIPE",
     "playerStart": {
       "x": 30,
       "y": 260
@@ -2598,39 +2955,19 @@ const ALL_CHAMBER_LEVELS = {
     "keys": [],
     "plates": [],
     "hazards": [],
-    "barriers": [
-      {
-        "id": "b1",
-        "x": 240,
-        "y": 180,
-        "w": 10,
-        "h": 120,
-        "active": true,
-        "byPlug": true
-      }
-    ],
-    "plug": {
-      "id": "plug1",
-      "x": 70,
-      "y": 180,
-      "plugged": true
-    },
-    "padlock": {
-      "id": "pad1",
-      "x": 316,
-      "y": 268,
-      "onDoor": true
-    },
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": false
+    "barriers": [],
+    "debrisPile": {
+      "x": 220,
+      "y": 285,
+      "w": 60,
+      "h": 20,
+      "cleared": false
+    }
   },
-  "31": {
-    "title": "CHAMBER 31: DUAL COLOR GAUNTLET",
-    "hint": "RED KEY BEHIND CRUMBLING FLOOR, CYAN KEY BEHIND LASER!",
+  "43": {
+    "title": "CHAMBER 43: SHATTER THE MIRROR",
+    "hint": "THE VISIBLE DOOR IS A REFLECTION! TAP THE MIRROR GLASS TO SHATTER IT AND REVEAL THE EXIT!",
+    "puzzleType": "MIRROR_SHATTER",
     "playerStart": {
       "x": 30,
       "y": 260
@@ -2640,8 +2977,7 @@ const ALL_CHAMBER_LEVELS = {
       "y": 254,
       "w": 28,
       "h": 42,
-      "locked": true,
-      "isDraggable": false
+      "locked": false
     },
     "platforms": [
       {
@@ -2671,404 +3007,6 @@ const ALL_CHAMBER_LEVELS = {
         "y": 0,
         "w": 360,
         "h": 12
-      },
-      {
-        "id": "cr1",
-        "x": 80,
-        "y": 265,
-        "w": 45,
-        "h": 12,
-        "isCrumbling": true,
-        "color": "#FB7185"
-      }
-    ],
-    "crates": [],
-    "springs": [],
-    "switches": [],
-    "keys": [
-      {
-        "id": "k_red",
-        "x": 90,
-        "y": 240,
-        "taken": false,
-        "color": "#FF0055",
-        "isDraggable": true
-      },
-      {
-        "id": "k_cyan",
-        "x": 260,
-        "y": 265,
-        "taken": false,
-        "color": "#00F5FF",
-        "isDraggable": false
-      }
-    ],
-    "plates": [],
-    "hazards": [],
-    "barriers": [
-      {
-        "id": "b_red",
-        "x": 190,
-        "y": 180,
-        "w": 8,
-        "h": 120,
-        "active": true,
-        "color": "#FF0055",
-        "requiredColor": "#FF0055"
-      }
-    ],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": false
-  },
-  "32": {
-    "title": "CHAMBER 32: CRUSHER STEP CLIMB",
-    "hint": "JAM CRUSHER WITH CRATE, THEN JUMP ON TOP TO HIGH DOOR!",
-    "playerStart": {
-      "x": 30,
-      "y": 260
-    },
-    "exitDoor": {
-      "x": 290,
-      "y": 118,
-      "w": 28,
-      "h": 42,
-      "locked": true
-    },
-    "platforms": [
-      {
-        "id": "floor",
-        "x": 0,
-        "y": 300,
-        "w": 360,
-        "h": 40
-      },
-      {
-        "id": "w_left",
-        "x": 0,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "w_right",
-        "x": 348,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "ceiling",
-        "x": 0,
-        "y": 0,
-        "w": 360,
-        "h": 12
-      },
-      {
-        "id": "high_p",
-        "x": 250,
-        "y": 160,
-        "w": 100,
-        "h": 140
-      }
-    ],
-    "crates": [
-      {
-        "id": "c1",
-        "x": 80,
-        "y": 260,
-        "isDraggable": true
-      }
-    ],
-    "springs": [],
-    "switches": [],
-    "keys": [
-      {
-        "id": "k1",
-        "x": 270,
-        "y": 125,
-        "taken": false,
-        "color": "#FFE600",
-        "isDraggable": true
-      }
-    ],
-    "plates": [],
-    "hazards": [
-      {
-        "id": "crush1",
-        "x": 180,
-        "y": 160,
-        "w": 36,
-        "h": 110,
-        "type": "SPIKES"
-      }
-    ],
-    "barriers": [],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": false
-  },
-  "33": {
-    "title": "CHAMBER 33: PORTAL SPIKES BYPASS",
-    "hint": "DROP INTO PORTAL ON LEFT TO EXIT SAFELY ON RIGHT SIDE!",
-    "playerStart": {
-      "x": 30,
-      "y": 260
-    },
-    "exitDoor": {
-      "x": 310,
-      "y": 254,
-      "w": 28,
-      "h": 42,
-      "locked": true,
-      "isDraggable": false
-    },
-    "platforms": [
-      {
-        "id": "floor",
-        "x": 0,
-        "y": 300,
-        "w": 360,
-        "h": 40
-      },
-      {
-        "id": "w_left",
-        "x": 0,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "w_right",
-        "x": 348,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "ceiling",
-        "x": 0,
-        "y": 0,
-        "w": 360,
-        "h": 12
-      }
-    ],
-    "crates": [],
-    "springs": [],
-    "switches": [],
-    "keys": [
-      {
-        "id": "k1",
-        "x": 295,
-        "y": 265,
-        "taken": false,
-        "color": "#39FF14",
-        "isDraggable": false
-      }
-    ],
-    "plates": [],
-    "hazards": [
-      {
-        "x": 90,
-        "y": 286,
-        "w": 160,
-        "h": 14,
-        "type": "SPIKES"
-      }
-    ],
-    "barriers": [],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [
-      {
-        "id": "p1",
-        "x": 50,
-        "y": 250,
-        "partnerId": "p2",
-        "color": "#00F5FF",
-        "exitOffsetX": 20,
-        "exitOffsetY": 0
-      },
-      {
-        "id": "p2",
-        "x": 270,
-        "y": 250,
-        "partnerId": "p1",
-        "color": "#FF9E00",
-        "exitOffsetX": 20,
-        "exitOffsetY": 0
-      }
-    ],
-    "fans": [],
-    "gravityInverted": false
-  },
-  "34": {
-    "title": "CHAMBER 34: BALLOON ELEVATOR RIDE",
-    "hint": "STAND ON BALLOON CRATE AND STEER IT UPWARD WITH FINGER!",
-    "playerStart": {
-      "x": 30,
-      "y": 260
-    },
-    "exitDoor": {
-      "x": 280,
-      "y": 78,
-      "w": 28,
-      "h": 42,
-      "locked": true
-    },
-    "platforms": [
-      {
-        "id": "floor",
-        "x": 0,
-        "y": 300,
-        "w": 360,
-        "h": 40
-      },
-      {
-        "id": "w_left",
-        "x": 0,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "w_right",
-        "x": 348,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "ceiling",
-        "x": 0,
-        "y": 0,
-        "w": 360,
-        "h": 12
-      },
-      {
-        "id": "high_p",
-        "x": 230,
-        "y": 120,
-        "w": 120,
-        "h": 180
-      }
-    ],
-    "crates": [
-      {
-        "id": "c_bal",
-        "x": 120,
-        "y": 260,
-        "isBalloon": true,
-        "isDraggable": true
-      }
-    ],
-    "springs": [],
-    "switches": [],
-    "keys": [
-      {
-        "id": "k1",
-        "x": 260,
-        "y": 85,
-        "taken": false,
-        "color": "#00F5FF",
-        "isDraggable": true
-      }
-    ],
-    "plates": [],
-    "hazards": [],
-    "barriers": [],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": false
-  },
-  "35": {
-    "title": "CHAMBER 35: DUAL MIRROR ZIG-ZAG",
-    "hint": "POSITION TWO 45° MIRRORS TO SNAKE THE LASER AROUND WALL!",
-    "playerStart": {
-      "x": 30,
-      "y": 260
-    },
-    "exitDoor": {
-      "x": 310,
-      "y": 254,
-      "w": 28,
-      "h": 42,
-      "locked": true,
-      "isDraggable": false
-    },
-    "platforms": [
-      {
-        "id": "floor",
-        "x": 0,
-        "y": 300,
-        "w": 360,
-        "h": 40
-      },
-      {
-        "id": "w_left",
-        "x": 0,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "w_right",
-        "x": 348,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "ceiling",
-        "x": 0,
-        "y": 0,
-        "w": 360,
-        "h": 12
-      },
-      {
-        "id": "wall",
-        "x": 170,
-        "y": 60,
-        "w": 18,
-        "h": 180
-      },
-      {
-        "id": "mir1",
-        "x": 90,
-        "y": 90,
-        "w": 32,
-        "h": 32,
-        "isMirror": true,
-        "isDraggable": true,
-        "color": "#A5F3FC"
-      },
-      {
-        "id": "mir2",
-        "x": 240,
-        "y": 200,
-        "w": 32,
-        "h": 32,
-        "isMirror": true,
-        "isDraggable": true,
-        "color": "#A5F3FC"
       }
     ],
     "crates": [],
@@ -3077,40 +3015,17 @@ const ALL_CHAMBER_LEVELS = {
     "keys": [],
     "plates": [],
     "hazards": [],
-    "barriers": [
-      {
-        "id": "b1",
-        "x": 270,
-        "y": 180,
-        "w": 8,
-        "h": 120,
-        "active": true,
-        "receptorId": "rec1"
-      }
-    ],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [
-      {
-        "id": "rec1",
-        "x": 290,
-        "y": 268,
-        "w": 24,
-        "h": 24,
-        "beamX": 180,
-        "beamY": 100,
-        "hit": false
-      }
-    ],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": false
+    "barriers": [],
+    "mirrorDoor": {
+      "x": 310,
+      "y": 254,
+      "shattered": false
+    }
   },
-  "36": {
-    "title": "CHAMBER 36: SPRING OVER LASER FENCE",
-    "hint": "BOUNCE ON SPRING OVER 180PX LASER FENCE TO REACH SWITCH!",
+  "44": {
+    "title": "CHAMBER 44: ELECTRICAL TAPE",
+    "hint": "DRAG THE BLACK ELECTRICAL TAPE ONTO THE SEVERED SPARKING WIRE TO RESTORE ELEVATOR POWER!",
+    "puzzleType": "WIRE_TAPE",
     "playerStart": {
       "x": 30,
       "y": 260
@@ -3118,92 +3033,6 @@ const ALL_CHAMBER_LEVELS = {
     "exitDoor": {
       "x": 310,
       "y": 254,
-      "w": 28,
-      "h": 42,
-      "locked": true,
-      "isDraggable": false
-    },
-    "platforms": [
-      {
-        "id": "floor",
-        "x": 0,
-        "y": 300,
-        "w": 360,
-        "h": 40
-      },
-      {
-        "id": "w_left",
-        "x": 0,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "w_right",
-        "x": 348,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "ceiling",
-        "x": 0,
-        "y": 0,
-        "w": 360,
-        "h": 12
-      }
-    ],
-    "crates": [],
-    "springs": [
-      {
-        "id": "sp1",
-        "x": 110,
-        "y": 288,
-        "w": 34,
-        "h": 12,
-        "isDraggable": true
-      }
-    ],
-    "switches": [
-      {
-        "id": "sw1",
-        "x": 250,
-        "y": 268,
-        "active": false
-      }
-    ],
-    "keys": [],
-    "plates": [],
-    "hazards": [],
-    "barriers": [
-      {
-        "id": "fence",
-        "x": 180,
-        "y": 100,
-        "w": 10,
-        "h": 200,
-        "active": true
-      }
-    ],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": false
-  },
-  "37": {
-    "title": "CHAMBER 37: BATTERY POWERED FAN",
-    "hint": "SLOT BATTERY INTO SOCKET TO POWER TURBINE WIND LIFT!",
-    "playerStart": {
-      "x": 30,
-      "y": 260
-    },
-    "exitDoor": {
-      "x": 280,
-      "y": 88,
       "w": 28,
       "h": 42,
       "locked": true
@@ -3236,75 +3065,40 @@ const ALL_CHAMBER_LEVELS = {
         "y": 0,
         "w": 360,
         "h": 12
-      },
-      {
-        "id": "roof",
-        "x": 220,
-        "y": 130,
-        "w": 130,
-        "h": 170
       }
     ],
     "crates": [],
     "springs": [],
     "switches": [],
-    "keys": [
-      {
-        "id": "k1",
-        "x": 260,
-        "y": 95,
-        "taken": false,
-        "color": "#00F5FF",
-        "isDraggable": true
-      }
-    ],
+    "keys": [],
     "plates": [],
     "hazards": [],
     "barriers": [],
-    "plug": null,
-    "padlock": null,
-    "battery": {
-      "id": "bat1",
-      "x": 50,
-      "y": 270,
-      "w": 22,
-      "h": 22,
-      "slotted": false
-    },
-    "socket": {
-      "id": "sock1",
-      "x": 140,
+    "severedWire": {
+      "x": 180,
       "y": 260,
-      "w": 28,
-      "h": 28
+      "taped": false
     },
-    "receptors": [],
-    "portals": [],
-    "fans": [
-      {
-        "id": "fan1",
-        "x": 140,
-        "y": 292,
-        "w": 38,
-        "h": 12,
-        "active": true
-      }
-    ],
-    "gravityInverted": false
+    "tapeRoll": {
+      "x": 80,
+      "y": 270,
+      "isDraggable": true
+    }
   },
-  "38": {
-    "title": "CHAMBER 38: CEILING CRATE STACK",
-    "hint": "WALK ON CEILING, STACK CRATES DOWNWARD TOWARD SWITCH!",
+  "45": {
+    "title": "CHAMBER 45: SLEDGEHAMMER WALL",
+    "hint": "GRAB THE SLEDGEHAMMER AND STRIKE THE CRACKED BRICK WALL 3 TIMES TO SMASH THROUGH!",
+    "puzzleType": "SLEDGEHAMMER",
     "playerStart": {
       "x": 30,
       "y": 260
     },
     "exitDoor": {
-      "x": 300,
-      "y": 14,
+      "x": 310,
+      "y": 254,
       "w": 28,
       "h": 42,
-      "locked": true
+      "locked": false
     },
     "platforms": [
       {
@@ -3336,153 +3130,30 @@ const ALL_CHAMBER_LEVELS = {
         "h": 12
       }
     ],
-    "crates": [
-      {
-        "id": "c1",
-        "x": 80,
-        "y": 50,
-        "isDraggable": true
-      },
-      {
-        "id": "c2",
-        "x": 130,
-        "y": 50,
-        "isDraggable": true
-      }
-    ],
+    "crates": [],
     "springs": [],
-    "switches": [
-      {
-        "id": "sw1",
-        "x": 200,
-        "y": 120,
-        "active": false
-      }
-    ],
+    "switches": [],
     "keys": [],
     "plates": [],
     "hazards": [],
     "barriers": [],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": true
-  },
-  "39": {
-    "title": "CHAMBER 39: PORTAL CRATE DROP",
-    "hint": "PUSH CRATE INTO UPPER PORTAL TO DROP ONTO FLOOR PLATE!",
-    "playerStart": {
-      "x": 30,
-      "y": 260
+    "crackedWall": {
+      "x": 180,
+      "y": 160,
+      "w": 16,
+      "h": 140,
+      "hits": 0
     },
-    "exitDoor": {
-      "x": 310,
-      "y": 254,
-      "w": 28,
-      "h": 42,
-      "locked": true,
-      "isDraggable": false
-    },
-    "platforms": [
-      {
-        "id": "floor",
-        "x": 0,
-        "y": 300,
-        "w": 360,
-        "h": 40
-      },
-      {
-        "id": "w_left",
-        "x": 0,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "w_right",
-        "x": 348,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "ceiling",
-        "x": 0,
-        "y": 0,
-        "w": 360,
-        "h": 12
-      }
-    ],
-    "crates": [
-      {
-        "id": "c1",
-        "x": 50,
-        "y": 260,
-        "isDraggable": true
-      }
-    ],
-    "springs": [],
-    "switches": [],
-    "keys": [],
-    "plates": [
-      {
-        "id": "p1",
-        "x": 270,
-        "y": 295,
-        "w": 38,
-        "h": 6,
-        "pressed": false
-      }
-    ],
-    "hazards": [],
-    "barriers": [
-      {
-        "id": "b1",
-        "x": 220,
-        "y": 180,
-        "w": 8,
-        "h": 120,
-        "active": true,
-        "plateIds": [
-          "p1"
-        ]
-      }
-    ],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [
-      {
-        "id": "p1",
-        "x": 90,
-        "y": 240,
-        "partnerId": "p2",
-        "color": "#00F5FF",
-        "exitOffsetX": 0,
-        "exitOffsetY": 25
-      },
-      {
-        "id": "p2",
-        "x": 270,
-        "y": 60,
-        "partnerId": "p1",
-        "color": "#FF9E00",
-        "exitOffsetX": 0,
-        "exitOffsetY": 25
-      }
-    ],
-    "fans": [],
-    "gravityInverted": false
+    "sledgehammer": {
+      "x": 80,
+      "y": 270,
+      "isDraggable": true
+    }
   },
-  "40": {
-    "title": "CHAMBER 40: TRIPLE PRESSURE OVERRIDE",
-    "hint": "PLATE 1 CRATE, PLATE 2 PLAYER, PLATE 3 FINGER HOLD!",
+  "46": {
+    "title": "CHAMBER 46: SOLAR BEAM REFLECTION",
+    "hint": "ANGLE THE POCKET MIRROR TO BOUNCE THE SKYLIGHT BEAM INTO THE DARK SOLAR SENSOR!",
+    "puzzleType": "POCKET_MIRROR",
     "playerStart": {
       "x": 30,
       "y": 260
@@ -3524,2255 +3195,1063 @@ const ALL_CHAMBER_LEVELS = {
         "h": 12
       }
     ],
+    "crates": [],
+    "springs": [],
+    "switches": [],
+    "keys": [],
+    "plates": [],
+    "hazards": [],
+    "barriers": [],
+    "pocketMirror": {
+      "x": 80,
+      "y": 270,
+      "isDraggable": true
+    },
+    "skylightBeam": {
+      "x": 180,
+      "y": 0
+    }
+  },
+  "47": {
+    "title": "CHAMBER 47: TIME-REWIND CLOCK",
+    "hint": "TAP THE REWIND CLOCK TO RESTORE THE FALLEN DRAWBRIDGE BACK TO FULL ELEVATION!",
+    "puzzleType": "TIME_REWIND",
+    "playerStart": {
+      "x": 30,
+      "y": 260
+    },
+    "exitDoor": {
+      "x": 310,
+      "y": 254,
+      "w": 28,
+      "h": 42,
+      "locked": false
+    },
+    "platforms": [
+      {
+        "id": "floor",
+        "x": 0,
+        "y": 300,
+        "w": 360,
+        "h": 40
+      },
+      {
+        "id": "w_left",
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "w_right",
+        "x": 348,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "ceiling",
+        "x": 0,
+        "y": 0,
+        "w": 360,
+        "h": 12
+      }
+    ],
+    "crates": [],
+    "springs": [],
+    "switches": [],
+    "keys": [],
+    "plates": [],
+    "hazards": [],
+    "barriers": [],
+    "rewindClock": {
+      "x": 180,
+      "y": 140,
+      "tapped": false
+    }
+  },
+  "48": {
+    "title": "CHAMBER 48: GLIDING UMBRELLA",
+    "hint": "OPEN THE UMBRELLA TO GLIDE SAFELY ACROSS THE BOTTOMLESS SPIKE PIT!",
+    "puzzleType": "UMBRELLA_GLIDE",
+    "playerStart": {
+      "x": 30,
+      "y": 260
+    },
+    "exitDoor": {
+      "x": 310,
+      "y": 254,
+      "w": 28,
+      "h": 42,
+      "locked": true
+    },
+    "platforms": [
+      {
+        "id": "floor",
+        "x": 0,
+        "y": 300,
+        "w": 360,
+        "h": 40
+      },
+      {
+        "id": "w_left",
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "w_right",
+        "x": 348,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "ceiling",
+        "x": 0,
+        "y": 0,
+        "w": 360,
+        "h": 12
+      }
+    ],
+    "crates": [],
+    "springs": [],
+    "switches": [],
+    "keys": [],
+    "plates": [],
+    "hazards": [],
+    "barriers": [],
+    "umbrella": {
+      "x": 70,
+      "y": 270,
+      "equipped": false
+    }
+  },
+  "49": {
+    "title": "CHAMBER 49: SCREWDRIVER VENT",
+    "hint": "DRAG THE SCREWDRIVER ONTO THE 4 VENT SCREWS TO DETACH THE GRATE AND CRAWL IN!",
+    "puzzleType": "SCREWDRIVER",
+    "playerStart": {
+      "x": 30,
+      "y": 260
+    },
+    "exitDoor": {
+      "x": 310,
+      "y": 254,
+      "w": 28,
+      "h": 42,
+      "locked": false
+    },
+    "platforms": [
+      {
+        "id": "floor",
+        "x": 0,
+        "y": 300,
+        "w": 360,
+        "h": 40
+      },
+      {
+        "id": "w_left",
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "w_right",
+        "x": 348,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "ceiling",
+        "x": 0,
+        "y": 0,
+        "w": 360,
+        "h": 12
+      }
+    ],
+    "crates": [],
+    "springs": [],
+    "switches": [],
+    "keys": [],
+    "plates": [],
+    "hazards": [],
+    "barriers": [],
+    "screwdriver": {
+      "x": 70,
+      "y": 270,
+      "isDraggable": true
+    },
+    "ventGrate": {
+      "x": 200,
+      "y": 250,
+      "screwsLeft": 4
+    }
+  },
+  "50": {
+    "title": "CHAMBER 50: KEY BEHIND PAUSE",
+    "hint": "DRAG THE PAUSE BUTTON ASIDE IN THE TOP HUD TO REVEAL THE HIDDEN GOLDEN KEY!",
+    "puzzleType": "PAUSE_BEHIND_KEY",
+    "playerStart": {
+      "x": 30,
+      "y": 260
+    },
+    "exitDoor": {
+      "x": 310,
+      "y": 254,
+      "w": 28,
+      "h": 42,
+      "locked": true
+    },
+    "platforms": [
+      {
+        "id": "floor",
+        "x": 0,
+        "y": 300,
+        "w": 360,
+        "h": 40
+      },
+      {
+        "id": "w_left",
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "w_right",
+        "x": 348,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "ceiling",
+        "x": 0,
+        "y": 0,
+        "w": 360,
+        "h": 12
+      }
+    ],
+    "crates": [],
+    "springs": [],
+    "switches": [],
+    "keys": [],
+    "plates": [],
+    "hazards": [],
+    "barriers": [],
+    "pauseBehindKey": true
+  },
+  "51": {
+    "title": "CHAMBER 51: FLASHLIGHT PHANTOM",
+    "hint": "SHINE THE FLASHLIGHT BEAM AT THE SHADOW PHANTOM BLOCKING THE DOOR TO DISSOLVE IT!",
+    "puzzleType": "FLASHLIGHT",
+    "playerStart": {
+      "x": 30,
+      "y": 260
+    },
+    "exitDoor": {
+      "x": 310,
+      "y": 254,
+      "w": 28,
+      "h": 42,
+      "locked": false
+    },
+    "platforms": [
+      {
+        "id": "floor",
+        "x": 0,
+        "y": 300,
+        "w": 360,
+        "h": 40
+      },
+      {
+        "id": "w_left",
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "w_right",
+        "x": 348,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "ceiling",
+        "x": 0,
+        "y": 0,
+        "w": 360,
+        "h": 12
+      }
+    ],
+    "crates": [],
+    "springs": [],
+    "switches": [],
+    "keys": [],
+    "plates": [],
+    "hazards": [],
+    "barriers": [],
+    "flashlight": {
+      "x": 70,
+      "y": 270,
+      "on": false
+    },
+    "phantomWall": {
+      "x": 200,
+      "y": 160,
+      "dissolved": false
+    }
+  },
+  "52": {
+    "title": "CHAMBER 52: SUPER GLUE KEY",
+    "hint": "DRAG THE TWO SNAPPED HALVES OF THE KEY TOGETHER WITH SUPER GLUE TO MEND IT!",
+    "puzzleType": "GLUE_KEY",
+    "playerStart": {
+      "x": 30,
+      "y": 260
+    },
+    "exitDoor": {
+      "x": 310,
+      "y": 254,
+      "w": 28,
+      "h": 42,
+      "locked": true
+    },
+    "platforms": [
+      {
+        "id": "floor",
+        "x": 0,
+        "y": 300,
+        "w": 360,
+        "h": 40
+      },
+      {
+        "id": "w_left",
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "w_right",
+        "x": 348,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "ceiling",
+        "x": 0,
+        "y": 0,
+        "w": 360,
+        "h": 12
+      }
+    ],
+    "crates": [],
+    "springs": [],
+    "switches": [],
+    "keys": [],
+    "plates": [],
+    "hazards": [],
+    "barriers": [],
+    "keyHalf1": {
+      "x": 90,
+      "y": 275
+    },
+    "keyHalf2": {
+      "x": 140,
+      "y": 275
+    },
+    "glue": {
+      "x": 70,
+      "y": 270,
+      "isDraggable": true
+    }
+  },
+  "53": {
+    "title": "CHAMBER 53: CLEAN KEYPAD SMUDGE",
+    "hint": "RUB YOUR FINGER OVER THE DIRTY KEYPAD TO READ THE HIGHLIGHTED CODE COMBINATION!",
+    "puzzleType": "SMUDGED_KEYPAD",
+    "playerStart": {
+      "x": 30,
+      "y": 260
+    },
+    "exitDoor": {
+      "x": 310,
+      "y": 254,
+      "w": 28,
+      "h": 42,
+      "locked": false
+    },
+    "platforms": [
+      {
+        "id": "floor",
+        "x": 0,
+        "y": 300,
+        "w": 360,
+        "h": 40
+      },
+      {
+        "id": "w_left",
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "w_right",
+        "x": 348,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "ceiling",
+        "x": 0,
+        "y": 0,
+        "w": 360,
+        "h": 12
+      }
+    ],
+    "crates": [],
+    "springs": [],
+    "switches": [],
+    "keys": [],
+    "plates": [],
+    "hazards": [],
+    "barriers": [],
+    "smudgedPad": {
+      "x": 270,
+      "y": 260,
+      "clean": false
+    }
+  },
+  "54": {
+    "title": "CHAMBER 54: SIPHON DRAINAGE",
+    "hint": "CONNECT THE SIPHON HOSE FROM THE WATER TANK TO THE DRAIN TO LOWER THE FLOOD LEVEL!",
+    "puzzleType": "SIPHON_HOSE",
+    "playerStart": {
+      "x": 30,
+      "y": 260
+    },
+    "exitDoor": {
+      "x": 310,
+      "y": 254,
+      "w": 28,
+      "h": 42,
+      "locked": true
+    },
+    "platforms": [
+      {
+        "id": "floor",
+        "x": 0,
+        "y": 300,
+        "w": 360,
+        "h": 40
+      },
+      {
+        "id": "w_left",
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "w_right",
+        "x": 348,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "ceiling",
+        "x": 0,
+        "y": 0,
+        "w": 360,
+        "h": 12
+      }
+    ],
+    "crates": [],
+    "springs": [],
+    "switches": [],
+    "keys": [],
+    "plates": [],
+    "hazards": [],
+    "barriers": [],
+    "siphonHose": {
+      "x": 80,
+      "y": 270,
+      "connected": false
+    }
+  },
+  "55": {
+    "title": "CHAMBER 55: CATAPULT SEESAW",
+    "hint": "DROP THE HEAVY CRATE FROM THE TOWER ONTO THE SEESAW TO CATAPULT YOURSELF UPWARD!",
+    "puzzleType": "SEESAW_CATAPULT",
+    "playerStart": {
+      "x": 30,
+      "y": 260
+    },
+    "exitDoor": {
+      "x": 310,
+      "y": 254,
+      "w": 28,
+      "h": 42,
+      "locked": false
+    },
+    "platforms": [
+      {
+        "id": "floor",
+        "x": 0,
+        "y": 300,
+        "w": 360,
+        "h": 40
+      },
+      {
+        "id": "w_left",
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "w_right",
+        "x": 348,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "ceiling",
+        "x": 0,
+        "y": 0,
+        "w": 360,
+        "h": 12
+      }
+    ],
     "crates": [
       {
-        "id": "c1",
-        "x": 40,
-        "y": 260,
-        "isDraggable": true
+        "id": "c_heavy",
+        "x": 60,
+        "y": 120
       }
     ],
     "springs": [],
     "switches": [],
     "keys": [],
-    "plates": [
+    "plates": [],
+    "hazards": [],
+    "barriers": [],
+    "seesaw": {
+      "x": 160,
+      "y": 285,
+      "w": 90,
+      "h": 10
+    }
+  },
+  "56": {
+    "title": "CHAMBER 56: BRIBE THE ROBOT",
+    "hint": "DRAG A GOLDEN CYBER COIN TO THE SENTRY BOT SO IT DISENGAGES THE SECURITY GATE!",
+    "puzzleType": "ROBOT_BRIBE",
+    "playerStart": {
+      "x": 30,
+      "y": 260
+    },
+    "exitDoor": {
+      "x": 310,
+      "y": 254,
+      "w": 28,
+      "h": 42,
+      "locked": true
+    },
+    "platforms": [
+      {
+        "id": "floor",
+        "x": 0,
+        "y": 300,
+        "w": 360,
+        "h": 40
+      },
+      {
+        "id": "w_left",
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "w_right",
+        "x": 348,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "ceiling",
+        "x": 0,
+        "y": 0,
+        "w": 360,
+        "h": 12
+      }
+    ],
+    "crates": [],
+    "springs": [],
+    "switches": [],
+    "keys": [],
+    "plates": [],
+    "hazards": [],
+    "barriers": [],
+    "robotGuard": {
+      "x": 220,
+      "y": 260,
+      "bribed": false
+    },
+    "goldCoin": {
+      "x": 80,
+      "y": 270,
+      "isDraggable": true
+    }
+  },
+  "57": {
+    "title": "CHAMBER 57: DYNAMITE BLAST",
+    "hint": "PLACE THE DYNAMITE STICK BY THE BOULDER AND IGNITE THE FUSE TO CLEAR THE PATH!",
+    "puzzleType": "DYNAMITE",
+    "playerStart": {
+      "x": 30,
+      "y": 260
+    },
+    "exitDoor": {
+      "x": 310,
+      "y": 254,
+      "w": 28,
+      "h": 42,
+      "locked": false
+    },
+    "platforms": [
+      {
+        "id": "floor",
+        "x": 0,
+        "y": 300,
+        "w": 360,
+        "h": 40
+      },
+      {
+        "id": "w_left",
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "w_right",
+        "x": 348,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "ceiling",
+        "x": 0,
+        "y": 0,
+        "w": 360,
+        "h": 12
+      }
+    ],
+    "crates": [],
+    "springs": [],
+    "switches": [],
+    "keys": [],
+    "plates": [],
+    "hazards": [],
+    "barriers": [],
+    "dynamite": {
+      "x": 80,
+      "y": 270,
+      "isDraggable": true
+    },
+    "boulder": {
+      "x": 200,
+      "y": 240,
+      "w": 45,
+      "h": 60
+    }
+  },
+  "58": {
+    "title": "CHAMBER 58: RADIO FREQUENCY",
+    "hint": "ROTATE THE RADIO TUNER KNOB TO 98.5 MHZ TO BROADCAST THE UNLOCK SIGNAL!",
+    "puzzleType": "RADIO_TUNER",
+    "playerStart": {
+      "x": 30,
+      "y": 260
+    },
+    "exitDoor": {
+      "x": 310,
+      "y": 254,
+      "w": 28,
+      "h": 42,
+      "locked": true
+    },
+    "platforms": [
+      {
+        "id": "floor",
+        "x": 0,
+        "y": 300,
+        "w": 360,
+        "h": 40
+      },
+      {
+        "id": "w_left",
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "w_right",
+        "x": 348,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "ceiling",
+        "x": 0,
+        "y": 0,
+        "w": 360,
+        "h": 12
+      }
+    ],
+    "crates": [],
+    "springs": [],
+    "switches": [],
+    "keys": [],
+    "plates": [],
+    "hazards": [],
+    "barriers": [],
+    "radio": {
+      "x": 150,
+      "y": 260,
+      "freq": 88,
+      "targetFreq": 98.5
+    }
+  },
+  "59": {
+    "title": "CHAMBER 59: SHADOW SILHOUETTE",
+    "hint": "STAND DIRECTLY IN FRONT OF THE SPOTLIGHT SO YOUR SHADOW FILLS THE WALL SENSOR!",
+    "puzzleType": "SHADOW_MATCH",
+    "playerStart": {
+      "x": 30,
+      "y": 260
+    },
+    "exitDoor": {
+      "x": 310,
+      "y": 254,
+      "w": 28,
+      "h": 42,
+      "locked": false
+    },
+    "platforms": [
+      {
+        "id": "floor",
+        "x": 0,
+        "y": 300,
+        "w": 360,
+        "h": 40
+      },
+      {
+        "id": "w_left",
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "w_right",
+        "x": 348,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "ceiling",
+        "x": 0,
+        "y": 0,
+        "w": 360,
+        "h": 12
+      }
+    ],
+    "crates": [],
+    "springs": [],
+    "switches": [],
+    "keys": [],
+    "plates": [],
+    "hazards": [],
+    "barriers": [],
+    "spotlight": {
+      "x": 50,
+      "y": 270
+    },
+    "shadowTarget": {
+      "x": 250,
+      "y": 250
+    }
+  },
+  "60": {
+    "title": "CHAMBER 60: ICE CUBE THERMOSTAT",
+    "hint": "DRAG AN ICE CUBE ONTO THE TEMPERATURE PROBE TO CHILL THE ROOM AND OPEN THE CRYOCELL!",
+    "puzzleType": "ICE_THERMOSTAT",
+    "playerStart": {
+      "x": 30,
+      "y": 260
+    },
+    "exitDoor": {
+      "x": 310,
+      "y": 254,
+      "w": 28,
+      "h": 42,
+      "locked": true
+    },
+    "platforms": [
+      {
+        "id": "floor",
+        "x": 0,
+        "y": 300,
+        "w": 360,
+        "h": 40
+      },
+      {
+        "id": "w_left",
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "w_right",
+        "x": 348,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "ceiling",
+        "x": 0,
+        "y": 0,
+        "w": 360,
+        "h": 12
+      }
+    ],
+    "crates": [],
+    "springs": [],
+    "switches": [],
+    "keys": [],
+    "plates": [],
+    "hazards": [],
+    "barriers": [],
+    "thermostat": {
+      "x": 220,
+      "y": 240,
+      "cold": false
+    },
+    "iceCube": {
+      "x": 80,
+      "y": 270,
+      "isDraggable": true
+    }
+  },
+  "61": {
+    "title": "CHAMBER 61: DISCO BALL REFLECTION",
+    "hint": "LOWER THE DISCO BALL INTO THE LASER TO SCATTER LIGHT ONTO 4 WALL SENSORS AT ONCE!",
+    "puzzleType": "DISCO_BALL",
+    "playerStart": {
+      "x": 30,
+      "y": 260
+    },
+    "exitDoor": {
+      "x": 310,
+      "y": 254,
+      "w": 28,
+      "h": 42,
+      "locked": false
+    },
+    "platforms": [
+      {
+        "id": "floor",
+        "x": 0,
+        "y": 300,
+        "w": 360,
+        "h": 40
+      },
+      {
+        "id": "w_left",
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "w_right",
+        "x": 348,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "ceiling",
+        "x": 0,
+        "y": 0,
+        "w": 360,
+        "h": 12
+      }
+    ],
+    "crates": [],
+    "springs": [],
+    "switches": [],
+    "keys": [],
+    "plates": [],
+    "hazards": [],
+    "barriers": [],
+    "discoBall": {
+      "x": 180,
+      "y": 80,
+      "lowered": false
+    }
+  },
+  "62": {
+    "title": "CHAMBER 62: MORSE TELEGRAPH",
+    "hint": "TAP THE TELEGRAPH KEY IN S-O-S RHYTHM (... --- ...) TO TRANSMIT THE OVERRIDE CODE!",
+    "puzzleType": "MORSE_CODE",
+    "playerStart": {
+      "x": 30,
+      "y": 260
+    },
+    "exitDoor": {
+      "x": 310,
+      "y": 254,
+      "w": 28,
+      "h": 42,
+      "locked": true
+    },
+    "platforms": [
+      {
+        "id": "floor",
+        "x": 0,
+        "y": 300,
+        "w": 360,
+        "h": 40
+      },
+      {
+        "id": "w_left",
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "w_right",
+        "x": 348,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "ceiling",
+        "x": 0,
+        "y": 0,
+        "w": 360,
+        "h": 12
+      }
+    ],
+    "crates": [],
+    "springs": [],
+    "switches": [],
+    "keys": [],
+    "plates": [],
+    "hazards": [],
+    "barriers": [],
+    "morseKey": {
+      "x": 150,
+      "y": 270,
+      "seq": ""
+    }
+  },
+  "63": {
+    "title": "CHAMBER 63: WATER PIPE ROTATION",
+    "hint": "ROTATE THE 3 WATER PIPE ELBOWS TO CHANNEL LIQUID INTO THE GENERATOR TURBINE!",
+    "puzzleType": "PIPE_ROTATION",
+    "playerStart": {
+      "x": 30,
+      "y": 260
+    },
+    "exitDoor": {
+      "x": 310,
+      "y": 254,
+      "w": 28,
+      "h": 42,
+      "locked": false
+    },
+    "platforms": [
+      {
+        "id": "floor",
+        "x": 0,
+        "y": 300,
+        "w": 360,
+        "h": 40
+      },
+      {
+        "id": "w_left",
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "w_right",
+        "x": 348,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "ceiling",
+        "x": 0,
+        "y": 0,
+        "w": 360,
+        "h": 12
+      }
+    ],
+    "crates": [],
+    "springs": [],
+    "switches": [],
+    "keys": [],
+    "plates": [],
+    "hazards": [],
+    "barriers": [],
+    "pipes": [
       {
         "id": "p1",
-        "x": 80,
-        "y": 295,
-        "w": 36,
-        "h": 6,
-        "pressed": false
+        "angle": 0
       },
       {
         "id": "p2",
-        "x": 160,
-        "y": 295,
-        "w": 36,
-        "h": 6,
-        "pressed": false
+        "angle": 90
       },
       {
         "id": "p3",
-        "x": 240,
-        "y": 295,
-        "w": 36,
-        "h": 6,
-        "pressed": false,
-        "pressedByFinger": false
+        "angle": 180
       }
-    ],
-    "hazards": [],
-    "barriers": [],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": false
-  },
-  "41": {
-    "title": "CHAMBER 41: KINETIC LABYRINTH",
-    "hint": "CRUMBLING FLOOR -> SPRING LAUNCH -> MIRROR DEFLECTION!",
-    "playerStart": {
-      "x": 30,
-      "y": 260
-    },
-    "exitDoor": {
-      "x": 310,
-      "y": 254,
-      "w": 28,
-      "h": 42,
-      "locked": true,
-      "isDraggable": false
-    },
-    "platforms": [
-      {
-        "id": "floor",
-        "x": 0,
-        "y": 300,
-        "w": 360,
-        "h": 40
-      },
-      {
-        "id": "w_left",
-        "x": 0,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "w_right",
-        "x": 348,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "ceiling",
-        "x": 0,
-        "y": 0,
-        "w": 360,
-        "h": 12
-      },
-      {
-        "id": "cr1",
-        "x": 60,
-        "y": 265,
-        "w": 40,
-        "h": 12,
-        "isCrumbling": true,
-        "color": "#FB7185"
-      },
-      {
-        "id": "mir1",
-        "x": 180,
-        "y": 90,
-        "w": 32,
-        "h": 32,
-        "isMirror": true,
-        "isDraggable": true,
-        "color": "#A5F3FC"
-      }
-    ],
-    "crates": [],
-    "springs": [
-      {
-        "id": "sp1",
-        "x": 120,
-        "y": 288,
-        "w": 34,
-        "h": 12,
-        "isDraggable": true
-      }
-    ],
-    "switches": [],
-    "keys": [],
-    "plates": [],
-    "hazards": [],
-    "barriers": [
-      {
-        "id": "b1",
-        "x": 250,
-        "y": 180,
-        "w": 8,
-        "h": 120,
-        "active": true,
-        "receptorId": "rec1"
-      }
-    ],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [
-      {
-        "id": "rec1",
-        "x": 280,
-        "y": 268,
-        "w": 24,
-        "h": 24,
-        "beamX": 180,
-        "beamY": 100,
-        "hit": false
-      }
-    ],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": false
-  },
-  "42": {
-    "title": "CHAMBER 42: BATTERY TRANSPORT",
-    "hint": "SPRING-JUMP TO BATTERY, BRIDGE CHASM WITH SLAB, SLOT IN SOCKET!",
-    "playerStart": {
-      "x": 30,
-      "y": 260
-    },
-    "exitDoor": {
-      "x": 310,
-      "y": 254,
-      "w": 28,
-      "h": 42,
-      "locked": true,
-      "requiresBattery": true
-    },
-    "platforms": [
-      {
-        "id": "floor",
-        "x": 0,
-        "y": 300,
-        "w": 360,
-        "h": 40
-      },
-      {
-        "id": "w_left",
-        "x": 0,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "w_right",
-        "x": 348,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "ceiling",
-        "x": 0,
-        "y": 0,
-        "w": 360,
-        "h": 12
-      },
-      {
-        "id": "slab",
-        "x": 150,
-        "y": 120,
-        "w": 65,
-        "h": 14,
-        "isDraggable": true,
-        "color": "#00F5D4"
-      }
-    ],
-    "crates": [],
-    "springs": [
-      {
-        "id": "sp1",
-        "x": 60,
-        "y": 288,
-        "w": 34,
-        "h": 12,
-        "isDraggable": true
-      }
-    ],
-    "switches": [],
-    "keys": [],
-    "plates": [],
-    "hazards": [
-      {
-        "x": 130,
-        "y": 286,
-        "w": 100,
-        "h": 14,
-        "type": "SPIKES"
-      }
-    ],
-    "barriers": [],
-    "plug": null,
-    "padlock": null,
-    "battery": {
-      "id": "bat1",
-      "x": 80,
-      "y": 120,
-      "w": 22,
-      "h": 22,
-      "slotted": false
-    },
-    "socket": {
-      "id": "sock1",
-      "x": 270,
-      "y": 260,
-      "w": 28,
-      "h": 28
-    },
-    "receptors": [],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": false
-  },
-  "43": {
-    "title": "CHAMBER 43: INVERTED LASER MIRROR",
-    "hint": "CEILING GRAVITY: DRAG MIRROR TO ALIGN CEILING LASER INTO RECEPTOR!",
-    "playerStart": {
-      "x": 30,
-      "y": 260
-    },
-    "exitDoor": {
-      "x": 300,
-      "y": 14,
-      "w": 28,
-      "h": 42,
-      "locked": true
-    },
-    "platforms": [
-      {
-        "id": "floor",
-        "x": 0,
-        "y": 300,
-        "w": 360,
-        "h": 40
-      },
-      {
-        "id": "w_left",
-        "x": 0,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "w_right",
-        "x": 348,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "ceiling",
-        "x": 0,
-        "y": 0,
-        "w": 360,
-        "h": 12
-      },
-      {
-        "id": "mir1",
-        "x": 120,
-        "y": 60,
-        "w": 32,
-        "h": 32,
-        "isMirror": true,
-        "isDraggable": true,
-        "color": "#A5F3FC"
-      }
-    ],
-    "crates": [],
-    "springs": [],
-    "switches": [],
-    "keys": [
-      {
-        "id": "k1",
-        "x": 270,
-        "y": 45,
-        "taken": false,
-        "color": "#00F5FF",
-        "isDraggable": true
-      }
-    ],
-    "plates": [],
-    "hazards": [],
-    "barriers": [],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [
-      {
-        "id": "rec1",
-        "x": 240,
-        "y": 40,
-        "w": 24,
-        "h": 24,
-        "beamX": 160,
-        "beamY": 80,
-        "hit": false
-      }
-    ],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": true
-  },
-  "44": {
-    "title": "CHAMBER 44: PORTAL CRUSHER JAM",
-    "hint": "TELEPORT CRATE THROUGH PORTAL INTO CRUSHER TO JAM IT!",
-    "playerStart": {
-      "x": 30,
-      "y": 260
-    },
-    "exitDoor": {
-      "x": 310,
-      "y": 254,
-      "w": 28,
-      "h": 42,
-      "locked": true,
-      "isDraggable": false
-    },
-    "platforms": [
-      {
-        "id": "floor",
-        "x": 0,
-        "y": 300,
-        "w": 360,
-        "h": 40
-      },
-      {
-        "id": "w_left",
-        "x": 0,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "w_right",
-        "x": 348,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "ceiling",
-        "x": 0,
-        "y": 0,
-        "w": 360,
-        "h": 12
-      }
-    ],
-    "crates": [
-      {
-        "id": "c1",
-        "x": 40,
-        "y": 260,
-        "isDraggable": true
-      }
-    ],
-    "springs": [],
-    "switches": [],
-    "keys": [
-      {
-        "id": "k1",
-        "x": 270,
-        "y": 265,
-        "taken": false,
-        "color": "#39FF14",
-        "isDraggable": false
-      }
-    ],
-    "plates": [],
-    "hazards": [
-      {
-        "id": "crush1",
-        "x": 170,
-        "y": 160,
-        "w": 36,
-        "h": 110,
-        "type": "SPIKES"
-      }
-    ],
-    "barriers": [],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [
-      {
-        "id": "p1",
-        "x": 60,
-        "y": 240,
-        "partnerId": "p2",
-        "color": "#00F5FF",
-        "exitOffsetX": 0,
-        "exitOffsetY": 25
-      },
-      {
-        "id": "p2",
-        "x": 180,
-        "y": 60,
-        "partnerId": "p1",
-        "color": "#FF9E00",
-        "exitOffsetX": 0,
-        "exitOffsetY": 25
-      }
-    ],
-    "fans": [],
-    "gravityInverted": false
-  },
-  "45": {
-    "title": "CHAMBER 45: TIMED WIND ASCENT",
-    "hint": "TIMED SWITCH ACTIVATES FAN FOR 5S: RIDE UPDRAFT BEFORE IT CUTS!",
-    "playerStart": {
-      "x": 30,
-      "y": 260
-    },
-    "exitDoor": {
-      "x": 290,
-      "y": 78,
-      "w": 28,
-      "h": 42,
-      "locked": true
-    },
-    "platforms": [
-      {
-        "id": "floor",
-        "x": 0,
-        "y": 300,
-        "w": 360,
-        "h": 40
-      },
-      {
-        "id": "w_left",
-        "x": 0,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "w_right",
-        "x": 348,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "ceiling",
-        "x": 0,
-        "y": 0,
-        "w": 360,
-        "h": 12
-      },
-      {
-        "id": "high_p",
-        "x": 230,
-        "y": 120,
-        "w": 120,
-        "h": 180
-      }
-    ],
-    "crates": [],
-    "springs": [],
-    "switches": [
-      {
-        "id": "sw_time",
-        "x": 50,
-        "y": 268,
-        "isTimed": true,
-        "timer": 0,
-        "maxTimer": 4.8,
-        "active": false
-      }
-    ],
-    "keys": [
-      {
-        "id": "k1",
-        "x": 260,
-        "y": 85,
-        "taken": false,
-        "color": "#FFD166",
-        "isDraggable": true
-      }
-    ],
-    "plates": [],
-    "hazards": [],
-    "barriers": [],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [],
-    "fans": [
-      {
-        "id": "fan1",
-        "x": 150,
-        "y": 292,
-        "w": 38,
-        "h": 12,
-        "active": true
-      }
-    ],
-    "gravityInverted": false
-  },
-  "46": {
-    "title": "CHAMBER 46: BALLOON SPRING COMBO",
-    "hint": "BOUNCE BALLOON CRATE OFF SPRING TO LAUNCH TO CEILING PLATE!",
-    "playerStart": {
-      "x": 30,
-      "y": 260
-    },
-    "exitDoor": {
-      "x": 310,
-      "y": 254,
-      "w": 28,
-      "h": 42,
-      "locked": true,
-      "isDraggable": false
-    },
-    "platforms": [
-      {
-        "id": "floor",
-        "x": 0,
-        "y": 300,
-        "w": 360,
-        "h": 40
-      },
-      {
-        "id": "w_left",
-        "x": 0,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "w_right",
-        "x": 348,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "ceiling",
-        "x": 0,
-        "y": 0,
-        "w": 360,
-        "h": 12
-      }
-    ],
-    "crates": [
-      {
-        "id": "c_bal",
-        "x": 80,
-        "y": 260,
-        "isBalloon": true,
-        "isDraggable": true
-      }
-    ],
-    "springs": [
-      {
-        "id": "sp1",
-        "x": 120,
-        "y": 288,
-        "w": 34,
-        "h": 12,
-        "isDraggable": true
-      }
-    ],
-    "switches": [],
-    "keys": [],
-    "plates": [
-      {
-        "id": "cp1",
-        "x": 180,
-        "y": 12,
-        "w": 42,
-        "h": 6,
-        "pressed": false,
-        "isCeiling": true
-      }
-    ],
-    "hazards": [],
-    "barriers": [
-      {
-        "id": "b1",
-        "x": 250,
-        "y": 180,
-        "w": 8,
-        "h": 120,
-        "active": true,
-        "plateIds": [
-          "cp1"
-        ]
-      }
-    ],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": false
-  },
-  "47": {
-    "title": "CHAMBER 47: DOUBLE PLUG LOCKDOWN",
-    "hint": "YANK PLUG A TO LOWER GATE, YANK PLUG B TO DROP EXIT DOOR!",
-    "playerStart": {
-      "x": 30,
-      "y": 260
-    },
-    "exitDoor": {
-      "x": 310,
-      "y": 55,
-      "w": 28,
-      "h": 42,
-      "locked": true,
-      "isDraggable": true
-    },
-    "platforms": [
-      {
-        "id": "floor",
-        "x": 0,
-        "y": 300,
-        "w": 360,
-        "h": 40
-      },
-      {
-        "id": "w_left",
-        "x": 0,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "w_right",
-        "x": 348,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "ceiling",
-        "x": 0,
-        "y": 0,
-        "w": 360,
-        "h": 12
-      }
-    ],
-    "crates": [],
-    "springs": [],
-    "switches": [],
-    "keys": [
-      {
-        "id": "k1",
-        "x": 210,
-        "y": 265,
-        "taken": false,
-        "color": "#FFD166",
-        "isDraggable": true
-      }
-    ],
-    "plates": [],
-    "hazards": [],
-    "barriers": [
-      {
-        "id": "b1",
-        "x": 160,
-        "y": 180,
-        "w": 8,
-        "h": 120,
-        "active": true,
-        "byPlug": true
-      },
-      {
-        "id": "b2",
-        "x": 260,
-        "y": 180,
-        "w": 8,
-        "h": 120,
-        "active": true,
-        "byPlug": true
-      }
-    ],
-    "plug": {
-      "id": "plug1",
-      "x": 60,
-      "y": 160,
-      "plugged": true
-    },
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": false
-  },
-  "48": {
-    "title": "CHAMBER 48: DUAL MIRROR PORTAL RELAY",
-    "hint": "MIRROR REFLECTS LASER INTO PORTAL, BEAMS OUT TO RECEPTOR!",
-    "playerStart": {
-      "x": 30,
-      "y": 260
-    },
-    "exitDoor": {
-      "x": 310,
-      "y": 254,
-      "w": 28,
-      "h": 42,
-      "locked": true,
-      "isDraggable": false
-    },
-    "platforms": [
-      {
-        "id": "floor",
-        "x": 0,
-        "y": 300,
-        "w": 360,
-        "h": 40
-      },
-      {
-        "id": "w_left",
-        "x": 0,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "w_right",
-        "x": 348,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "ceiling",
-        "x": 0,
-        "y": 0,
-        "w": 360,
-        "h": 12
-      },
-      {
-        "id": "mir1",
-        "x": 90,
-        "y": 100,
-        "w": 32,
-        "h": 32,
-        "isMirror": true,
-        "isDraggable": true,
-        "color": "#A5F3FC"
-      }
-    ],
-    "crates": [],
-    "springs": [],
-    "switches": [],
-    "keys": [],
-    "plates": [],
-    "hazards": [],
-    "barriers": [
-      {
-        "id": "b1",
-        "x": 250,
-        "y": 180,
-        "w": 8,
-        "h": 120,
-        "active": true,
-        "receptorId": "rec1"
-      }
-    ],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [
-      {
-        "id": "rec1",
-        "x": 280,
-        "y": 268,
-        "w": 24,
-        "h": 24,
-        "beamX": 150,
-        "beamY": 100,
-        "hit": false
-      }
-    ],
-    "portals": [
-      {
-        "id": "p1",
-        "x": 150,
-        "y": 160,
-        "partnerId": "p2",
-        "color": "#00F5FF"
-      },
-      {
-        "id": "p2",
-        "x": 240,
-        "y": 200,
-        "partnerId": "p1",
-        "color": "#FF9E00"
-      }
-    ],
-    "fans": [],
-    "gravityInverted": false
-  },
-  "49": {
-    "title": "CHAMBER 49: SPRING PAD MEGA BRIDGE",
-    "hint": "SPRING LAUNCH OVER FIRST WALL, DRAG SLAB OVER SECOND PIT!",
-    "playerStart": {
-      "x": 30,
-      "y": 260
-    },
-    "exitDoor": {
-      "x": 310,
-      "y": 254,
-      "w": 28,
-      "h": 42,
-      "locked": true,
-      "isDraggable": false
-    },
-    "platforms": [
-      {
-        "id": "floor",
-        "x": 0,
-        "y": 300,
-        "w": 360,
-        "h": 40
-      },
-      {
-        "id": "w_left",
-        "x": 0,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "w_right",
-        "x": 348,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "ceiling",
-        "x": 0,
-        "y": 0,
-        "w": 360,
-        "h": 12
-      },
-      {
-        "id": "wall1",
-        "x": 120,
-        "y": 140,
-        "w": 18,
-        "h": 160
-      },
-      {
-        "id": "slab",
-        "x": 170,
-        "y": 100,
-        "w": 60,
-        "h": 14,
-        "isDraggable": true,
-        "color": "#00F5D4"
-      }
-    ],
-    "crates": [],
-    "springs": [
-      {
-        "id": "sp1",
-        "x": 70,
-        "y": 288,
-        "w": 34,
-        "h": 12,
-        "isDraggable": true
-      }
-    ],
-    "switches": [],
-    "keys": [
-      {
-        "id": "k1",
-        "x": 280,
-        "y": 265,
-        "taken": false,
-        "color": "#39FF14",
-        "isDraggable": false
-      }
-    ],
-    "plates": [],
-    "hazards": [
-      {
-        "x": 160,
-        "y": 286,
-        "w": 90,
-        "h": 14,
-        "type": "SPIKES"
-      }
-    ],
-    "barriers": [],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": false
-  },
-  "50": {
-    "title": "CHAMBER 50: TRIPLE COLOR SECURITY",
-    "hint": "RED KEY -> BLUE GATE -> CYAN KEY -> YELLOW GATE -> EXIT!",
-    "playerStart": {
-      "x": 30,
-      "y": 260
-    },
-    "exitDoor": {
-      "x": 310,
-      "y": 254,
-      "w": 28,
-      "h": 42,
-      "locked": true,
-      "isDraggable": false
-    },
-    "platforms": [
-      {
-        "id": "floor",
-        "x": 0,
-        "y": 300,
-        "w": 360,
-        "h": 40
-      },
-      {
-        "id": "w_left",
-        "x": 0,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "w_right",
-        "x": 348,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "ceiling",
-        "x": 0,
-        "y": 0,
-        "w": 360,
-        "h": 12
-      }
-    ],
-    "crates": [],
-    "springs": [],
-    "switches": [],
-    "keys": [
-      {
-        "id": "k_red",
-        "x": 50,
-        "y": 265,
-        "taken": false,
-        "color": "#FF0055",
-        "isDraggable": true
-      },
-      {
-        "id": "k_cyan",
-        "x": 140,
-        "y": 265,
-        "taken": false,
-        "color": "#00F5FF",
-        "isDraggable": true
-      },
-      {
-        "id": "k_yel",
-        "x": 230,
-        "y": 265,
-        "taken": false,
-        "color": "#FFE600",
-        "isDraggable": false
-      }
-    ],
-    "plates": [],
-    "hazards": [],
-    "barriers": [
-      {
-        "id": "b_red",
-        "x": 100,
-        "y": 180,
-        "w": 8,
-        "h": 120,
-        "active": true,
-        "color": "#FF0055",
-        "requiredColor": "#FF0055"
-      },
-      {
-        "id": "b_cyan",
-        "x": 190,
-        "y": 180,
-        "w": 8,
-        "h": 120,
-        "active": true,
-        "color": "#00F5FF",
-        "requiredColor": "#00F5FF"
-      }
-    ],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": false
-  },
-  "51": {
-    "title": "CHAMBER 51: CEILING PORTAL DROP",
-    "hint": "INVERT GRAVITY TO ENTER CEILING PORTAL, FALL RIGHT TO EXIT!",
-    "playerStart": {
-      "x": 30,
-      "y": 260
-    },
-    "exitDoor": {
-      "x": 310,
-      "y": 254,
-      "w": 28,
-      "h": 42,
-      "locked": true,
-      "isDraggable": false
-    },
-    "platforms": [
-      {
-        "id": "floor",
-        "x": 0,
-        "y": 300,
-        "w": 360,
-        "h": 40
-      },
-      {
-        "id": "w_left",
-        "x": 0,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "w_right",
-        "x": 348,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "ceiling",
-        "x": 0,
-        "y": 0,
-        "w": 360,
-        "h": 12
-      }
-    ],
-    "crates": [],
-    "springs": [],
-    "switches": [],
-    "keys": [],
-    "plates": [],
-    "hazards": [],
-    "barriers": [
-      {
-        "id": "b1",
-        "x": 180,
-        "y": 0,
-        "w": 10,
-        "h": 300,
-        "active": true
-      }
-    ],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [
-      {
-        "id": "p1",
-        "x": 90,
-        "y": 40,
-        "partnerId": "p2",
-        "color": "#00F5FF",
-        "exitOffsetX": 20,
-        "exitOffsetY": 0
-      },
-      {
-        "id": "p2",
-        "x": 260,
-        "y": 240,
-        "partnerId": "p1",
-        "color": "#FF9E00",
-        "exitOffsetX": 20,
-        "exitOffsetY": 0
-      }
-    ],
-    "fans": [],
-    "gravityInverted": true
-  },
-  "52": {
-    "title": "CHAMBER 52: WIND FAN DEFLECTOR",
-    "hint": "FAN BLOWS KEY SIDEWAYS; POSITION SLAB TO DEFLECT IT TO GROUND!",
-    "playerStart": {
-      "x": 30,
-      "y": 260
-    },
-    "exitDoor": {
-      "x": 310,
-      "y": 254,
-      "w": 28,
-      "h": 42,
-      "locked": true,
-      "isDraggable": false
-    },
-    "platforms": [
-      {
-        "id": "floor",
-        "x": 0,
-        "y": 300,
-        "w": 360,
-        "h": 40
-      },
-      {
-        "id": "w_left",
-        "x": 0,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "w_right",
-        "x": 348,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "ceiling",
-        "x": 0,
-        "y": 0,
-        "w": 360,
-        "h": 12
-      },
-      {
-        "id": "slab",
-        "x": 160,
-        "y": 140,
-        "w": 55,
-        "h": 14,
-        "isDraggable": true,
-        "color": "#00F5D4"
-      }
-    ],
-    "crates": [],
-    "springs": [],
-    "switches": [],
-    "keys": [
-      {
-        "id": "k1",
-        "x": 120,
-        "y": 80,
-        "taken": false,
-        "color": "#FFD166",
-        "isDraggable": true
-      }
-    ],
-    "plates": [],
-    "hazards": [],
-    "barriers": [],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [],
-    "fans": [
-      {
-        "id": "fan1",
-        "x": 100,
-        "y": 292,
-        "w": 38,
-        "h": 12,
-        "active": true
-      }
-    ],
-    "gravityInverted": false
-  },
-  "53": {
-    "title": "CHAMBER 53: TIMED DUAL OVERRIDE",
-    "hint": "HIT 4S TIMED SWITCH, SPRINT TO PLATE A, HOLD PLATE B!",
-    "playerStart": {
-      "x": 30,
-      "y": 260
-    },
-    "exitDoor": {
-      "x": 310,
-      "y": 254,
-      "w": 28,
-      "h": 42,
-      "locked": true,
-      "isDraggable": false
-    },
-    "platforms": [
-      {
-        "id": "floor",
-        "x": 0,
-        "y": 300,
-        "w": 360,
-        "h": 40
-      },
-      {
-        "id": "w_left",
-        "x": 0,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "w_right",
-        "x": 348,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "ceiling",
-        "x": 0,
-        "y": 0,
-        "w": 360,
-        "h": 12
-      }
-    ],
-    "crates": [],
-    "springs": [],
-    "switches": [
-      {
-        "id": "sw_time",
-        "x": 40,
-        "y": 268,
-        "isTimed": true,
-        "timer": 0,
-        "maxTimer": 4.2,
-        "active": false
-      }
-    ],
-    "keys": [],
-    "plates": [
-      {
-        "id": "p1",
-        "x": 130,
-        "y": 295,
-        "w": 38,
-        "h": 6,
-        "pressed": false
-      },
-      {
-        "id": "p2",
-        "x": 230,
-        "y": 295,
-        "w": 38,
-        "h": 6,
-        "pressed": false,
-        "pressedByFinger": false
-      }
-    ],
-    "hazards": [],
-    "barriers": [
-      {
-        "id": "b1",
-        "x": 270,
-        "y": 180,
-        "w": 8,
-        "h": 120,
-        "active": true,
-        "switchId": "sw_time"
-      }
-    ],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": false
-  },
-  "54": {
-    "title": "CHAMBER 54: CRUSHER ROOF RIDE",
-    "hint": "STAND ON TOP OF RISING CRUSHER PISTON TO REACH HIGH ALCOVE!",
-    "playerStart": {
-      "x": 30,
-      "y": 260
-    },
-    "exitDoor": {
-      "x": 280,
-      "y": 58,
-      "w": 28,
-      "h": 42,
-      "locked": true
-    },
-    "platforms": [
-      {
-        "id": "floor",
-        "x": 0,
-        "y": 300,
-        "w": 360,
-        "h": 40
-      },
-      {
-        "id": "w_left",
-        "x": 0,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "w_right",
-        "x": 348,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "ceiling",
-        "x": 0,
-        "y": 0,
-        "w": 360,
-        "h": 12
-      },
-      {
-        "id": "alcove",
-        "x": 220,
-        "y": 100,
-        "w": 130,
-        "h": 200
-      }
-    ],
-    "crates": [],
-    "springs": [],
-    "switches": [],
-    "keys": [
-      {
-        "id": "k1",
-        "x": 250,
-        "y": 65,
-        "taken": false,
-        "color": "#39FF14",
-        "isDraggable": false
-      }
-    ],
-    "plates": [],
-    "hazards": [
-      {
-        "id": "crush1",
-        "x": 140,
-        "y": 170,
-        "w": 38,
-        "h": 100,
-        "type": "SPIKES"
-      }
-    ],
-    "barriers": [],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": false
-  },
-  "55": {
-    "title": "CHAMBER 55: BALLOON CRATE STAIRCASE",
-    "hint": "STACK NORMAL CRATE ON FLOATING BALLOON CRATE FOR TALL STAIR!",
-    "playerStart": {
-      "x": 30,
-      "y": 260
-    },
-    "exitDoor": {
-      "x": 310,
-      "y": 254,
-      "w": 28,
-      "h": 42,
-      "locked": true,
-      "isDraggable": false
-    },
-    "platforms": [
-      {
-        "id": "floor",
-        "x": 0,
-        "y": 300,
-        "w": 360,
-        "h": 40
-      },
-      {
-        "id": "w_left",
-        "x": 0,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "w_right",
-        "x": 348,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "ceiling",
-        "x": 0,
-        "y": 0,
-        "w": 360,
-        "h": 12
-      },
-      {
-        "id": "wall",
-        "x": 200,
-        "y": 120,
-        "w": 20,
-        "h": 180
-      }
-    ],
-    "crates": [
-      {
-        "id": "c_bal",
-        "x": 100,
-        "y": 260,
-        "isBalloon": true,
-        "isDraggable": true
-      },
-      {
-        "id": "c_norm",
-        "x": 50,
-        "y": 260,
-        "isDraggable": true
-      }
-    ],
-    "springs": [],
-    "switches": [],
-    "keys": [
-      {
-        "id": "k1",
-        "x": 270,
-        "y": 265,
-        "taken": false,
-        "color": "#FFD166",
-        "isDraggable": true
-      }
-    ],
-    "plates": [],
-    "hazards": [],
-    "barriers": [],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": false
-  },
-  "56": {
-    "title": "CHAMBER 56: PORTAL MIRROR CIRCUIT",
-    "hint": "LASER SHOOTS THROUGH PORTAL, BOUNCED BY MIRROR INTO RECEPTOR!",
-    "playerStart": {
-      "x": 30,
-      "y": 260
-    },
-    "exitDoor": {
-      "x": 310,
-      "y": 254,
-      "w": 28,
-      "h": 42,
-      "locked": true,
-      "isDraggable": false
-    },
-    "platforms": [
-      {
-        "id": "floor",
-        "x": 0,
-        "y": 300,
-        "w": 360,
-        "h": 40
-      },
-      {
-        "id": "w_left",
-        "x": 0,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "w_right",
-        "x": 348,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "ceiling",
-        "x": 0,
-        "y": 0,
-        "w": 360,
-        "h": 12
-      },
-      {
-        "id": "mir1",
-        "x": 230,
-        "y": 160,
-        "w": 32,
-        "h": 32,
-        "isMirror": true,
-        "isDraggable": true,
-        "color": "#A5F3FC"
-      }
-    ],
-    "crates": [],
-    "springs": [],
-    "switches": [],
-    "keys": [],
-    "plates": [],
-    "hazards": [],
-    "barriers": [
-      {
-        "id": "b1",
-        "x": 260,
-        "y": 180,
-        "w": 8,
-        "h": 120,
-        "active": true,
-        "receptorId": "rec1"
-      }
-    ],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [
-      {
-        "id": "rec1",
-        "x": 280,
-        "y": 268,
-        "w": 24,
-        "h": 24,
-        "beamX": 180,
-        "beamY": 100,
-        "hit": false
-      }
-    ],
-    "portals": [
-      {
-        "id": "p1",
-        "x": 80,
-        "y": 120,
-        "partnerId": "p2",
-        "color": "#00F5FF"
-      },
-      {
-        "id": "p2",
-        "x": 180,
-        "y": 160,
-        "partnerId": "p1",
-        "color": "#FF9E00"
-      }
-    ],
-    "fans": [],
-    "gravityInverted": false
-  },
-  "57": {
-    "title": "CHAMBER 57: CRUMBLING SPRING ESCAPE",
-    "hint": "RUN ACROSS 3 CRUMBLING TILES, FINAL TILE IS SPRING LAUNCH!",
-    "playerStart": {
-      "x": 30,
-      "y": 260
-    },
-    "exitDoor": {
-      "x": 310,
-      "y": 254,
-      "w": 28,
-      "h": 42,
-      "locked": true,
-      "isDraggable": false
-    },
-    "platforms": [
-      {
-        "id": "floor",
-        "x": 0,
-        "y": 300,
-        "w": 360,
-        "h": 40
-      },
-      {
-        "id": "w_left",
-        "x": 0,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "w_right",
-        "x": 348,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "ceiling",
-        "x": 0,
-        "y": 0,
-        "w": 360,
-        "h": 12
-      },
-      {
-        "id": "cr1",
-        "x": 90,
-        "y": 265,
-        "w": 38,
-        "h": 12,
-        "isCrumbling": true,
-        "color": "#FB7185"
-      },
-      {
-        "id": "cr2",
-        "x": 150,
-        "y": 265,
-        "w": 38,
-        "h": 12,
-        "isCrumbling": true,
-        "color": "#FB7185"
-      }
-    ],
-    "crates": [],
-    "springs": [
-      {
-        "id": "sp1",
-        "x": 200,
-        "y": 288,
-        "w": 34,
-        "h": 12,
-        "isDraggable": false
-      }
-    ],
-    "switches": [],
-    "keys": [
-      {
-        "id": "k1",
-        "x": 290,
-        "y": 265,
-        "taken": false,
-        "color": "#00F5FF",
-        "isDraggable": false
-      }
-    ],
-    "plates": [],
-    "hazards": [
-      {
-        "x": 70,
-        "y": 286,
-        "w": 160,
-        "h": 14,
-        "type": "SPIKES"
-      }
-    ],
-    "barriers": [],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": false
-  },
-  "58": {
-    "title": "CHAMBER 58: PADLOCK ABOVE PIT",
-    "hint": "SPIKE PIT IN FRONT OF DOOR: BRIDGE WITH SLAB, THEN RIP PADLOCK!",
-    "playerStart": {
-      "x": 30,
-      "y": 260
-    },
-    "exitDoor": {
-      "x": 310,
-      "y": 254,
-      "w": 28,
-      "h": 42,
-      "locked": true
-    },
-    "platforms": [
-      {
-        "id": "floor",
-        "x": 0,
-        "y": 300,
-        "w": 360,
-        "h": 40
-      },
-      {
-        "id": "w_left",
-        "x": 0,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "w_right",
-        "x": 348,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "ceiling",
-        "x": 0,
-        "y": 0,
-        "w": 360,
-        "h": 12
-      },
-      {
-        "id": "slab",
-        "x": 70,
-        "y": 140,
-        "w": 65,
-        "h": 14,
-        "isDraggable": true,
-        "color": "#00F5D4"
-      }
-    ],
-    "crates": [],
-    "springs": [],
-    "switches": [],
-    "keys": [],
-    "plates": [],
-    "hazards": [
-      {
-        "x": 200,
-        "y": 286,
-        "w": 90,
-        "h": 14,
-        "type": "SPIKES"
-      }
-    ],
-    "barriers": [],
-    "plug": null,
-    "padlock": {
-      "id": "pad1",
-      "x": 316,
-      "y": 268,
-      "onDoor": true
-    },
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": false
-  },
-  "59": {
-    "title": "CHAMBER 59: BATTERY ELEVATOR",
-    "hint": "SLOT BATTERY INTO MOVING LIFT SOCKET TO START PLATFORM MOVING!",
-    "playerStart": {
-      "x": 30,
-      "y": 260
-    },
-    "exitDoor": {
-      "x": 310,
-      "y": 254,
-      "w": 28,
-      "h": 42,
-      "locked": true,
-      "isDraggable": false
-    },
-    "platforms": [
-      {
-        "id": "floor",
-        "x": 0,
-        "y": 300,
-        "w": 360,
-        "h": 40
-      },
-      {
-        "id": "w_left",
-        "x": 0,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "w_right",
-        "x": 348,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "ceiling",
-        "x": 0,
-        "y": 0,
-        "w": 360,
-        "h": 12
-      },
-      {
-        "id": "mov_p",
-        "x": 100,
-        "y": 270,
-        "w": 55,
-        "h": 14,
-        "minX": 95,
-        "maxX": 220,
-        "speed": 1.6,
-        "dir": 1,
-        "color": "#00F5FF"
-      }
-    ],
-    "crates": [],
-    "springs": [],
-    "switches": [],
-    "keys": [
-      {
-        "id": "k1",
-        "x": 280,
-        "y": 265,
-        "taken": false,
-        "color": "#FFD166",
-        "isDraggable": false
-      }
-    ],
-    "plates": [],
-    "hazards": [
-      {
-        "x": 90,
-        "y": 286,
-        "w": 150,
-        "h": 14,
-        "type": "SPIKES"
-      }
-    ],
-    "barriers": [],
-    "plug": null,
-    "padlock": null,
-    "battery": {
-      "id": "bat1",
-      "x": 40,
-      "y": 270,
-      "w": 22,
-      "h": 22,
-      "slotted": false
-    },
-    "socket": {
-      "id": "sock1",
-      "x": 100,
-      "y": 260,
-      "w": 28,
-      "h": 28
-    },
-    "receptors": [],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": false
-  },
-  "60": {
-    "title": "CHAMBER 60: MID-AIR PADLOCK TEAR",
-    "hint": "BOUNCE HIGH ON SPRING PAD, RIP PADLOCK OFF HIGH DOOR IN MID-AIR!",
-    "playerStart": {
-      "x": 30,
-      "y": 260
-    },
-    "exitDoor": {
-      "x": 290,
-      "y": 70,
-      "w": 28,
-      "h": 42,
-      "locked": true
-    },
-    "platforms": [
-      {
-        "id": "floor",
-        "x": 0,
-        "y": 300,
-        "w": 360,
-        "h": 40
-      },
-      {
-        "id": "w_left",
-        "x": 0,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "w_right",
-        "x": 348,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "ceiling",
-        "x": 0,
-        "y": 0,
-        "w": 360,
-        "h": 12
-      }
-    ],
-    "crates": [],
-    "springs": [
-      {
-        "id": "sp1",
-        "x": 180,
-        "y": 288,
-        "w": 34,
-        "h": 12,
-        "isDraggable": true
-      }
-    ],
-    "switches": [],
-    "keys": [],
-    "plates": [],
-    "hazards": [],
-    "barriers": [],
-    "plug": null,
-    "padlock": {
-      "id": "pad1",
-      "x": 296,
-      "y": 84,
-      "onDoor": true
-    },
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": false
-  },
-  "61": {
-    "title": "CHAMBER 61: THE QUANTUM RELAY",
-    "hint": "ALIGN 3 MIRRORS IN SEQUENCE TO REFRACT BEAM TO POWER RECEPTOR!",
-    "playerStart": {
-      "x": 30,
-      "y": 260
-    },
-    "exitDoor": {
-      "x": 310,
-      "y": 254,
-      "w": 28,
-      "h": 42,
-      "locked": true,
-      "isDraggable": false
-    },
-    "platforms": [
-      {
-        "id": "floor",
-        "x": 0,
-        "y": 300,
-        "w": 360,
-        "h": 40
-      },
-      {
-        "id": "w_left",
-        "x": 0,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "w_right",
-        "x": 348,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "ceiling",
-        "x": 0,
-        "y": 0,
-        "w": 360,
-        "h": 12
-      },
-      {
-        "id": "mir_61",
-        "x": 100,
-        "y": 110,
-        "w": 32,
-        "h": 32,
-        "isMirror": true,
-        "isDraggable": true,
-        "color": "#A5F3FC"
-      }
-    ],
-    "crates": [],
-    "springs": [],
-    "switches": [],
-    "keys": [],
-    "plates": [],
-    "hazards": [],
-    "barriers": [
-      {
-        "id": "b_61",
-        "x": 240,
-        "y": 180,
-        "w": 8,
-        "h": 120,
-        "active": true,
-        "receptorId": "rec_61"
-      }
-    ],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [
-      {
-        "id": "rec_61",
-        "x": 260,
-        "y": 268,
-        "w": 24,
-        "h": 24,
-        "beamX": 160,
-        "beamY": 100,
-        "hit": false
-      }
-    ],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": false
-  },
-  "62": {
-    "title": "CHAMBER 62: HYDRO-PNEUMATIC LIFT",
-    "hint": "WIND FAN LIFTS BALLOON CRATE INTO STEPPING STONE FOR HIGH EXIT!",
-    "playerStart": {
-      "x": 30,
-      "y": 260
-    },
-    "exitDoor": {
-      "x": 280,
-      "y": 78,
-      "w": 28,
-      "h": 42,
-      "locked": true
-    },
-    "platforms": [
-      {
-        "id": "floor",
-        "x": 0,
-        "y": 300,
-        "w": 360,
-        "h": 40
-      },
-      {
-        "id": "w_left",
-        "x": 0,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "w_right",
-        "x": 348,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "ceiling",
-        "x": 0,
-        "y": 0,
-        "w": 360,
-        "h": 12
-      },
-      {
-        "id": "roof_62",
-        "x": 220,
-        "y": 120,
-        "w": 130,
-        "h": 180
-      }
-    ],
-    "crates": [
-      {
-        "id": "c_bal_62",
-        "x": 80,
-        "y": 260,
-        "isBalloon": true,
-        "isDraggable": true
-      }
-    ],
-    "springs": [],
-    "switches": [],
-    "keys": [
-      {
-        "id": "k_62",
-        "x": 260,
-        "y": 85,
-        "taken": false,
-        "color": "#00F5FF",
-        "isDraggable": true
-      }
-    ],
-    "plates": [],
-    "hazards": [],
-    "barriers": [],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [],
-    "fans": [
-      {
-        "id": "fan_62",
-        "x": 120,
-        "y": 292,
-        "w": 38,
-        "h": 12,
-        "active": true
-      }
-    ],
-    "gravityInverted": false
-  },
-  "63": {
-    "title": "CHAMBER 63: THE REVERSED RUNNER",
-    "hint": "CEILING GRAVITY + TIMED LASER GATE: SPRINT CEILING TILES BEFORE GATE RE-LOCKS!",
-    "playerStart": {
-      "x": 30,
-      "y": 260
-    },
-    "exitDoor": {
-      "x": 300,
-      "y": 14,
-      "w": 28,
-      "h": 42,
-      "locked": true
-    },
-    "platforms": [
-      {
-        "id": "floor",
-        "x": 0,
-        "y": 300,
-        "w": 360,
-        "h": 40
-      },
-      {
-        "id": "w_left",
-        "x": 0,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "w_right",
-        "x": 348,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "ceiling",
-        "x": 0,
-        "y": 0,
-        "w": 360,
-        "h": 12
-      },
-      {
-        "id": "crumb_63",
-        "x": 120,
-        "y": 40,
-        "w": 45,
-        "h": 12,
-        "isCrumbling": true,
-        "color": "#FB7185"
-      }
-    ],
-    "crates": [],
-    "springs": [],
-    "switches": [],
-    "keys": [
-      {
-        "id": "k_63",
-        "x": 260,
-        "y": 40,
-        "taken": false,
-        "color": "#FFD166",
-        "isDraggable": true
-      }
-    ],
-    "plates": [],
-    "hazards": [],
-    "barriers": [],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": true
+    ]
   },
   "64": {
-    "title": "CHAMBER 64: BATTERY SHUTTLE",
-    "hint": "RIDE MOVING PLATFORM WHILE HOLDING BATTERY TO DOCK INTO MOVING SOCKET!",
+    "title": "CHAMBER 64: JACK IN THE BOX",
+    "hint": "WIND THE CRANK ON THE MYSTERY BOX UNTIL THE JESTER POPS OUT BEARING THE KEY!",
+    "puzzleType": "JACK_BOX",
     "playerStart": {
       "x": 30,
       "y": 260
@@ -5782,8 +4261,7 @@ const ALL_CHAMBER_LEVELS = {
       "y": 254,
       "w": 28,
       "h": 42,
-      "locked": true,
-      "requiresBattery": true
+      "locked": true
     },
     "platforms": [
       {
@@ -5813,18 +4291,6 @@ const ALL_CHAMBER_LEVELS = {
         "y": 0,
         "w": 360,
         "h": 12
-      },
-      {
-        "id": "mov_64",
-        "x": 90,
-        "y": 270,
-        "w": 55,
-        "h": 14,
-        "minX": 85,
-        "maxX": 210,
-        "speed": 1.6,
-        "dir": 1,
-        "color": "#00F5FF"
       }
     ],
     "crates": [],
@@ -5834,31 +4300,16 @@ const ALL_CHAMBER_LEVELS = {
     "plates": [],
     "hazards": [],
     "barriers": [],
-    "plug": null,
-    "padlock": null,
-    "battery": {
-      "id": "bat_64",
-      "x": 40,
-      "y": 270,
-      "w": 22,
-      "h": 22,
-      "slotted": false
-    },
-    "socket": {
-      "id": "sock_64",
-      "x": 260,
+    "jackBox": {
+      "x": 180,
       "y": 260,
-      "w": 28,
-      "h": 28
-    },
-    "receptors": [],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": false
+      "cranks": 0
+    }
   },
   "65": {
-    "title": "CHAMBER 65: SOKOBAN TRI-PLATE",
-    "hint": "PUSH 3 CRATES INTO 3 ALCOVES TO DISABLE 3 LASER PERIMETER FENCES!",
+    "title": "CHAMBER 65: LAVA STEPPING STONES",
+    "hint": "THROW OBSIDIAN SLABS INTO THE MOLTEN LAVA TO CREATE A SAFE PATHWAY ACROSS!",
+    "puzzleType": "LAVA_STONES",
     "playerStart": {
       "x": 30,
       "y": 260
@@ -5868,8 +4319,7 @@ const ALL_CHAMBER_LEVELS = {
       "y": 254,
       "w": 28,
       "h": 42,
-      "locked": true,
-      "isDraggable": false
+      "locked": false
     },
     "platforms": [
       {
@@ -5901,68 +4351,26 @@ const ALL_CHAMBER_LEVELS = {
         "h": 12
       }
     ],
-    "crates": [
-      {
-        "id": "c1_65",
-        "x": 50,
-        "y": 260,
-        "isDraggable": true
-      },
-      {
-        "id": "c2_65",
-        "x": 90,
-        "y": 260,
-        "isDraggable": true
-      }
-    ],
+    "crates": [],
     "springs": [],
     "switches": [],
     "keys": [],
-    "plates": [
-      {
-        "id": "p1_65",
-        "x": 140,
-        "y": 295,
-        "w": 34,
-        "h": 6,
-        "pressed": false
-      },
-      {
-        "id": "p2_65",
-        "x": 220,
-        "y": 295,
-        "w": 34,
-        "h": 6,
-        "pressed": false
-      }
-    ],
+    "plates": [],
     "hazards": [],
-    "barriers": [
+    "barriers": [],
+    "stoneSlabs": [
       {
-        "id": "b_65",
-        "x": 270,
-        "y": 180,
-        "w": 8,
-        "h": 120,
-        "active": true,
-        "plateIds": [
-          "p1_65",
-          "p2_65"
-        ]
+        "id": "s1",
+        "x": 80,
+        "y": 270,
+        "isDraggable": true
       }
-    ],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": false
+    ]
   },
   "66": {
-    "title": "CHAMBER 66: MOVING MIRROR SHIELD",
-    "hint": "HOLD MIRROR SLAB TO DEFLECT CONTINUOUS LASER BARRAGE WHILE WALKING!",
+    "title": "CHAMBER 66: EXTINGUISHER JETPACK",
+    "hint": "SPRAY THE FIRE EXTINGUISHER DOWNWARD TO JET-PROPEL OVER THE HIGH STEEL WALL!",
+    "puzzleType": "EXTINGUISHER_JET",
     "playerStart": {
       "x": 30,
       "y": 260
@@ -5972,8 +4380,7 @@ const ALL_CHAMBER_LEVELS = {
       "y": 254,
       "w": 28,
       "h": 42,
-      "locked": true,
-      "isDraggable": false
+      "locked": true
     },
     "platforms": [
       {
@@ -6006,61 +4413,22 @@ const ALL_CHAMBER_LEVELS = {
       }
     ],
     "crates": [],
-    "springs": [
-      {
-        "id": "sp_66",
-        "x": 100,
-        "y": 288,
-        "w": 34,
-        "h": 12,
-        "isDraggable": true
-      }
-    ],
+    "springs": [],
     "switches": [],
-    "keys": [
-      {
-        "id": "k_66",
-        "x": 290,
-        "y": 265,
-        "taken": false,
-        "color": "#FFD166",
-        "isDraggable": false
-      }
-    ],
+    "keys": [],
     "plates": [],
     "hazards": [],
     "barriers": [],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [
-      {
-        "id": "p1_66",
-        "x": 180,
-        "y": 140,
-        "partnerId": "p2_66",
-        "color": "#00F5FF",
-        "exitOffsetX": 20,
-        "exitOffsetY": 0
-      },
-      {
-        "id": "p2_66",
-        "x": 270,
-        "y": 240,
-        "partnerId": "p1_66",
-        "color": "#FF9E00",
-        "exitOffsetX": 20,
-        "exitOffsetY": 0
-      }
-    ],
-    "fans": [],
-    "gravityInverted": false
+    "fireExtinguisher": {
+      "x": 80,
+      "y": 270,
+      "taken": false
+    }
   },
   "67": {
-    "title": "CHAMBER 67: PORTAL GRAVITY LOOP",
-    "hint": "PORTALS PLACED VERTICALLY: FALL THROUGH TO BUILD SPEED, SLINGSHOT TO EXIT!",
+    "title": "CHAMBER 67: X-RAY SCANNER",
+    "hint": "DRAG THE PORTABLE X-RAY OVER THE 3 STEEL SAFES TO FIND WHICH CONTAINS THE KEY!",
+    "puzzleType": "XRAY_SCANNER",
     "playerStart": {
       "x": 30,
       "y": 260
@@ -6070,8 +4438,7 @@ const ALL_CHAMBER_LEVELS = {
       "y": 254,
       "w": 28,
       "h": 42,
-      "locked": true,
-      "isDraggable": false
+      "locked": false
     },
     "platforms": [
       {
@@ -6101,61 +4468,37 @@ const ALL_CHAMBER_LEVELS = {
         "y": 0,
         "w": 360,
         "h": 12
-      },
-      {
-        "id": "slab_67",
-        "x": 70,
-        "y": 140,
-        "w": 65,
-        "h": 14,
-        "isDraggable": true,
-        "color": "#00F5D4"
       }
     ],
-    "crates": [
-      {
-        "id": "c_67",
-        "x": 40,
-        "y": 260,
-        "isDraggable": true
-      }
-    ],
+    "crates": [],
     "springs": [],
     "switches": [],
-    "keys": [
-      {
-        "id": "k_67",
-        "x": 270,
-        "y": 265,
-        "taken": false,
-        "color": "#39FF14",
-        "isDraggable": false
-      }
-    ],
+    "keys": [],
     "plates": [],
-    "hazards": [
-      {
-        "id": "crush_67",
-        "x": 160,
-        "y": 170,
-        "w": 36,
-        "h": 100,
-        "type": "SPIKES"
-      }
-    ],
+    "hazards": [],
     "barriers": [],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": false
+    "xrayScanner": {
+      "x": 80,
+      "y": 270,
+      "isDraggable": true
+    },
+    "safes": [
+      {
+        "id": "sf1"
+      },
+      {
+        "id": "sf2",
+        "hasKey": true
+      },
+      {
+        "id": "sf3"
+      }
+    ]
   },
   "68": {
-    "title": "CHAMBER 68: CRUSHER SLAB TUNNEL",
-    "hint": "SLIDE MAGNETIC SLAB BETWEEN TWO CRUSHERS TO FORM A SAFE CRAWL TUNNEL!",
+    "title": "CHAMBER 68: CRYSTAL RESONANCE",
+    "hint": "PLUCK THE HIGH GUITAR STRING AT THE RESONANT FREQUENCY TO SHATTER THE CRYSTAL GATE!",
+    "puzzleType": "GUITAR_RESONANCE",
     "playerStart": {
       "x": 30,
       "y": 260
@@ -6195,71 +4538,25 @@ const ALL_CHAMBER_LEVELS = {
         "y": 0,
         "w": 360,
         "h": 12
-      },
-      {
-        "id": "slab_68",
-        "x": 140,
-        "y": 130,
-        "w": 60,
-        "h": 14,
-        "isDraggable": true,
-        "color": "#00F5D4"
-      },
-      {
-        "id": "mir_68",
-        "x": 210,
-        "y": 110,
-        "w": 32,
-        "h": 32,
-        "isMirror": true,
-        "isDraggable": true,
-        "color": "#A5F3FC"
       }
     ],
     "crates": [],
-    "springs": [
-      {
-        "id": "sp_68",
-        "x": 70,
-        "y": 288,
-        "w": 34,
-        "h": 12,
-        "isDraggable": true
-      }
-    ],
+    "springs": [],
     "switches": [],
     "keys": [],
     "plates": [],
     "hazards": [],
     "barriers": [],
-    "plug": null,
-    "padlock": {
-      "id": "pad_68",
-      "x": 316,
-      "y": 268,
-      "onDoor": true
-    },
-    "battery": null,
-    "socket": null,
-    "receptors": [
-      {
-        "id": "rec_68",
-        "x": 280,
-        "y": 268,
-        "w": 24,
-        "h": 24,
-        "beamX": 180,
-        "beamY": 100,
-        "hit": false
-      }
-    ],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": false
+    "acousticGuitar": {
+      "x": 80,
+      "y": 260,
+      "plucked": false
+    }
   },
   "69": {
-    "title": "CHAMBER 69: TRIPLE TIMED SWITCHBOARD",
-    "hint": "HIT SWITCHES 1, 2, 3 IN RAPID SUCCESSION BEFORE ANY RESET!",
+    "title": "CHAMBER 69: BICYCLE AIR PUMP",
+    "hint": "PUMP THE AIR PUMP 3 TIMES TO INFLATE A RUBBER RAFT BRIDGE OVER THE SPIKES!",
+    "puzzleType": "AIR_PUMP",
     "playerStart": {
       "x": 30,
       "y": 260
@@ -6269,8 +4566,7 @@ const ALL_CHAMBER_LEVELS = {
       "y": 254,
       "w": 28,
       "h": 42,
-      "locked": true,
-      "isDraggable": false
+      "locked": false
     },
     "platforms": [
       {
@@ -6300,16 +4596,6 @@ const ALL_CHAMBER_LEVELS = {
         "y": 0,
         "w": 360,
         "h": 12
-      },
-      {
-        "id": "mir_69",
-        "x": 124,
-        "y": 110,
-        "w": 32,
-        "h": 32,
-        "isMirror": true,
-        "isDraggable": true,
-        "color": "#A5F3FC"
       }
     ],
     "crates": [],
@@ -6318,47 +4604,24 @@ const ALL_CHAMBER_LEVELS = {
     "keys": [],
     "plates": [],
     "hazards": [],
-    "barriers": [
-      {
-        "id": "b_69",
-        "x": 240,
-        "y": 180,
-        "w": 8,
-        "h": 120,
-        "active": true,
-        "receptorId": "rec_69"
-      }
-    ],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [
-      {
-        "id": "rec_69",
-        "x": 260,
-        "y": 268,
-        "w": 24,
-        "h": 24,
-        "beamX": 160,
-        "beamY": 100,
-        "hit": false
-      }
-    ],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": false
+    "barriers": [],
+    "airPump": {
+      "x": 80,
+      "y": 270,
+      "pumps": 0
+    }
   },
   "70": {
-    "title": "CHAMBER 70: THE FLOATING VAULT",
-    "hint": "EXIT DOOR ADRIFT IN CENTER: DRAG DOOR ONTO MOVING PLATFORM TO REACH IT!",
+    "title": "CHAMBER 70: CUT GREEN WIRE",
+    "hint": "USE THE WIRE SNIPS TO CUT THE GREEN WIRE BEFORE THE 10-SECOND LOCKDOWN OCCURS!",
+    "puzzleType": "CUT_WIRE",
     "playerStart": {
       "x": 30,
       "y": 260
     },
     "exitDoor": {
-      "x": 280,
-      "y": 78,
+      "x": 310,
+      "y": 254,
       "w": 28,
       "h": 42,
       "locked": true
@@ -6391,70 +4654,40 @@ const ALL_CHAMBER_LEVELS = {
         "y": 0,
         "w": 360,
         "h": 12
-      },
-      {
-        "id": "roof_70",
-        "x": 220,
-        "y": 120,
-        "w": 130,
-        "h": 180
       }
     ],
-    "crates": [
-      {
-        "id": "c_bal_70",
-        "x": 80,
-        "y": 260,
-        "isBalloon": true,
-        "isDraggable": true
-      }
-    ],
+    "crates": [],
     "springs": [],
     "switches": [],
-    "keys": [
-      {
-        "id": "k_70",
-        "x": 260,
-        "y": 85,
-        "taken": false,
-        "color": "#00F5FF",
-        "isDraggable": true
-      }
-    ],
+    "keys": [],
     "plates": [],
     "hazards": [],
     "barriers": [],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [],
-    "fans": [
-      {
-        "id": "fan_70",
-        "x": 120,
-        "y": 292,
-        "w": 38,
-        "h": 12,
-        "active": true
-      }
-    ],
-    "gravityInverted": false
+    "wireBox": {
+      "x": 180,
+      "y": 250,
+      "wires": [
+        "RED",
+        "BLUE",
+        "GREEN"
+      ],
+      "cutWire": null
+    }
   },
   "71": {
-    "title": "CHAMBER 71: ALTERNATING GRAVITY",
-    "hint": "FLIP GRAVITY SWITCH TO CEILING TO CROSS UPPER SPIKES, FLIP BACK FOR EXIT!",
+    "title": "CHAMBER 71: PINBALL FLIPPER",
+    "hint": "PULL BACK THE PINBALL SPRING PLUNGER TO LAUNCH YOURSELF INTO THE HIGH EXIT CHUTE!",
+    "puzzleType": "PINBALL_LAUNCH",
     "playerStart": {
       "x": 30,
       "y": 260
     },
     "exitDoor": {
-      "x": 300,
-      "y": 14,
+      "x": 310,
+      "y": 254,
       "w": 28,
       "h": 42,
-      "locked": true
+      "locked": false
     },
     "platforms": [
       {
@@ -6484,45 +4717,25 @@ const ALL_CHAMBER_LEVELS = {
         "y": 0,
         "w": 360,
         "h": 12
-      },
-      {
-        "id": "crumb_71",
-        "x": 120,
-        "y": 40,
-        "w": 45,
-        "h": 12,
-        "isCrumbling": true,
-        "color": "#FB7185"
       }
     ],
     "crates": [],
     "springs": [],
     "switches": [],
-    "keys": [
-      {
-        "id": "k_71",
-        "x": 260,
-        "y": 40,
-        "taken": false,
-        "color": "#FFD166",
-        "isDraggable": true
-      }
-    ],
+    "keys": [],
     "plates": [],
     "hazards": [],
     "barriers": [],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": true
+    "pinballPlunger": {
+      "x": 60,
+      "y": 280,
+      "pulled": false
+    }
   },
   "72": {
-    "title": "CHAMBER 72: THE COLOR PRISM MATRIX",
-    "hint": "RED KEY OPENS MIRROR CHAMBER; MIRROR DEFLECTION OPENS CYAN EXIT GATE!",
+    "title": "CHAMBER 72: STETHOSCOPE SAFE",
+    "hint": "LISTEN CLOSELY FOR THE AUDIBLE CLICK AS YOU TURN THE SAFE DIAL TO CRACK THE CODE!",
+    "puzzleType": "STETHOSCOPE",
     "playerStart": {
       "x": 30,
       "y": 260
@@ -6532,8 +4745,7 @@ const ALL_CHAMBER_LEVELS = {
       "y": 254,
       "w": 28,
       "h": 42,
-      "locked": true,
-      "requiresBattery": true
+      "locked": true
     },
     "platforms": [
       {
@@ -6563,18 +4775,6 @@ const ALL_CHAMBER_LEVELS = {
         "y": 0,
         "w": 360,
         "h": 12
-      },
-      {
-        "id": "mov_72",
-        "x": 90,
-        "y": 270,
-        "w": 55,
-        "h": 14,
-        "minX": 85,
-        "maxX": 210,
-        "speed": 1.6,
-        "dir": 1,
-        "color": "#00F5FF"
       }
     ],
     "crates": [],
@@ -6584,31 +4784,16 @@ const ALL_CHAMBER_LEVELS = {
     "plates": [],
     "hazards": [],
     "barriers": [],
-    "plug": null,
-    "padlock": null,
-    "battery": {
-      "id": "bat_72",
-      "x": 40,
-      "y": 270,
-      "w": 22,
-      "h": 22,
-      "slotted": false
-    },
-    "socket": {
-      "id": "sock_72",
-      "x": 260,
-      "y": 260,
-      "w": 28,
-      "h": 28
-    },
-    "receptors": [],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": false
+    "safeDial": {
+      "x": 180,
+      "y": 250,
+      "cracked": false
+    }
   },
   "73": {
-    "title": "CHAMBER 73: BALLOON COUNTERBALANCE",
-    "hint": "BALLOON CRATE SUPPORTS HEAVY SLAB WHILE PLAYER WALKS ACROSS!",
+    "title": "CHAMBER 73: KITE LIGHTNING ROD",
+    "hint": "FLY THE METAL KITE INTO THE THUNDERCLOUD TO HARNESS A LIGHTNING VOLT FOR THE DOOR!",
+    "puzzleType": "KITE_LIGHTNING",
     "playerStart": {
       "x": 30,
       "y": 260
@@ -6618,8 +4803,7 @@ const ALL_CHAMBER_LEVELS = {
       "y": 254,
       "w": 28,
       "h": 42,
-      "locked": true,
-      "isDraggable": false
+      "locked": false
     },
     "platforms": [
       {
@@ -6651,68 +4835,23 @@ const ALL_CHAMBER_LEVELS = {
         "h": 12
       }
     ],
-    "crates": [
-      {
-        "id": "c1_73",
-        "x": 50,
-        "y": 260,
-        "isDraggable": true
-      },
-      {
-        "id": "c2_73",
-        "x": 90,
-        "y": 260,
-        "isDraggable": true
-      }
-    ],
+    "crates": [],
     "springs": [],
     "switches": [],
     "keys": [],
-    "plates": [
-      {
-        "id": "p1_73",
-        "x": 140,
-        "y": 295,
-        "w": 34,
-        "h": 6,
-        "pressed": false
-      },
-      {
-        "id": "p2_73",
-        "x": 220,
-        "y": 295,
-        "w": 34,
-        "h": 6,
-        "pressed": false
-      }
-    ],
+    "plates": [],
     "hazards": [],
-    "barriers": [
-      {
-        "id": "b_73",
-        "x": 270,
-        "y": 180,
-        "w": 8,
-        "h": 120,
-        "active": true,
-        "plateIds": [
-          "p1_73",
-          "p2_73"
-        ]
-      }
-    ],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": false
+    "barriers": [],
+    "metalKite": {
+      "x": 80,
+      "y": 270,
+      "flown": false
+    }
   },
   "74": {
-    "title": "CHAMBER 74: LASER GRID SHIELDING",
-    "hint": "DENSE LASER FIELD: USE 2 MOVABLE SLABS TO CREATE A SHIELDED SAFE PATH!",
+    "title": "CHAMBER 74: SHOP VACUUM SUCTION",
+    "hint": "TURN ON THE SHOP VACUUM TO SUCK THE HIGH FLOATING FEATHER KEY DOWN TO YOU!",
+    "puzzleType": "VACUUM_SUCTION",
     "playerStart": {
       "x": 30,
       "y": 260
@@ -6722,8 +4861,7 @@ const ALL_CHAMBER_LEVELS = {
       "y": 254,
       "w": 28,
       "h": 42,
-      "locked": true,
-      "isDraggable": false
+      "locked": true
     },
     "platforms": [
       {
@@ -6756,61 +4894,22 @@ const ALL_CHAMBER_LEVELS = {
       }
     ],
     "crates": [],
-    "springs": [
-      {
-        "id": "sp_74",
-        "x": 100,
-        "y": 288,
-        "w": 34,
-        "h": 12,
-        "isDraggable": true
-      }
-    ],
+    "springs": [],
     "switches": [],
-    "keys": [
-      {
-        "id": "k_74",
-        "x": 290,
-        "y": 265,
-        "taken": false,
-        "color": "#FFD166",
-        "isDraggable": false
-      }
-    ],
+    "keys": [],
     "plates": [],
     "hazards": [],
     "barriers": [],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [
-      {
-        "id": "p1_74",
-        "x": 180,
-        "y": 140,
-        "partnerId": "p2_74",
-        "color": "#00F5FF",
-        "exitOffsetX": 20,
-        "exitOffsetY": 0
-      },
-      {
-        "id": "p2_74",
-        "x": 270,
-        "y": 240,
-        "partnerId": "p1_74",
-        "color": "#FF9E00",
-        "exitOffsetX": 20,
-        "exitOffsetY": 0
-      }
-    ],
-    "fans": [],
-    "gravityInverted": false
+    "shopVac": {
+      "x": 80,
+      "y": 270,
+      "on": false
+    }
   },
   "75": {
-    "title": "CHAMBER 75: DOUBLE CRUSHER STRIDE",
-    "hint": "PUSH CRATE INTO CRUSHER 1, STEP ONTO CRUSHER 2 AT PEAK OF RHYTHM!",
+    "title": "CHAMBER 75: GRAVITY SINGULARITY",
+    "hint": "TOSS THE MINIATURE BLACK HOLE ORB TO PULL AND CRUSH ALL SPIKES INTO HARMLESS METAL!",
+    "puzzleType": "BLACK_HOLE",
     "playerStart": {
       "x": 30,
       "y": 260
@@ -6820,8 +4919,7 @@ const ALL_CHAMBER_LEVELS = {
       "y": 254,
       "w": 28,
       "h": 42,
-      "locked": true,
-      "isDraggable": false
+      "locked": false
     },
     "platforms": [
       {
@@ -6851,61 +4949,25 @@ const ALL_CHAMBER_LEVELS = {
         "y": 0,
         "w": 360,
         "h": 12
-      },
-      {
-        "id": "slab_75",
-        "x": 70,
-        "y": 140,
-        "w": 65,
-        "h": 14,
-        "isDraggable": true,
-        "color": "#00F5D4"
       }
     ],
-    "crates": [
-      {
-        "id": "c_75",
-        "x": 40,
-        "y": 260,
-        "isDraggable": true
-      }
-    ],
+    "crates": [],
     "springs": [],
     "switches": [],
-    "keys": [
-      {
-        "id": "k_75",
-        "x": 270,
-        "y": 265,
-        "taken": false,
-        "color": "#39FF14",
-        "isDraggable": false
-      }
-    ],
+    "keys": [],
     "plates": [],
-    "hazards": [
-      {
-        "id": "crush_75",
-        "x": 160,
-        "y": 170,
-        "w": 36,
-        "h": 100,
-        "type": "SPIKES"
-      }
-    ],
+    "hazards": [],
     "barriers": [],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": false
+    "blackHoleOrb": {
+      "x": 80,
+      "y": 270,
+      "isDraggable": true
+    }
   },
   "76": {
-    "title": "CHAMBER 76: SPRING TO PORTAL LEAP",
-    "hint": "SPRING PAD LAUNCHES PLAYER INTO CEILING PORTAL, EXITING DIRECTLY AT DOOR!",
+    "title": "CHAMBER 76: RUNIC SYMBOL MATCH",
+    "hint": "SWAP 3 GLOWING CYAN RUNES ON THE ANCIENT DOORWAY ARCH TO TRIGGER ITS ANCIENT MAGIC!",
+    "puzzleType": "RUNE_MATCH",
     "playerStart": {
       "x": 30,
       "y": 260
@@ -6945,71 +5007,34 @@ const ALL_CHAMBER_LEVELS = {
         "y": 0,
         "w": 360,
         "h": 12
-      },
-      {
-        "id": "slab_76",
-        "x": 140,
-        "y": 130,
-        "w": 60,
-        "h": 14,
-        "isDraggable": true,
-        "color": "#00F5D4"
-      },
-      {
-        "id": "mir_76",
-        "x": 210,
-        "y": 110,
-        "w": 32,
-        "h": 32,
-        "isMirror": true,
-        "isDraggable": true,
-        "color": "#A5F3FC"
       }
     ],
     "crates": [],
-    "springs": [
-      {
-        "id": "sp_76",
-        "x": 70,
-        "y": 288,
-        "w": 34,
-        "h": 12,
-        "isDraggable": true
-      }
-    ],
+    "springs": [],
     "switches": [],
     "keys": [],
     "plates": [],
     "hazards": [],
     "barriers": [],
-    "plug": null,
-    "padlock": {
-      "id": "pad_76",
-      "x": 316,
-      "y": 268,
-      "onDoor": true
-    },
-    "battery": null,
-    "socket": null,
-    "receptors": [
+    "runes": [
       {
-        "id": "rec_76",
-        "x": 280,
-        "y": 268,
-        "w": 24,
-        "h": 24,
-        "beamX": 180,
-        "beamY": 100,
-        "hit": false
+        "id": "r1",
+        "symbol": "A"
+      },
+      {
+        "id": "r2",
+        "symbol": "A"
+      },
+      {
+        "id": "r3",
+        "symbol": "A"
       }
-    ],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": false
+    ]
   },
   "77": {
-    "title": "CHAMBER 77: TRIPLE PLUG SHUTDOWN",
-    "hint": "PULL 3 WALL PLUGS IN SPECIFIC ORDER TO DEACTIVATE CORE SHIELD!",
+    "title": "CHAMBER 77: FISHING ROD REEL",
+    "hint": "CAST THE FISHING HOOK OVER THE PERIMETER FENCE TO SNAG THE GOLDEN KEY RING!",
+    "puzzleType": "FISHING_ROD",
     "playerStart": {
       "x": 30,
       "y": 260
@@ -7019,8 +5044,7 @@ const ALL_CHAMBER_LEVELS = {
       "y": 254,
       "w": 28,
       "h": 42,
-      "locked": true,
-      "isDraggable": false
+      "locked": false
     },
     "platforms": [
       {
@@ -7050,16 +5074,6 @@ const ALL_CHAMBER_LEVELS = {
         "y": 0,
         "w": 360,
         "h": 12
-      },
-      {
-        "id": "mir_77",
-        "x": 148,
-        "y": 110,
-        "w": 32,
-        "h": 32,
-        "isMirror": true,
-        "isDraggable": true,
-        "color": "#A5F3FC"
       }
     ],
     "crates": [],
@@ -7068,47 +5082,24 @@ const ALL_CHAMBER_LEVELS = {
     "keys": [],
     "plates": [],
     "hazards": [],
-    "barriers": [
-      {
-        "id": "b_77",
-        "x": 240,
-        "y": 180,
-        "w": 8,
-        "h": 120,
-        "active": true,
-        "receptorId": "rec_77"
-      }
-    ],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [
-      {
-        "id": "rec_77",
-        "x": 260,
-        "y": 268,
-        "w": 24,
-        "h": 24,
-        "beamX": 160,
-        "beamY": 100,
-        "hit": false
-      }
-    ],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": false
+    "barriers": [],
+    "fishingRod": {
+      "x": 80,
+      "y": 270,
+      "cast": false
+    }
   },
   "78": {
-    "title": "CHAMBER 78: CRUMBLING FALL INTERCEPT",
-    "hint": "KEY DROPS ONTO CRUMBLING FLOOR: DRAG SLAB UNDERNEATH TO CATCH IT!",
+    "title": "CHAMBER 78: UV INVISIBLE INK",
+    "hint": "PAINT UV DEVELOPER FLUID ONTO THE BLANK CONCRETE WALL TO REVEAL THE HIDDEN DOORWAY!",
+    "puzzleType": "UV_PAINT",
     "playerStart": {
       "x": 30,
       "y": 260
     },
     "exitDoor": {
-      "x": 280,
-      "y": 78,
+      "x": 310,
+      "y": 254,
       "w": 28,
       "h": 42,
       "locked": true
@@ -7141,70 +5132,35 @@ const ALL_CHAMBER_LEVELS = {
         "y": 0,
         "w": 360,
         "h": 12
-      },
-      {
-        "id": "roof_78",
-        "x": 220,
-        "y": 120,
-        "w": 130,
-        "h": 180
       }
     ],
-    "crates": [
-      {
-        "id": "c_bal_78",
-        "x": 80,
-        "y": 260,
-        "isBalloon": true,
-        "isDraggable": true
-      }
-    ],
+    "crates": [],
     "springs": [],
     "switches": [],
-    "keys": [
-      {
-        "id": "k_78",
-        "x": 260,
-        "y": 85,
-        "taken": false,
-        "color": "#00F5FF",
-        "isDraggable": true
-      }
-    ],
+    "keys": [],
     "plates": [],
     "hazards": [],
     "barriers": [],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [],
-    "fans": [
-      {
-        "id": "fan_78",
-        "x": 120,
-        "y": 292,
-        "w": 38,
-        "h": 12,
-        "active": true
-      }
-    ],
-    "gravityInverted": false
+    "uvBrush": {
+      "x": 80,
+      "y": 270,
+      "isDraggable": true
+    }
   },
   "79": {
-    "title": "CHAMBER 79: SOLAR SENSOR ELEVATION",
-    "hint": "LASER REDIRECTED INTO ELEVATOR SENSOR TO LIFT PLATFORM TO ROOF!",
+    "title": "CHAMBER 79: DOMINO CASCADE",
+    "hint": "PUSH OVER THE GIANT LEAD DOMINO TO TRIGGER A CHAIN REACTION THAT TOPPLES THE BRIDGE!",
+    "puzzleType": "DOMINO_TOPPLE",
     "playerStart": {
       "x": 30,
       "y": 260
     },
     "exitDoor": {
-      "x": 300,
-      "y": 14,
+      "x": 310,
+      "y": 254,
       "w": 28,
       "h": 42,
-      "locked": true
+      "locked": false
     },
     "platforms": [
       {
@@ -7234,45 +5190,26 @@ const ALL_CHAMBER_LEVELS = {
         "y": 0,
         "w": 360,
         "h": 12
-      },
-      {
-        "id": "crumb_79",
-        "x": 120,
-        "y": 40,
-        "w": 45,
-        "h": 12,
-        "isCrumbling": true,
-        "color": "#FB7185"
       }
     ],
     "crates": [],
     "springs": [],
     "switches": [],
-    "keys": [
-      {
-        "id": "k_79",
-        "x": 260,
-        "y": 40,
-        "taken": false,
-        "color": "#FFD166",
-        "isDraggable": true
-      }
-    ],
+    "keys": [],
     "plates": [],
     "hazards": [],
     "barriers": [],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": true
+    "dominos": [
+      {
+        "id": "d1",
+        "toppled": false
+      }
+    ]
   },
   "80": {
-    "title": "CHAMBER 80: MID-FALL CATCH",
-    "hint": "DROP DOWN DEEP CHASM: DRAG SLAB INTO POSITION IN MID-FALL TO LAND SAFELY!",
+    "title": "CHAMBER 80: SHRINK RAY ZAP",
+    "hint": "ZAP YOURSELF WITH THE MINIATURIZING SHRINK RAY TO CRAWL THROUGH THE TINY MOUSE HOLE!",
+    "puzzleType": "SHRINK_RAY",
     "playerStart": {
       "x": 30,
       "y": 260
@@ -7282,8 +5219,7 @@ const ALL_CHAMBER_LEVELS = {
       "y": 254,
       "w": 28,
       "h": 42,
-      "locked": true,
-      "requiresBattery": true
+      "locked": true
     },
     "platforms": [
       {
@@ -7313,18 +5249,6 @@ const ALL_CHAMBER_LEVELS = {
         "y": 0,
         "w": 360,
         "h": 12
-      },
-      {
-        "id": "mov_80",
-        "x": 90,
-        "y": 270,
-        "w": 55,
-        "h": 14,
-        "minX": 85,
-        "maxX": 210,
-        "speed": 1.6,
-        "dir": 1,
-        "color": "#00F5FF"
       }
     ],
     "crates": [],
@@ -7334,31 +5258,16 @@ const ALL_CHAMBER_LEVELS = {
     "plates": [],
     "hazards": [],
     "barriers": [],
-    "plug": null,
-    "padlock": null,
-    "battery": {
-      "id": "bat_80",
-      "x": 40,
+    "shrinkRay": {
+      "x": 80,
       "y": 270,
-      "w": 22,
-      "h": 22,
-      "slotted": false
-    },
-    "socket": {
-      "id": "sock_80",
-      "x": 260,
-      "y": 260,
-      "w": 28,
-      "h": 28
-    },
-    "receptors": [],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": false
+      "active": false
+    }
   },
   "81": {
-    "title": "CHAMBER 81: THE APEX PRISM",
-    "hint": "DEFLECT TWO CONVERGING LASERS ONTO CENTRAL CORE TO OPEN BLAST DOORS!",
+    "title": "CHAMBER 81: PRISM RAINBOW SPLIT",
+    "hint": "ALIGN THE TRIANGULAR GLASS PRISM TO SPLIT WHITE LIGHT INTO 3 DISTINCT COLOR BEAMS!",
+    "puzzleType": "RAINBOW_PRISM",
     "playerStart": {
       "x": 30,
       "y": 260
@@ -7368,8 +5277,7 @@ const ALL_CHAMBER_LEVELS = {
       "y": 254,
       "w": 28,
       "h": 42,
-      "locked": true,
-      "isDraggable": false
+      "locked": false
     },
     "platforms": [
       {
@@ -7401,68 +5309,23 @@ const ALL_CHAMBER_LEVELS = {
         "h": 12
       }
     ],
-    "crates": [
-      {
-        "id": "c1_81",
-        "x": 50,
-        "y": 260,
-        "isDraggable": true
-      },
-      {
-        "id": "c2_81",
-        "x": 90,
-        "y": 260,
-        "isDraggable": true
-      }
-    ],
+    "crates": [],
     "springs": [],
     "switches": [],
     "keys": [],
-    "plates": [
-      {
-        "id": "p1_81",
-        "x": 140,
-        "y": 295,
-        "w": 34,
-        "h": 6,
-        "pressed": false
-      },
-      {
-        "id": "p2_81",
-        "x": 220,
-        "y": 295,
-        "w": 34,
-        "h": 6,
-        "pressed": false
-      }
-    ],
+    "plates": [],
     "hazards": [],
-    "barriers": [
-      {
-        "id": "b_81",
-        "x": 270,
-        "y": 180,
-        "w": 8,
-        "h": 120,
-        "active": true,
-        "plateIds": [
-          "p1_81",
-          "p2_81"
-        ]
-      }
-    ],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": false
+    "barriers": [],
+    "glassPrism": {
+      "x": 80,
+      "y": 270,
+      "isDraggable": true
+    }
   },
   "82": {
-    "title": "CHAMBER 82: PERPETUAL PORTAL TOWER",
-    "hint": "USE PORTALS AND GRAVITY INVERSION TO TRAVERSE VERTICAL TOWER!",
+    "title": "CHAMBER 82: WRECKING PENDULUM",
+    "hint": "SWING THE HEAVY IRON WRECKING PENDULUM TO SMASH APART THE REINFORCED BRICK WALL!",
+    "puzzleType": "WRECKING_BALL",
     "playerStart": {
       "x": 30,
       "y": 260
@@ -7472,8 +5335,7 @@ const ALL_CHAMBER_LEVELS = {
       "y": 254,
       "w": 28,
       "h": 42,
-      "locked": true,
-      "isDraggable": false
+      "locked": true
     },
     "platforms": [
       {
@@ -7506,61 +5368,22 @@ const ALL_CHAMBER_LEVELS = {
       }
     ],
     "crates": [],
-    "springs": [
-      {
-        "id": "sp_82",
-        "x": 100,
-        "y": 288,
-        "w": 34,
-        "h": 12,
-        "isDraggable": true
-      }
-    ],
+    "springs": [],
     "switches": [],
-    "keys": [
-      {
-        "id": "k_82",
-        "x": 290,
-        "y": 265,
-        "taken": false,
-        "color": "#FFD166",
-        "isDraggable": false
-      }
-    ],
+    "keys": [],
     "plates": [],
     "hazards": [],
     "barriers": [],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [
-      {
-        "id": "p1_82",
-        "x": 180,
-        "y": 140,
-        "partnerId": "p2_82",
-        "color": "#00F5FF",
-        "exitOffsetX": 20,
-        "exitOffsetY": 0
-      },
-      {
-        "id": "p2_82",
-        "x": 270,
-        "y": 240,
-        "partnerId": "p1_82",
-        "color": "#FF9E00",
-        "exitOffsetX": 20,
-        "exitOffsetY": 0
-      }
-    ],
-    "fans": [],
-    "gravityInverted": false
+    "wreckingBall": {
+      "x": 180,
+      "y": 60,
+      "swung": false
+    }
   },
   "83": {
-    "title": "CHAMBER 83: ZERO-G CORE",
-    "hint": "FLOATING BLOCKS IN ANTI-GRAVITY: PUSH BLOCKS TOGETHER TO FORM STEPPING BRIDGE!",
+    "title": "CHAMBER 83: SOAP BUBBLE FLOAT",
+    "hint": "BLOW A GIANT PROTECTIVE SOAP BUBBLE AROUND YOURSELF TO FLOAT GENTLY OVER THE LASERS!",
+    "puzzleType": "SOAP_BUBBLE",
     "playerStart": {
       "x": 30,
       "y": 260
@@ -7570,8 +5393,7 @@ const ALL_CHAMBER_LEVELS = {
       "y": 254,
       "w": 28,
       "h": 42,
-      "locked": true,
-      "isDraggable": false
+      "locked": false
     },
     "platforms": [
       {
@@ -7601,61 +5423,25 @@ const ALL_CHAMBER_LEVELS = {
         "y": 0,
         "w": 360,
         "h": 12
-      },
-      {
-        "id": "slab_83",
-        "x": 70,
-        "y": 140,
-        "w": 65,
-        "h": 14,
-        "isDraggable": true,
-        "color": "#00F5D4"
       }
     ],
-    "crates": [
-      {
-        "id": "c_83",
-        "x": 40,
-        "y": 260,
-        "isDraggable": true
-      }
-    ],
+    "crates": [],
     "springs": [],
     "switches": [],
-    "keys": [
-      {
-        "id": "k_83",
-        "x": 270,
-        "y": 265,
-        "taken": false,
-        "color": "#39FF14",
-        "isDraggable": false
-      }
-    ],
+    "keys": [],
     "plates": [],
-    "hazards": [
-      {
-        "id": "crush_83",
-        "x": 160,
-        "y": 170,
-        "w": 36,
-        "h": 100,
-        "type": "SPIKES"
-      }
-    ],
+    "hazards": [],
     "barriers": [],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": false
+    "bubbleWand": {
+      "x": 80,
+      "y": 270,
+      "blown": false
+    }
   },
   "84": {
-    "title": "CHAMBER 84: THE KINETIC DOMINO",
-    "hint": "CRATE HITS SPRING -> TRIGGERS PLATE -> STARTS FAN -> LIFTS KEY!",
+    "title": "CHAMBER 84: BIOMETRIC WARMTH",
+    "hint": "HOLD YOUR FINGER ON THE THERMAL SCANNER FOR 3 SECONDS TO REGISTER YOUR BODY HEAT!",
+    "puzzleType": "BIOMETRIC_HEAT",
     "playerStart": {
       "x": 30,
       "y": 260
@@ -7695,71 +5481,25 @@ const ALL_CHAMBER_LEVELS = {
         "y": 0,
         "w": 360,
         "h": 12
-      },
-      {
-        "id": "slab_84",
-        "x": 140,
-        "y": 130,
-        "w": 60,
-        "h": 14,
-        "isDraggable": true,
-        "color": "#00F5D4"
-      },
-      {
-        "id": "mir_84",
-        "x": 210,
-        "y": 110,
-        "w": 32,
-        "h": 32,
-        "isMirror": true,
-        "isDraggable": true,
-        "color": "#A5F3FC"
       }
     ],
     "crates": [],
-    "springs": [
-      {
-        "id": "sp_84",
-        "x": 70,
-        "y": 288,
-        "w": 34,
-        "h": 12,
-        "isDraggable": true
-      }
-    ],
+    "springs": [],
     "switches": [],
     "keys": [],
     "plates": [],
     "hazards": [],
     "barriers": [],
-    "plug": null,
-    "padlock": {
-      "id": "pad_84",
-      "x": 316,
-      "y": 268,
-      "onDoor": true
-    },
-    "battery": null,
-    "socket": null,
-    "receptors": [
-      {
-        "id": "rec_84",
-        "x": 280,
-        "y": 268,
-        "w": 24,
-        "h": 24,
-        "beamX": 180,
-        "beamY": 100,
-        "hit": false
-      }
-    ],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": false
+    "biometricScanner": {
+      "x": 260,
+      "y": 250,
+      "heated": false
+    }
   },
   "85": {
-    "title": "CHAMBER 85: QUADRUPLE OVERRIDE",
-    "hint": "4 PRESSURE PLATES: 2 CRATES, 1 PLAYER, 1 FINGER-HOLD!",
+    "title": "CHAMBER 85: METRONOME RHYTHM",
+    "hint": "STRIDE ACROSS THE RHYTHM PLATES EXACTLY IN SYNC WITH THE TICKING METRONOME!",
+    "puzzleType": "METRONOME_STEP",
     "playerStart": {
       "x": 30,
       "y": 260
@@ -7769,8 +5509,7 @@ const ALL_CHAMBER_LEVELS = {
       "y": 254,
       "w": 28,
       "h": 42,
-      "locked": true,
-      "isDraggable": false
+      "locked": false
     },
     "platforms": [
       {
@@ -7800,16 +5539,6 @@ const ALL_CHAMBER_LEVELS = {
         "y": 0,
         "w": 360,
         "h": 12
-      },
-      {
-        "id": "mir_85",
-        "x": 172,
-        "y": 110,
-        "w": 32,
-        "h": 32,
-        "isMirror": true,
-        "isDraggable": true,
-        "color": "#A5F3FC"
       }
     ],
     "crates": [],
@@ -7818,47 +5547,24 @@ const ALL_CHAMBER_LEVELS = {
     "keys": [],
     "plates": [],
     "hazards": [],
-    "barriers": [
-      {
-        "id": "b_85",
-        "x": 240,
-        "y": 180,
-        "w": 8,
-        "h": 120,
-        "active": true,
-        "receptorId": "rec_85"
-      }
-    ],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [
-      {
-        "id": "rec_85",
-        "x": 260,
-        "y": 268,
-        "w": 24,
-        "h": 24,
-        "beamX": 160,
-        "beamY": 100,
-        "hit": false
-      }
-    ],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": false
+    "barriers": [],
+    "metronome": {
+      "x": 180,
+      "y": 40,
+      "bpm": 80
+    }
   },
   "86": {
-    "title": "CHAMBER 86: VERTICAL MIRROR TOWER",
-    "hint": "REDIRECT LASER UP VERTICAL SHAFT TO BURN PADLOCK OFF CEILING DOOR!",
+    "title": "CHAMBER 86: LUBRICATING OIL CAN",
+    "hint": "SQUIRT MOTOR OIL ONTO THE RUSTED DOOR COG TO ALLOW THE HEAVY GEAR TO TURN!",
+    "puzzleType": "OIL_CAN",
     "playerStart": {
       "x": 30,
       "y": 260
     },
     "exitDoor": {
-      "x": 280,
-      "y": 78,
+      "x": 310,
+      "y": 254,
       "w": 28,
       "h": 42,
       "locked": true
@@ -7891,70 +5597,35 @@ const ALL_CHAMBER_LEVELS = {
         "y": 0,
         "w": 360,
         "h": 12
-      },
-      {
-        "id": "roof_86",
-        "x": 220,
-        "y": 120,
-        "w": 130,
-        "h": 180
       }
     ],
-    "crates": [
-      {
-        "id": "c_bal_86",
-        "x": 80,
-        "y": 260,
-        "isBalloon": true,
-        "isDraggable": true
-      }
-    ],
+    "crates": [],
     "springs": [],
     "switches": [],
-    "keys": [
-      {
-        "id": "k_86",
-        "x": 260,
-        "y": 85,
-        "taken": false,
-        "color": "#00F5FF",
-        "isDraggable": true
-      }
-    ],
+    "keys": [],
     "plates": [],
     "hazards": [],
     "barriers": [],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [],
-    "fans": [
-      {
-        "id": "fan_86",
-        "x": 120,
-        "y": 292,
-        "w": 38,
-        "h": 12,
-        "active": true
-      }
-    ],
-    "gravityInverted": false
+    "oilCan": {
+      "x": 80,
+      "y": 270,
+      "isDraggable": true
+    }
   },
   "87": {
-    "title": "CHAMBER 87: SYNCHRONIZED PISTON GAUNTLET",
-    "hint": "3 SYNCHRONIZED PISTONS, 2 CRATES TO PLACE, RAZOR-THIN TIMING!",
+    "title": "CHAMBER 87: KALEIDOSCOPE KEY",
+    "hint": "TURN THE KALEIDOSCOPE CYLINDER UNTIL THE GEOMETRIC PATTERNS FORM A KEYHOLE SHAPE!",
+    "puzzleType": "KALEIDOSCOPE",
     "playerStart": {
       "x": 30,
       "y": 260
     },
     "exitDoor": {
-      "x": 300,
-      "y": 14,
+      "x": 310,
+      "y": 254,
       "w": 28,
       "h": 42,
-      "locked": true
+      "locked": false
     },
     "platforms": [
       {
@@ -7984,45 +5655,25 @@ const ALL_CHAMBER_LEVELS = {
         "y": 0,
         "w": 360,
         "h": 12
-      },
-      {
-        "id": "crumb_87",
-        "x": 120,
-        "y": 40,
-        "w": 45,
-        "h": 12,
-        "isCrumbling": true,
-        "color": "#FB7185"
       }
     ],
     "crates": [],
     "springs": [],
     "switches": [],
-    "keys": [
-      {
-        "id": "k_87",
-        "x": 260,
-        "y": 40,
-        "taken": false,
-        "color": "#FFD166",
-        "isDraggable": true
-      }
-    ],
+    "keys": [],
     "plates": [],
     "hazards": [],
     "barriers": [],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": true
+    "kaleidoscope": {
+      "x": 180,
+      "y": 240,
+      "aligned": false
+    }
   },
   "88": {
-    "title": "CHAMBER 88: OPPOSING WIND VENTS",
-    "hint": "CROSS OPPOSING WIND FANS USING HEAVY METAL CRATES AS BALLAST!",
+    "title": "CHAMBER 88: PAPER AIRPLANE",
+    "hint": "FOLD AND THROW A PAPER AIRPLANE ACROSS THE GAP TO STRIKE THE REMOTE TOGGLE SWITCH!",
+    "puzzleType": "PAPER_AIRPLANE",
     "playerStart": {
       "x": 30,
       "y": 260
@@ -8032,8 +5683,7 @@ const ALL_CHAMBER_LEVELS = {
       "y": 254,
       "w": 28,
       "h": 42,
-      "locked": true,
-      "requiresBattery": true
+      "locked": true
     },
     "platforms": [
       {
@@ -8063,18 +5713,6 @@ const ALL_CHAMBER_LEVELS = {
         "y": 0,
         "w": 360,
         "h": 12
-      },
-      {
-        "id": "mov_88",
-        "x": 90,
-        "y": 270,
-        "w": 55,
-        "h": 14,
-        "minX": 85,
-        "maxX": 210,
-        "speed": 1.6,
-        "dir": 1,
-        "color": "#00F5FF"
       }
     ],
     "crates": [],
@@ -8084,31 +5722,16 @@ const ALL_CHAMBER_LEVELS = {
     "plates": [],
     "hazards": [],
     "barriers": [],
-    "plug": null,
-    "padlock": null,
-    "battery": {
-      "id": "bat_88",
-      "x": 40,
+    "paperPlane": {
+      "x": 80,
       "y": 270,
-      "w": 22,
-      "h": 22,
-      "slotted": false
-    },
-    "socket": {
-      "id": "sock_88",
-      "x": 260,
-      "y": 260,
-      "w": 28,
-      "h": 28
-    },
-    "receptors": [],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": false
+      "thrown": false
+    }
   },
   "89": {
-    "title": "CHAMBER 89: TWIN BATTERY MATRIX",
-    "hint": "2 BATTERIES TO SLOT INTO DUAL GENERATORS TO POWER TWIN BLAST DOORS!",
+    "title": "CHAMBER 89: TESLA ARREST ROD",
+    "hint": "HOLD THE COPPER LIGHTNING ROD TO CHANNEL THE HIGH-VOLTAGE SPARK INTO THE RECEIVER!",
+    "puzzleType": "TESLA_ROD",
     "playerStart": {
       "x": 30,
       "y": 260
@@ -8118,8 +5741,7 @@ const ALL_CHAMBER_LEVELS = {
       "y": 254,
       "w": 28,
       "h": 42,
-      "locked": true,
-      "isDraggable": false
+      "locked": false
     },
     "platforms": [
       {
@@ -8151,68 +5773,23 @@ const ALL_CHAMBER_LEVELS = {
         "h": 12
       }
     ],
-    "crates": [
-      {
-        "id": "c1_89",
-        "x": 50,
-        "y": 260,
-        "isDraggable": true
-      },
-      {
-        "id": "c2_89",
-        "x": 90,
-        "y": 260,
-        "isDraggable": true
-      }
-    ],
+    "crates": [],
     "springs": [],
     "switches": [],
     "keys": [],
-    "plates": [
-      {
-        "id": "p1_89",
-        "x": 140,
-        "y": 295,
-        "w": 34,
-        "h": 6,
-        "pressed": false
-      },
-      {
-        "id": "p2_89",
-        "x": 220,
-        "y": 295,
-        "w": 34,
-        "h": 6,
-        "pressed": false
-      }
-    ],
+    "plates": [],
     "hazards": [],
-    "barriers": [
-      {
-        "id": "b_89",
-        "x": 270,
-        "y": 180,
-        "w": 8,
-        "h": 120,
-        "active": true,
-        "plateIds": [
-          "p1_89",
-          "p2_89"
-        ]
-      }
-    ],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": false
+    "barriers": [],
+    "copperRod": {
+      "x": 80,
+      "y": 270,
+      "isDraggable": true
+    }
   },
   "90": {
-    "title": "CHAMBER 90: DARK SPRINT MEMORY",
-    "hint": "TIMED BLACKOUT SWITCH: MEMORIZE CRUMBLING FLOOR LAYOUT AND CROSS IN DARK!",
+    "title": "CHAMBER 90: SUNDIAL SHADOW",
+    "hint": "MOVE THE SUN SPOTLIGHT UNTIL THE SUNDIAL GNOMON SHADOW POINTS DIRECTLY AT NOON (XII)!",
+    "puzzleType": "SUNDIAL_ALIGN",
     "playerStart": {
       "x": 30,
       "y": 260
@@ -8222,8 +5799,7 @@ const ALL_CHAMBER_LEVELS = {
       "y": 254,
       "w": 28,
       "h": 42,
-      "locked": true,
-      "isDraggable": false
+      "locked": true
     },
     "platforms": [
       {
@@ -8256,61 +5832,22 @@ const ALL_CHAMBER_LEVELS = {
       }
     ],
     "crates": [],
-    "springs": [
-      {
-        "id": "sp_90",
-        "x": 100,
-        "y": 288,
-        "w": 34,
-        "h": 12,
-        "isDraggable": true
-      }
-    ],
+    "springs": [],
     "switches": [],
-    "keys": [
-      {
-        "id": "k_90",
-        "x": 290,
-        "y": 265,
-        "taken": false,
-        "color": "#FFD166",
-        "isDraggable": false
-      }
-    ],
+    "keys": [],
     "plates": [],
     "hazards": [],
     "barriers": [],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [
-      {
-        "id": "p1_90",
-        "x": 180,
-        "y": 140,
-        "partnerId": "p2_90",
-        "color": "#00F5FF",
-        "exitOffsetX": 20,
-        "exitOffsetY": 0
-      },
-      {
-        "id": "p2_90",
-        "x": 270,
-        "y": 240,
-        "partnerId": "p1_90",
-        "color": "#FF9E00",
-        "exitOffsetX": 20,
-        "exitOffsetY": 0
-      }
-    ],
-    "fans": [],
-    "gravityInverted": false
+    "sunLamp": {
+      "x": 80,
+      "y": 270,
+      "isDraggable": true
+    }
   },
   "91": {
-    "title": "CHAMBER 91: TRIPLE PORTAL CIRCUIT",
-    "hint": "CYCLE THROUGH 3 PORTAL PAIRS TO COLLECT 3 DISPERSED KEYCARDS!",
+    "title": "CHAMBER 91: LIQUID NITROGEN",
+    "hint": "SPRAY LIQUID NITROGEN ONTO THE RAGING WATERFALL TO FREEZE IT INTO CLIMBABLE ICE!",
+    "puzzleType": "NITROGEN_FREEZE",
     "playerStart": {
       "x": 30,
       "y": 260
@@ -8320,8 +5857,7 @@ const ALL_CHAMBER_LEVELS = {
       "y": 254,
       "w": 28,
       "h": 42,
-      "locked": true,
-      "isDraggable": false
+      "locked": false
     },
     "platforms": [
       {
@@ -8351,61 +5887,25 @@ const ALL_CHAMBER_LEVELS = {
         "y": 0,
         "w": 360,
         "h": 12
-      },
-      {
-        "id": "slab_91",
-        "x": 70,
-        "y": 140,
-        "w": 65,
-        "h": 14,
-        "isDraggable": true,
-        "color": "#00F5D4"
       }
     ],
-    "crates": [
-      {
-        "id": "c_91",
-        "x": 40,
-        "y": 260,
-        "isDraggable": true
-      }
-    ],
+    "crates": [],
     "springs": [],
     "switches": [],
-    "keys": [
-      {
-        "id": "k_91",
-        "x": 270,
-        "y": 265,
-        "taken": false,
-        "color": "#39FF14",
-        "isDraggable": false
-      }
-    ],
+    "keys": [],
     "plates": [],
-    "hazards": [
-      {
-        "id": "crush_91",
-        "x": 160,
-        "y": 170,
-        "w": 36,
-        "h": 100,
-        "type": "SPIKES"
-      }
-    ],
+    "hazards": [],
     "barriers": [],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": false
+    "nitrogenSpray": {
+      "x": 80,
+      "y": 270,
+      "sprayed": false
+    }
   },
   "92": {
-    "title": "CHAMBER 92: CRATE SEESAW LAUNCH",
-    "hint": "DROP HEAVY CRATE FROM HIGH PLATFORM ONTO SEESAW TO FLING KEY INTO REACH!",
+    "title": "CHAMBER 92: CAESAR CIPHER WHEEL",
+    "hint": "ROTATE THE CIPHER DISC 3 POSITIONS TO DECODE THE SECRET PASSWORD 'OPEN'!",
+    "puzzleType": "CAESAR_CIPHER",
     "playerStart": {
       "x": 30,
       "y": 260
@@ -8445,71 +5945,25 @@ const ALL_CHAMBER_LEVELS = {
         "y": 0,
         "w": 360,
         "h": 12
-      },
-      {
-        "id": "slab_92",
-        "x": 140,
-        "y": 130,
-        "w": 60,
-        "h": 14,
-        "isDraggable": true,
-        "color": "#00F5D4"
-      },
-      {
-        "id": "mir_92",
-        "x": 210,
-        "y": 110,
-        "w": 32,
-        "h": 32,
-        "isMirror": true,
-        "isDraggable": true,
-        "color": "#A5F3FC"
       }
     ],
     "crates": [],
-    "springs": [
-      {
-        "id": "sp_92",
-        "x": 70,
-        "y": 288,
-        "w": 34,
-        "h": 12,
-        "isDraggable": true
-      }
-    ],
+    "springs": [],
     "switches": [],
     "keys": [],
     "plates": [],
     "hazards": [],
     "barriers": [],
-    "plug": null,
-    "padlock": {
-      "id": "pad_92",
-      "x": 316,
-      "y": 268,
-      "onDoor": true
-    },
-    "battery": null,
-    "socket": null,
-    "receptors": [
-      {
-        "id": "rec_92",
-        "x": 280,
-        "y": 268,
-        "w": 24,
-        "h": 24,
-        "beamX": 180,
-        "beamY": 100,
-        "hit": false
-      }
-    ],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": false
+    "cipherDisc": {
+      "x": 180,
+      "y": 250,
+      "rot": 0
+    }
   },
   "93": {
-    "title": "CHAMBER 93: DUAL LASER SPLITTER",
-    "hint": "TWO INDEPENDENT LASER BEAMS DEFLECTED BY DUAL MIRRORS TO DUAL RECEPTORS!",
+    "title": "CHAMBER 93: BOWLING BALL STRIKE",
+    "hint": "ROLL THE HEAVY CYBER BOWLING BALL DOWN THE ALLEY TO STRIKE DOWN ALL 10 LASER PINS!",
+    "puzzleType": "BOWLING_STRIKE",
     "playerStart": {
       "x": 30,
       "y": 260
@@ -8519,8 +5973,7 @@ const ALL_CHAMBER_LEVELS = {
       "y": 254,
       "w": 28,
       "h": 42,
-      "locked": true,
-      "isDraggable": false
+      "locked": false
     },
     "platforms": [
       {
@@ -8550,16 +6003,6 @@ const ALL_CHAMBER_LEVELS = {
         "y": 0,
         "w": 360,
         "h": 12
-      },
-      {
-        "id": "mir_93",
-        "x": 116,
-        "y": 110,
-        "w": 32,
-        "h": 32,
-        "isMirror": true,
-        "isDraggable": true,
-        "color": "#A5F3FC"
       }
     ],
     "crates": [],
@@ -8568,47 +6011,24 @@ const ALL_CHAMBER_LEVELS = {
     "keys": [],
     "plates": [],
     "hazards": [],
-    "barriers": [
-      {
-        "id": "b_93",
-        "x": 240,
-        "y": 180,
-        "w": 8,
-        "h": 120,
-        "active": true,
-        "receptorId": "rec_93"
-      }
-    ],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [
-      {
-        "id": "rec_93",
-        "x": 260,
-        "y": 268,
-        "w": 24,
-        "h": 24,
-        "beamX": 160,
-        "beamY": 100,
-        "hit": false
-      }
-    ],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": false
+    "barriers": [],
+    "bowlingBall": {
+      "x": 80,
+      "y": 270,
+      "rolled": false
+    }
   },
   "94": {
-    "title": "CHAMBER 94: MULTI-ZONE GRAVITY MAZE",
-    "hint": "FLOOR -> CEILING -> FLOOR -> CEILING NAVIGATION SEQUENCE!",
+    "title": "CHAMBER 94: ARCHIMEDES SCREW",
+    "hint": "CRANK THE SPIRAL ARCHIMEDES WATER SCREW TO FLOOD THE LOWER BASIN AND FLOAT THE RAFT!",
+    "puzzleType": "ARCHIMEDES_PUMP",
     "playerStart": {
       "x": 30,
       "y": 260
     },
     "exitDoor": {
-      "x": 280,
-      "y": 78,
+      "x": 310,
+      "y": 254,
       "w": 28,
       "h": 42,
       "locked": true
@@ -8641,70 +6061,35 @@ const ALL_CHAMBER_LEVELS = {
         "y": 0,
         "w": 360,
         "h": 12
-      },
-      {
-        "id": "roof_94",
-        "x": 220,
-        "y": 120,
-        "w": 130,
-        "h": 180
       }
     ],
-    "crates": [
-      {
-        "id": "c_bal_94",
-        "x": 80,
-        "y": 260,
-        "isBalloon": true,
-        "isDraggable": true
-      }
-    ],
+    "crates": [],
     "springs": [],
     "switches": [],
-    "keys": [
-      {
-        "id": "k_94",
-        "x": 260,
-        "y": 85,
-        "taken": false,
-        "color": "#00F5FF",
-        "isDraggable": true
-      }
-    ],
+    "keys": [],
     "plates": [],
     "hazards": [],
     "barriers": [],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [],
-    "fans": [
-      {
-        "id": "fan_94",
-        "x": 120,
-        "y": 292,
-        "w": 38,
-        "h": 12,
-        "active": true
-      }
-    ],
-    "gravityInverted": false
+    "waterScrew": {
+      "x": 180,
+      "y": 250,
+      "cranked": false
+    }
   },
   "95": {
-    "title": "CHAMBER 95: ASCENDING CRUMBLING STEPS",
-    "hint": "CLIMB ASCENDING CRUMBLING STAIRCASE WHILE DODGING MOVING LASER SWEEPS!",
+    "title": "CHAMBER 95: MAGLEV TRACK CHARGE",
+    "hint": "CHARGE THE ELECTROMAGNETIC RAILS TO LEVITATE THE HOVER PLATFORM ACROSS THE CHASM!",
+    "puzzleType": "MAGLEV_CHARGE",
     "playerStart": {
       "x": 30,
       "y": 260
     },
     "exitDoor": {
-      "x": 300,
-      "y": 14,
+      "x": 310,
+      "y": 254,
       "w": 28,
       "h": 42,
-      "locked": true
+      "locked": false
     },
     "platforms": [
       {
@@ -8734,428 +6119,25 @@ const ALL_CHAMBER_LEVELS = {
         "y": 0,
         "w": 360,
         "h": 12
-      },
-      {
-        "id": "crumb_95",
-        "x": 120,
-        "y": 40,
-        "w": 45,
-        "h": 12,
-        "isCrumbling": true,
-        "color": "#FB7185"
       }
     ],
     "crates": [],
     "springs": [],
     "switches": [],
-    "keys": [
-      {
-        "id": "k_95",
-        "x": 260,
-        "y": 40,
-        "taken": false,
-        "color": "#FFD166",
-        "isDraggable": true
-      }
-    ],
+    "keys": [],
     "plates": [],
     "hazards": [],
     "barriers": [],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": true
+    "maglevSwitch": {
+      "x": 80,
+      "y": 270,
+      "charged": false
+    }
   },
   "96": {
-    "title": "CHAMBER 96: EMERGENCY LOCKOUT SPRINT",
-    "hint": "PULL 2 PLUGS, DISMANTLE PADLOCK, AND SLIDE SLAB IN UNDER 10 SECONDS!",
-    "playerStart": {
-      "x": 30,
-      "y": 260
-    },
-    "exitDoor": {
-      "x": 310,
-      "y": 254,
-      "w": 28,
-      "h": 42,
-      "locked": true,
-      "requiresBattery": true
-    },
-    "platforms": [
-      {
-        "id": "floor",
-        "x": 0,
-        "y": 300,
-        "w": 360,
-        "h": 40
-      },
-      {
-        "id": "w_left",
-        "x": 0,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "w_right",
-        "x": 348,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "ceiling",
-        "x": 0,
-        "y": 0,
-        "w": 360,
-        "h": 12
-      },
-      {
-        "id": "mov_96",
-        "x": 90,
-        "y": 270,
-        "w": 55,
-        "h": 14,
-        "minX": 85,
-        "maxX": 210,
-        "speed": 1.6,
-        "dir": 1,
-        "color": "#00F5FF"
-      }
-    ],
-    "crates": [],
-    "springs": [],
-    "switches": [],
-    "keys": [],
-    "plates": [],
-    "hazards": [],
-    "barriers": [],
-    "plug": null,
-    "padlock": null,
-    "battery": {
-      "id": "bat_96",
-      "x": 40,
-      "y": 270,
-      "w": 22,
-      "h": 22,
-      "slotted": false
-    },
-    "socket": {
-      "id": "sock_96",
-      "x": 260,
-      "y": 260,
-      "w": 28,
-      "h": 28
-    },
-    "receptors": [],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": false
-  },
-  "97": {
-    "title": "CHAMBER 97: SUPERCONDUCTOR POOL",
-    "hint": "CARRY CHARGED BATTERY THROUGH LIQUID POOL USING FLOATING BALLOON CRATES!",
-    "playerStart": {
-      "x": 30,
-      "y": 260
-    },
-    "exitDoor": {
-      "x": 310,
-      "y": 254,
-      "w": 28,
-      "h": 42,
-      "locked": true,
-      "isDraggable": false
-    },
-    "platforms": [
-      {
-        "id": "floor",
-        "x": 0,
-        "y": 300,
-        "w": 360,
-        "h": 40
-      },
-      {
-        "id": "w_left",
-        "x": 0,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "w_right",
-        "x": 348,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "ceiling",
-        "x": 0,
-        "y": 0,
-        "w": 360,
-        "h": 12
-      }
-    ],
-    "crates": [
-      {
-        "id": "c1_97",
-        "x": 50,
-        "y": 260,
-        "isDraggable": true
-      },
-      {
-        "id": "c2_97",
-        "x": 90,
-        "y": 260,
-        "isDraggable": true
-      }
-    ],
-    "springs": [],
-    "switches": [],
-    "keys": [],
-    "plates": [
-      {
-        "id": "p1_97",
-        "x": 140,
-        "y": 295,
-        "w": 34,
-        "h": 6,
-        "pressed": false
-      },
-      {
-        "id": "p2_97",
-        "x": 220,
-        "y": 295,
-        "w": 34,
-        "h": 6,
-        "pressed": false
-      }
-    ],
-    "hazards": [],
-    "barriers": [
-      {
-        "id": "b_97",
-        "x": 270,
-        "y": 180,
-        "w": 8,
-        "h": 120,
-        "active": true,
-        "plateIds": [
-          "p1_97",
-          "p2_97"
-        ]
-      }
-    ],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": false
-  },
-  "98": {
-    "title": "CHAMBER 98: THE GRAND CASCADE",
-    "hint": "5-STEP CASCADE: SWITCH -> FAN -> SPRING -> MIRROR -> GATE!",
-    "playerStart": {
-      "x": 30,
-      "y": 260
-    },
-    "exitDoor": {
-      "x": 310,
-      "y": 254,
-      "w": 28,
-      "h": 42,
-      "locked": true,
-      "isDraggable": false
-    },
-    "platforms": [
-      {
-        "id": "floor",
-        "x": 0,
-        "y": 300,
-        "w": 360,
-        "h": 40
-      },
-      {
-        "id": "w_left",
-        "x": 0,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "w_right",
-        "x": 348,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "ceiling",
-        "x": 0,
-        "y": 0,
-        "w": 360,
-        "h": 12
-      }
-    ],
-    "crates": [],
-    "springs": [
-      {
-        "id": "sp_98",
-        "x": 100,
-        "y": 288,
-        "w": 34,
-        "h": 12,
-        "isDraggable": true
-      }
-    ],
-    "switches": [],
-    "keys": [
-      {
-        "id": "k_98",
-        "x": 290,
-        "y": 265,
-        "taken": false,
-        "color": "#FFD166",
-        "isDraggable": false
-      }
-    ],
-    "plates": [],
-    "hazards": [],
-    "barriers": [],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [
-      {
-        "id": "p1_98",
-        "x": 180,
-        "y": 140,
-        "partnerId": "p2_98",
-        "color": "#00F5FF",
-        "exitOffsetX": 20,
-        "exitOffsetY": 0
-      },
-      {
-        "id": "p2_98",
-        "x": 270,
-        "y": 240,
-        "partnerId": "p1_98",
-        "color": "#FF9E00",
-        "exitOffsetX": 20,
-        "exitOffsetY": 0
-      }
-    ],
-    "fans": [],
-    "gravityInverted": false
-  },
-  "99": {
-    "title": "CHAMBER 99: THE TITAN'S GAUNTLET",
-    "hint": "MASSIVE COMPOSITE VAULT TESTING ALL LEARNED MECHANICS IN ONE EPIC RUN!",
-    "playerStart": {
-      "x": 30,
-      "y": 260
-    },
-    "exitDoor": {
-      "x": 310,
-      "y": 254,
-      "w": 28,
-      "h": 42,
-      "locked": true,
-      "isDraggable": false
-    },
-    "platforms": [
-      {
-        "id": "floor",
-        "x": 0,
-        "y": 300,
-        "w": 360,
-        "h": 40
-      },
-      {
-        "id": "w_left",
-        "x": 0,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "w_right",
-        "x": 348,
-        "y": 0,
-        "w": 12,
-        "h": 300
-      },
-      {
-        "id": "ceiling",
-        "x": 0,
-        "y": 0,
-        "w": 360,
-        "h": 12
-      },
-      {
-        "id": "slab_99",
-        "x": 70,
-        "y": 140,
-        "w": 65,
-        "h": 14,
-        "isDraggable": true,
-        "color": "#00F5D4"
-      }
-    ],
-    "crates": [
-      {
-        "id": "c_99",
-        "x": 40,
-        "y": 260,
-        "isDraggable": true
-      }
-    ],
-    "springs": [],
-    "switches": [],
-    "keys": [
-      {
-        "id": "k_99",
-        "x": 270,
-        "y": 265,
-        "taken": false,
-        "color": "#39FF14",
-        "isDraggable": false
-      }
-    ],
-    "plates": [],
-    "hazards": [
-      {
-        "id": "crush_99",
-        "x": 160,
-        "y": 170,
-        "w": 36,
-        "h": 100,
-        "type": "SPIKES"
-      }
-    ],
-    "barriers": [],
-    "plug": null,
-    "padlock": null,
-    "battery": null,
-    "socket": null,
-    "receptors": [],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": false
-  },
-  "100": {
-    "title": "CHAMBER 100: THE MASTER'S ESCAPE",
-    "hint": "THE ULTIMATE ESCAPE: FIND THE SECRET HIDDEN HATCH IN THE CEILING!",
+    "title": "CHAMBER 96: CAMOUFLAGE SUIT",
+    "hint": "TAP THE COLOR PALETTE TO MATCH YOUR CYBER SUIT TO THE WALL AND SNEAK PAST THE CAMERA!",
+    "puzzleType": "CAMOUFLAGE",
     "playerStart": {
       "x": 30,
       "y": 260
@@ -9195,67 +6177,253 @@ const ALL_CHAMBER_LEVELS = {
         "y": 0,
         "w": 360,
         "h": 12
-      },
-      {
-        "id": "slab_100",
-        "x": 140,
-        "y": 130,
-        "w": 60,
-        "h": 14,
-        "isDraggable": true,
-        "color": "#00F5D4"
-      },
-      {
-        "id": "mir_100",
-        "x": 210,
-        "y": 110,
-        "w": 32,
-        "h": 32,
-        "isMirror": true,
-        "isDraggable": true,
-        "color": "#A5F3FC"
       }
     ],
     "crates": [],
-    "springs": [
-      {
-        "id": "sp_100",
-        "x": 70,
-        "y": 288,
-        "w": 34,
-        "h": 12,
-        "isDraggable": true
-      }
-    ],
+    "springs": [],
     "switches": [],
     "keys": [],
     "plates": [],
     "hazards": [],
     "barriers": [],
-    "plug": null,
-    "padlock": {
-      "id": "pad_100",
-      "x": 316,
-      "y": 268,
-      "onDoor": true
+    "camoSuit": {
+      "x": 80,
+      "y": 270,
+      "matched": false
+    }
+  },
+  "97": {
+    "title": "CHAMBER 97: BOOMBOX GROOVE",
+    "hint": "DROP THE 80S BOOMBOX ON THE DANCE FLOOR TO MAKE THE LASERS GROOVE INTO ARCHWAYS!",
+    "puzzleType": "BOOMBOX_BEAT",
+    "playerStart": {
+      "x": 30,
+      "y": 260
     },
-    "battery": null,
-    "socket": null,
-    "receptors": [
+    "exitDoor": {
+      "x": 310,
+      "y": 254,
+      "w": 28,
+      "h": 42,
+      "locked": false
+    },
+    "platforms": [
       {
-        "id": "rec_100",
-        "x": 280,
-        "y": 268,
-        "w": 24,
-        "h": 24,
-        "beamX": 180,
-        "beamY": 100,
-        "hit": false
+        "id": "floor",
+        "x": 0,
+        "y": 300,
+        "w": 360,
+        "h": 40
+      },
+      {
+        "id": "w_left",
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "w_right",
+        "x": 348,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "ceiling",
+        "x": 0,
+        "y": 0,
+        "w": 360,
+        "h": 12
       }
     ],
-    "portals": [],
-    "fans": [],
-    "gravityInverted": false
+    "crates": [],
+    "springs": [],
+    "switches": [],
+    "keys": [],
+    "plates": [],
+    "hazards": [],
+    "barriers": [],
+    "boombox": {
+      "x": 160,
+      "y": 270,
+      "playing": false
+    }
+  },
+  "98": {
+    "title": "CHAMBER 98: HOLOGRAM UNPLUG",
+    "hint": "UNPLUG THE CONCEALED HOLOGRAM PROJECTOR TO REVEAL THE SOLID WALL IS JUST A PROJECTION!",
+    "puzzleType": "HOLOGRAM_UNPLUG",
+    "playerStart": {
+      "x": 30,
+      "y": 260
+    },
+    "exitDoor": {
+      "x": 310,
+      "y": 254,
+      "w": 28,
+      "h": 42,
+      "locked": true
+    },
+    "platforms": [
+      {
+        "id": "floor",
+        "x": 0,
+        "y": 300,
+        "w": 360,
+        "h": 40
+      },
+      {
+        "id": "w_left",
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "w_right",
+        "x": 348,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "ceiling",
+        "x": 0,
+        "y": 0,
+        "w": 360,
+        "h": 12
+      }
+    ],
+    "crates": [],
+    "springs": [],
+    "switches": [],
+    "keys": [],
+    "plates": [],
+    "hazards": [],
+    "barriers": [],
+    "holoProjector": {
+      "x": 240,
+      "y": 280,
+      "plugged": true
+    }
+  },
+  "99": {
+    "title": "CHAMBER 99: CHESS KNIGHT DEFLECT",
+    "hint": "MOVE THE MIRRORED CHESS KNIGHT PIECE TO REFLECT THE LASER INTO THE KING'S CROWN!",
+    "puzzleType": "CHESS_KNIGHT",
+    "playerStart": {
+      "x": 30,
+      "y": 260
+    },
+    "exitDoor": {
+      "x": 310,
+      "y": 254,
+      "w": 28,
+      "h": 42,
+      "locked": false
+    },
+    "platforms": [
+      {
+        "id": "floor",
+        "x": 0,
+        "y": 300,
+        "w": 360,
+        "h": 40
+      },
+      {
+        "id": "w_left",
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "w_right",
+        "x": 348,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "ceiling",
+        "x": 0,
+        "y": 0,
+        "w": 360,
+        "h": 12
+      }
+    ],
+    "crates": [],
+    "springs": [],
+    "switches": [],
+    "keys": [],
+    "plates": [],
+    "hazards": [],
+    "barriers": [],
+    "chessKnight": {
+      "x": 150,
+      "y": 260,
+      "isDraggable": true
+    }
+  },
+  "100": {
+    "title": "CHAMBER 100: THE MASTER TROPHY ESCAPE",
+    "hint": "THE ULTIMATE LOCK: DRAG THE LEVEL 100 GOLDEN TROPHY FROM HUD INTO THE MASTER VAULT!",
+    "puzzleType": "MASTER_FINALE",
+    "playerStart": {
+      "x": 30,
+      "y": 260
+    },
+    "exitDoor": {
+      "x": 310,
+      "y": 254,
+      "w": 28,
+      "h": 42,
+      "locked": true
+    },
+    "platforms": [
+      {
+        "id": "floor",
+        "x": 0,
+        "y": 300,
+        "w": 360,
+        "h": 40
+      },
+      {
+        "id": "w_left",
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "w_right",
+        "x": 348,
+        "y": 0,
+        "w": 12,
+        "h": 300
+      },
+      {
+        "id": "ceiling",
+        "x": 0,
+        "y": 0,
+        "w": 360,
+        "h": 12
+      }
+    ],
+    "crates": [],
+    "springs": [],
+    "switches": [],
+    "keys": [],
+    "plates": [],
+    "hazards": [],
+    "barriers": [],
+    "masterTrophySocket": {
+      "x": 310,
+      "y": 220,
+      "filled": false
+    },
+    "masterHudTrophy": true
   }
 };
 

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import {
   View,
   Text,
+  Pressable,
   StyleSheet,
   Platform,
   useWindowDimensions,
@@ -110,6 +111,22 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
   const [receptors, setReceptors] = useState([]);
   const [gravityInverted, setGravityInverted] = useState(false);
 
+  // Dedicated Novel Puzzle Systems
+  const [shovel, setShovel] = useState(null);
+  const [dirtBlocks, setDirtBlocks] = useState([]);
+  const [earthquake, setEarthquake] = useState(null);
+  const [windowObj, setWindowObj] = useState(null);
+  const [windActive, setWindActive] = useState(false);
+  const [guard, setGuard] = useState(null);
+  const [hintHeartActive, setHintHeartActive] = useState(false);
+  const [hudKeyDraggableActive, setHudKeyDraggableActive] = useState(false);
+  const [gun, setGun] = useState(null);
+  const [bullet, setBullet] = useState(null);
+  const [rotatableSpikes, setRotatableSpikes] = useState(null);
+  const [gravityRotateMode, setGravityRotateMode] = useState(false);
+  const [gravityTiltable, setGravityTiltable] = useState(false);
+  const [reversedControls, setReversedControls] = useState(false);
+
   const [modalVisible, setModalVisible] = useState(false);
   const [modalType, setModalType] = useState('VICTORY');
   const [failReason, setFailReason] = useState('');
@@ -141,6 +158,16 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
   const socketRef = useRef(socket);
   const receptorsRef = useRef(receptors);
   const gravityInvertedRef = useRef(gravityInverted);
+  const shovelRef = useRef(shovel);
+  const dirtBlocksRef = useRef(dirtBlocks);
+  const earthquakeRef = useRef(earthquake);
+  const windowObjRef = useRef(windowObj);
+  const guardRef = useRef(guard);
+  const gunRef = useRef(gun);
+  const bulletRef = useRef(bullet);
+  const rotatableSpikesRef = useRef(rotatableSpikes);
+  const gravityTiltableRef = useRef(gravityTiltable);
+  const reversedControlsRef = useRef(reversedControls);
 
   // Sync refs in useEffect to cleanly comply with React rules
   useEffect(() => {
@@ -162,6 +189,16 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
     socketRef.current = socket;
     receptorsRef.current = receptors;
     gravityInvertedRef.current = gravityInverted;
+    shovelRef.current = shovel;
+    dirtBlocksRef.current = dirtBlocks;
+    earthquakeRef.current = earthquake;
+    windowObjRef.current = windowObj;
+    guardRef.current = guard;
+    gunRef.current = gun;
+    bulletRef.current = bullet;
+    rotatableSpikesRef.current = rotatableSpikes;
+    gravityTiltableRef.current = gravityTiltable;
+    reversedControlsRef.current = reversedControls;
   }, [
     player,
     crates,
@@ -181,6 +218,16 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
     socket,
     receptors,
     gravityInverted,
+    shovel,
+    dirtBlocks,
+    earthquake,
+    windowObj,
+    guard,
+    gun,
+    bullet,
+    rotatableSpikes,
+    gravityTiltable,
+    reversedControls,
   ]);
 
   // Initialize room level
@@ -259,6 +306,40 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
 
       setGravityInverted(Boolean(cfg.gravityInverted));
       gravityInvertedRef.current = Boolean(cfg.gravityInverted);
+
+      setShovel(cfg.shovel || null);
+      shovelRef.current = cfg.shovel || null;
+
+      setDirtBlocks(cfg.dirtBlocks || []);
+      dirtBlocksRef.current = cfg.dirtBlocks || [];
+
+      setEarthquake(cfg.earthquake ? { ...cfg.earthquake } : null);
+      earthquakeRef.current = cfg.earthquake ? { ...cfg.earthquake } : null;
+
+      setWindowObj(cfg.windowObj ? { ...cfg.windowObj } : null);
+      windowObjRef.current = cfg.windowObj ? { ...cfg.windowObj } : null;
+      setWindActive(false);
+
+      setGuard(cfg.guard ? { ...cfg.guard } : null);
+      guardRef.current = cfg.guard ? { ...cfg.guard } : null;
+
+      setHintHeartActive(Boolean(cfg.hintHeart));
+      setHudKeyDraggableActive(Boolean(cfg.hudKeyDraggable));
+
+      setGun(cfg.gun ? { ...cfg.gun } : null);
+      gunRef.current = cfg.gun ? { ...cfg.gun } : null;
+      setBullet(null);
+      bulletRef.current = null;
+
+      setRotatableSpikes(cfg.rotatableSpikes ? { ...cfg.rotatableSpikes } : null);
+      rotatableSpikesRef.current = cfg.rotatableSpikes ? { ...cfg.rotatableSpikes } : null;
+
+      setGravityRotateMode(Boolean(cfg.gravityRotateMode));
+      setGravityTiltable(Boolean(cfg.gravityTiltable));
+      gravityTiltableRef.current = Boolean(cfg.gravityTiltable);
+
+      setReversedControls(Boolean(cfg.reversedControls));
+      reversedControlsRef.current = Boolean(cfg.reversedControls);
     },
     [
       setRoomTitle,
@@ -321,6 +402,91 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
     [bestScore, onScoreUpdate]
   );
 
+  // Dedicated Novel Puzzle Interaction Handlers
+  const handleRotateGravity = useCallback(() => {
+    playSliceSound();
+    triggerMediumHaptic();
+    if (juiceRef.current) {
+      juiceRef.current.shake(12, 10);
+    }
+    const nextInv = !gravityInvertedRef.current;
+    gravityInvertedRef.current = nextInv;
+    setGravityInverted(nextInv);
+
+    // If on rail (Level 9), heavy door slides down rail!
+    if (gravityTiltableRef.current) {
+      const curDoor = { ...exitDoorRef.current };
+      curDoor.y = 254;
+      curDoor.x = 290;
+      exitDoorRef.current = curDoor;
+      setExitDoor(curDoor);
+    }
+  }, []);
+
+  const handleHealGuardWithHeart = useCallback(() => {
+    const curG = guardRef.current;
+    if (curG && !curG.healed) {
+      curG.healed = true;
+      curG.speech = 'KEY REVEALED!';
+      guardRef.current = { ...curG };
+      setGuard({ ...curG });
+      // Reveal the key!
+      const newKey = { id: 'guard_k', x: curG.x + 35, y: 275, taken: false, color: '#FFD166' };
+      keysRef.current = [newKey];
+      setKeys([newKey]);
+      playPerfectSound(4);
+      triggerPerfectHaptic(2);
+      if (juiceRef.current) {
+        juiceRef.current.burst(curG.x + 10, curG.y + 10, '#39FF14', 20);
+      }
+    }
+  }, []);
+
+  const handleUnlockWithHudKey = useCallback(() => {
+    const curDoor = { ...exitDoorRef.current };
+    curDoor.locked = false;
+    curDoor.permanentlyUnlocked = true;
+    exitDoorRef.current = curDoor;
+    setExitDoor(curDoor);
+    playPerfectSound(5);
+    triggerPerfectHaptic(3);
+    if (juiceRef.current) {
+      juiceRef.current.burst(curDoor.x + 14, curDoor.y + 20, '#FFD166', 22);
+      juiceRef.current.flash('#00F5D4');
+    }
+  }, []);
+
+  const handleFlipSpikes = useCallback(() => {
+    const curSpk = rotatableSpikesRef.current;
+    if (curSpk) {
+      curSpk.rotated = !curSpk.rotated;
+      rotatableSpikesRef.current = { ...curSpk };
+      setRotatableSpikes({ ...curSpk });
+      playSliceSound();
+      triggerPerfectHaptic(2);
+      if (juiceRef.current) {
+        juiceRef.current.burst(curSpk.x + curSpk.w / 2, curSpk.y + 10, '#38BDF8', 16);
+      }
+    }
+  }, []);
+
+  const handleFireBlaster = useCallback(() => {
+    const curG = gunRef.current;
+    if (curG && curG.taken) {
+      const p = playerRef.current;
+      playSliceSound();
+      triggerMediumHaptic();
+      const newBullet = {
+        x: p.x + (p.facing === 1 ? PLAYER_W + 6 : -6),
+        y: p.y + 12,
+        vx: (p.facing === 1 ? 1 : -1) * 14,
+        active: true,
+      };
+      bulletRef.current = newBullet;
+      setBullet(newBullet);
+    }
+  }, []);
+
   // Interactive Drag & Touch Puzzle Solver PanResponder
   const arenaPanResponder = useMemo(
     () =>
@@ -332,6 +498,49 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
         const { locationX, locationY } = evt.nativeEvent;
         const tx = Math.max(0, Math.min(GAME_W, locationX / arenaScale));
         const ty = Math.max(0, Math.min(GAME_H, locationY / arenaScale));
+
+        // Check Shovel
+        const curShovel = shovelRef.current;
+        if (curShovel && !curShovel.taken) {
+          if (Math.hypot(tx - curShovel.x, ty - curShovel.y) < 36) {
+            draggedEntityRef.current = { type: 'SHOVEL', offsetX: curShovel.x - tx, offsetY: curShovel.y - ty };
+            triggerLightHaptic();
+            return;
+          }
+        }
+
+        // Check Window
+        const curWin = windowObjRef.current;
+        if (curWin && !curWin.open) {
+          if (tx >= curWin.x - 8 && tx <= curWin.x + curWin.w + 8 && ty >= curWin.y - 8 && ty <= curWin.y + curWin.h + 8) {
+            curWin.open = true;
+            windowObjRef.current = { ...curWin };
+            setWindowObj({ ...curWin });
+            setWindActive(true);
+            const curDoor = { ...exitDoorRef.current };
+            curDoor.y = 254;
+            curDoor.x = 290;
+            exitDoorRef.current = curDoor;
+            setExitDoor(curDoor);
+            playSliceSound();
+            triggerMediumHaptic();
+            if (juiceRef.current) {
+              juiceRef.current.shake(12, 10);
+              juiceRef.current.burst(curWin.x, curWin.y, '#00F5FF', 16);
+            }
+            return;
+          }
+        }
+
+        // Check Rotatable Spikes
+        const curSpikes = rotatableSpikesRef.current;
+        if (curSpikes && curSpikes.isDraggable) {
+          if (tx >= curSpikes.x - 10 && tx <= curSpikes.x + curSpikes.w + 10 && ty >= curSpikes.y - 12 && ty <= curSpikes.y + curSpikes.h + 12) {
+            draggedEntityRef.current = { type: 'ROTATABLE_SPIKES', offsetX: curSpikes.x - tx, offsetY: curSpikes.y - ty };
+            triggerLightHaptic();
+            return;
+          }
+        }
 
         // 1. Check Padlock
         const curPadlock = padlockRef.current;
@@ -448,7 +657,39 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
         const dragged = draggedEntityRef.current;
         if (!dragged) return;
 
-        if (dragged.type === 'KEY') {
+        if (dragged.type === 'SHOVEL') {
+          const curShovel = shovelRef.current;
+          if (curShovel) {
+            curShovel.x = tx + (dragged.offsetX || 0);
+            curShovel.y = ty + (dragged.offsetY || 0);
+            setShovel({ ...curShovel });
+
+            const curDirt = dirtBlocksRef.current.map((d) => ({ ...d }));
+            let dugAny = false;
+            for (let d of curDirt) {
+              if (!d.dug && Math.hypot(curShovel.x + 10 - (d.x + d.w / 2), curShovel.y + 10 - (d.y + d.h / 2)) < 28) {
+                d.dug = true;
+                dugAny = true;
+                playSliceSound();
+                triggerMediumHaptic();
+                if (juiceRef.current) {
+                  juiceRef.current.burst(d.x + d.w / 2, d.y + d.h / 2, '#8B5A2B', 12);
+                }
+              }
+            }
+            if (dugAny) {
+              dirtBlocksRef.current = [...curDirt];
+              setDirtBlocks([...curDirt]);
+            }
+          }
+        } else if (dragged.type === 'ROTATABLE_SPIKES') {
+          const curSpk = rotatableSpikesRef.current;
+          if (curSpk) {
+            curSpk.x = Math.max(10, Math.min(GAME_W - curSpk.w - 10, tx + (dragged.offsetX || 0)));
+            rotatableSpikesRef.current = { ...curSpk };
+            setRotatableSpikes({ ...curSpk });
+          }
+        } else if (dragged.type === 'KEY') {
           const curKeys = keysRef.current;
           const k = curKeys.find((item) => item.id === dragged.id);
           if (k && !k.taken) {
@@ -802,13 +1043,14 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
 
       // Horizontal player input & platform carrier speed
       let moveVx = platformCarrierDx;
+      const isRev = Boolean(reversedControlsRef.current);
       if (inputLeftRef.current) {
-        moveVx -= MOVE_SPEED;
-        p.facing = -1;
+        moveVx += isRev ? MOVE_SPEED : -MOVE_SPEED;
+        p.facing = isRev ? 1 : -1;
       }
       if (inputRightRef.current) {
-        moveVx += MOVE_SPEED;
-        p.facing = 1;
+        moveVx += isRev ? -MOVE_SPEED : MOVE_SPEED;
+        p.facing = isRev ? -1 : 1;
       }
       p.vx = moveVx;
 
@@ -826,6 +1068,22 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
 
       // Solid collision obstacles: non-collapsed platforms + active barriers
       const solids = curPlatforms.filter((s) => !s.collapsed);
+
+      // Non-dug dirt blocks are solid
+      dirtBlocksRef.current.forEach((d) => {
+        if (!d.dug) solids.push({ x: d.x, y: d.y, w: d.w, h: d.h });
+      });
+
+      // Door as solid stepping platform if isPlatform
+      if (curDoor && curDoor.isPlatform) {
+        solids.push({ x: curDoor.x, y: curDoor.y, w: curDoor.w, h: 8 });
+      }
+
+      // Flipped spikes are safe solid platform
+      const curSpkSolid = rotatableSpikesRef.current;
+      if (curSpkSolid && curSpkSolid.rotated) {
+        solids.push({ x: curSpkSolid.x, y: curSpkSolid.y, w: curSpkSolid.w, h: curSpkSolid.h });
+      }
       curBarriers.forEach((b) => {
         if (b.isBridge) {
           const swActive = curSwitches.some((s) => s.active);
@@ -952,8 +1210,81 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
           }
         }
       }
+      const prevLandingVy = p.vy;
       p.y = nextPy;
       p.onGround = onFloor;
+
+      // Earthquake Stomp Check on Landing
+      const curEq = earthquakeRef.current;
+      if (curEq && curEq.remainingStomps > 0 && prevLandingVy > 1.2 && onFloor) {
+        curEq.remainingStomps -= 1;
+        curEq.offset += 25;
+        if (juiceRef.current) {
+          juiceRef.current.shake(16, 12);
+        }
+        triggerMediumHaptic();
+        playTapSound();
+        if (curEq.remainingStomps === 0) {
+          curDoor.y = 254;
+          curDoor.x = 290;
+          curEq.settled = true;
+          exitDoorRef.current = curDoor;
+          setExitDoor({ ...curDoor });
+          triggerPerfectHaptic(2);
+          if (juiceRef.current) {
+            juiceRef.current.burst(curDoor.x + 14, curDoor.y + 20, '#FFE600', 18);
+          }
+        }
+        earthquakeRef.current = { ...curEq };
+        setEarthquake({ ...curEq });
+      }
+
+      // Gun pickup check
+      const curGun = gunRef.current;
+      if (curGun && !curGun.taken) {
+        if (Math.hypot(p.x + PLAYER_W / 2 - curGun.x, p.y + PLAYER_H / 2 - curGun.y) < 28) {
+          curGun.taken = true;
+          gunRef.current = { ...curGun };
+          setGun({ ...curGun });
+          playTapSound();
+          triggerLightHaptic();
+          if (juiceRef.current) {
+            juiceRef.current.burst(curGun.x, curGun.y, '#00F5FF', 14);
+          }
+        }
+      }
+
+      // Blaster bullet movement & padlock shattering
+      const curBul = bulletRef.current;
+      if (curBul && curBul.active) {
+        curBul.x += curBul.vx;
+        const curPad = padlockRef.current;
+        if (curPad && curPad.onDoor && Math.hypot(curBul.x - curPad.x, curBul.y - curPad.y) < 28) {
+          curBul.active = false;
+          curPad.onDoor = false;
+          padlockRef.current = { ...curPad };
+          setPadlock({ ...curPad });
+          curDoor.locked = false;
+          curDoor.permanentlyUnlocked = true;
+          exitDoorRef.current = curDoor;
+          setExitDoor({ ...curDoor });
+          bulletRef.current = null;
+          setBullet(null);
+          playGameOverSound();
+          triggerPerfectHaptic(3);
+          if (juiceRef.current) {
+            juiceRef.current.burst(curPad.x, curPad.y, '#FF0055', 24);
+            juiceRef.current.shake(14, 10);
+          }
+        } else if (curBul.x < 0 || curBul.x > GAME_W) {
+          curBul.active = false;
+          bulletRef.current = null;
+          setBullet(null);
+        } else {
+          bulletRef.current = { ...curBul };
+          setBullet({ ...curBul });
+        }
+      }
 
       // 2b. Spring Pad Bounce on Player
       for (let sp of curSprings) {
@@ -1215,6 +1546,21 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
         }
       }
 
+      // Rotatable Spikes hazard check (deadly only if NOT rotated!)
+      const curSpkHaz = rotatableSpikesRef.current;
+      if (curSpkHaz && !curSpkHaz.rotated) {
+        if (
+          p.x + PLAYER_W > curSpkHaz.x &&
+          p.x < curSpkHaz.x + curSpkHaz.w &&
+          p.y + PLAYER_H > curSpkHaz.y + 2 &&
+          p.y < curSpkHaz.y + curSpkHaz.h
+        ) {
+          handleFail('IMPALED BY SPIKES!');
+          animFrameRef.current = requestAnimationFrame(tick);
+          return;
+        }
+      }
+
       // 9. Hazard Collision
       for (let h of hazardsRef.current) {
         if (
@@ -1302,6 +1648,26 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
             </View>
 
             <View style={styles.statusRow}>
+              {hudKeyDraggableActive && (
+                <Pressable
+                  style={[styles.hudBadge, { borderColor: '#FFE600', backgroundColor: 'rgba(255, 230, 0, 0.25)' }]}
+                  onPress={handleUnlockWithHudKey}
+                >
+                  <Text style={[styles.hudBadgeText, { color: '#FFE600', fontWeight: 'bold' }]}>
+                    🔑 TAKE KEY
+                  </Text>
+                </Pressable>
+              )}
+              {(gravityRotateMode || gravityTiltable) && (
+                <Pressable
+                  style={[styles.hudBadge, { borderColor: '#00F5FF', backgroundColor: 'rgba(0, 245, 255, 0.25)' }]}
+                  onPress={handleRotateGravity}
+                >
+                  <Text style={[styles.hudBadgeText, { color: '#00F5FF', fontWeight: 'bold' }]}>
+                    🔄 TILT GRAVITY
+                  </Text>
+                </Pressable>
+              )}
               {keys.length > 0 && (
                 <View style={styles.hudBadge}>
                   <Text style={styles.hudBadgeText}>
@@ -1329,8 +1695,24 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
 
           {/* Puzzle Hint Banner */}
           {roomHint ? (
-            <View style={styles.hintBanner}>
-              <Text style={styles.hintBannerText}>💡 {roomHint}</Text>
+            <View style={[styles.hintBanner, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}>
+              <Text style={[styles.hintBannerText, { flex: 1 }]}>💡 {roomHint}</Text>
+              {hintHeartActive && (
+                <Pressable
+                  style={{
+                    backgroundColor: '#FF0055',
+                    paddingHorizontal: 8,
+                    paddingVertical: 4,
+                    borderRadius: 8,
+                    marginLeft: 6,
+                  }}
+                  onPress={handleHealGuardWithHeart}
+                >
+                  <Text style={{ fontSize: 11, color: '#FFFFFF', fontWeight: 'bold' }}>
+                    ❤️ HEAL SENTRY
+                  </Text>
+                </Pressable>
+              )}
             </View>
           ) : null}
         </View>
@@ -1691,6 +2073,95 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
                 </G>
               )}
 
+              {/* Dirt Blocks (Excavation Room) */}
+              {dirtBlocks.map((d) => {
+                if (d.dug) return null;
+                return (
+                  <G key={d.id} transform={`translate(${d.x}, ${d.y})`}>
+                    <Rect x={0} y={0} width={d.w} height={d.h} fill="#451A03" stroke="#78350F" strokeWidth={1.5} rx={3} />
+                    <Line x1={3} y1={3} x2={d.w - 3} y2={d.h - 3} stroke="#92400E" strokeWidth={1} />
+                    <Line x1={d.w - 3} y1={3} x2={3} y2={d.h - 3} stroke="#92400E" strokeWidth={1} />
+                  </G>
+                );
+              })}
+
+              {/* Shovel Item */}
+              {shovel && !shovel.taken && (
+                <G transform={`translate(${shovel.x}, ${shovel.y})`}>
+                  <Line x1={0} y1={0} x2={14} y2={14} stroke="#B45309" strokeWidth={3} strokeLinecap="round" />
+                  <Path d="M10,10 L20,12 L12,20 Z" fill="#94A3B8" stroke="#FFFFFF" strokeWidth={1.2} />
+                  <Circle cx={12} cy={12} r={14} stroke="#FFE600" strokeWidth={1} strokeDasharray="3 3" opacity={0.7} />
+                </G>
+              )}
+
+              {/* Window with Wind (Room 8) */}
+              {windowObj && (
+                <G transform={`translate(${windowObj.x}, ${windowObj.y})`}>
+                  <Rect x={0} y={0} width={windowObj.w} height={windowObj.h} fill="#0F172A" stroke="#00F5FF" strokeWidth={2} rx={4} />
+                  <Rect x={2} y={2} width={windowObj.open ? 6 : windowObj.w / 2 - 3} height={windowObj.h - 4} fill="#0284C7" rx={2} />
+                  <Rect x={windowObj.open ? windowObj.w - 8 : windowObj.w / 2 + 1} y={2} width={windowObj.open ? 6 : windowObj.w / 2 - 3} height={windowObj.h - 4} fill="#0284C7" rx={2} />
+                  {(windowObj.open || windActive) && (
+                    <G>
+                      <Line x1={-60} y1={10} x2={windowObj.w} y2={10} stroke="#00F5FF" strokeWidth={2} strokeDasharray="6 4" opacity={0.8} />
+                      <Line x1={-80} y1={22} x2={windowObj.w} y2={22} stroke="#38BDF8" strokeWidth={2.5} strokeDasharray="8 5" opacity={0.9} />
+                      <Line x1={-50} y1={34} x2={windowObj.w} y2={34} stroke="#00F5FF" strokeWidth={1.5} strokeDasharray="5 3" opacity={0.7} />
+                    </G>
+                  )}
+                </G>
+              )}
+
+              {/* Wounded / Healed Guard (Room 10) */}
+              {guard && (
+                <G transform={`translate(${guard.x}, ${guard.y})`}>
+                  <Rect x={0} y={guard.healed ? 6 : 14} width={22} height={guard.healed ? 22 : 12} fill={guard.healed ? "#10B981" : "#EF4444"} rx={4} />
+                  <Circle cx={11} cy={guard.healed ? 4 : 12} r={6} fill="#1F2937" stroke={guard.healed ? "#34D399" : "#F87171"} strokeWidth={1.5} />
+                  <G transform="translate(-25, -28)">
+                    <Rect x={0} y={0} width={76} height={18} fill="#1F2937" stroke={guard.healed ? "#34D399" : "#F87171"} strokeWidth={1} rx={4} />
+                    <Line x1={10} y1={4} x2={25} y2={4} stroke={guard.healed ? "#34D399" : "#F87171"} strokeWidth={2} />
+                    <Circle cx={40} cy={9} r={5} fill={guard.healed ? "#34D399" : "#F87171"} />
+                  </G>
+                </G>
+              )}
+
+              {/* Laser Blaster Gun Item (Room 12) */}
+              {gun && !gun.taken && (
+                <G transform={`translate(${gun.x}, ${gun.y})`}>
+                  <Rect x={-4} y={-3} width={18} height={9} fill="#0284C7" stroke="#00F5FF" strokeWidth={1.5} rx={2} />
+                  <Rect x={-2} y={3} width={5} height={7} fill="#1E293B" rx={1} />
+                  <Circle cx={5} cy={2} r={14} stroke="#00F5FF" strokeWidth={1} strokeDasharray="3 2" opacity={0.7} />
+                </G>
+              )}
+
+              {/* Fired Blaster Laser Bolt */}
+              {bullet && bullet.active && (
+                <Circle cx={bullet.x} cy={bullet.y} r={5} fill="#00F5FF" stroke="#FFFFFF" strokeWidth={1.5} />
+              )}
+
+              {/* Rotatable Big Spikes (Room 13) */}
+              {rotatableSpikes && (
+                <G transform={`translate(${rotatableSpikes.x}, ${rotatableSpikes.y})`}>
+                  {rotatableSpikes.rotated ? (
+                    <G>
+                      <Rect x={0} y={0} width={rotatableSpikes.w} height={rotatableSpikes.h} fill="#334155" stroke="#38BDF8" strokeWidth={2} rx={3} />
+                      <Line x1={2} y1={2} x2={rotatableSpikes.w - 2} y2={2} stroke="#38BDF8" strokeWidth={2.5} />
+                      <Circle cx={rotatableSpikes.w / 2} cy={rotatableSpikes.h / 2} r={3} fill="#38BDF8" />
+                    </G>
+                  ) : (
+                    <G>
+                      {Array.from({ length: Math.floor(rotatableSpikes.w / 12) }).map((_, i) => (
+                        <Path
+                          key={`rspk_${i}`}
+                          d={`M${i * 12},${rotatableSpikes.h} L${i * 12 + 6},0 L${i * 12 + 12},${rotatableSpikes.h} Z`}
+                          fill="#EF4444"
+                          stroke="#FFFFFF"
+                          strokeWidth={1}
+                        />
+                      ))}
+                    </G>
+                  )}
+                </G>
+              )}
+
               {/* Exit Door */}
               <G transform={`translate(${exitDoor.x}, ${exitDoor.y})`}>
                 <Rect
@@ -1766,6 +2237,46 @@ export default function CyberPathGame({ onBackToHub, onScoreUpdate, isPaused = f
             </Svg>
           </View>
         </View>
+
+        {/* Extra Action Buttons (Blaster, Spikes Flip) */}
+        {(gun?.taken || rotatableSpikes) && (
+          <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 12, marginBottom: 6 }}>
+            {gun && gun.taken && (
+              <Pressable
+                style={{
+                  backgroundColor: '#FF0055',
+                  paddingHorizontal: 16,
+                  paddingVertical: 8,
+                  borderRadius: 16,
+                  borderWidth: 1.5,
+                  borderColor: '#FFFFFF',
+                }}
+                onPress={handleFireBlaster}
+              >
+                <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 13 }}>
+                  🔫 FIRE BLASTER
+                </Text>
+              </Pressable>
+            )}
+            {rotatableSpikes && (
+              <Pressable
+                style={{
+                  backgroundColor: rotatableSpikes.rotated ? '#10B981' : '#F59E0B',
+                  paddingHorizontal: 16,
+                  paddingVertical: 8,
+                  borderRadius: 16,
+                  borderWidth: 1.5,
+                  borderColor: '#FFFFFF',
+                }}
+                onPress={handleFlipSpikes}
+              >
+                <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 13 }}>
+                  {rotatableSpikes.rotated ? '✓ SPIKES INVERTED' : '🔄 FLIP SPIKES (180°)'}
+                </Text>
+              </Pressable>
+            )}
+          </View>
+        )}
 
         {/* On-Screen Touch D-PAD & Jump Controls (Supports simultaneous Multi-Touch Running + Jumping) */}
         <View
