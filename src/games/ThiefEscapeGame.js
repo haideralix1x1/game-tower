@@ -1365,6 +1365,10 @@ export default function ThiefEscapeGame({
           ...g,
           floor: gFloor,
           x: gX,
+          y: null,
+          isClimbing: false,
+          stair: null,
+          climbDir: 0,
           minX: gMinX ?? g.minX,
           maxX: gMaxX ?? g.maxX,
           isDefeated: false,
@@ -1618,6 +1622,10 @@ export default function ThiefEscapeGame({
                 ...g,
                 floor: diamondFloor,
                 x: startX,
+                y: null,
+                isClimbing: false,
+                stair: null,
+                climbDir: 0,
                 pauseTimer: 50,
                 isChasing: false,
                 isInvestigating: false,
@@ -2421,7 +2429,57 @@ export default function ThiefEscapeGame({
 
         if (g.isHunter) {
           // STALKER / HUNTER GUARD: Follows player silently without vision torch
-          if (g.pauseTimer > 0) {
+          if (g.isClimbing && g.stair != null) {
+            // Gradually climb up or down the ladder
+            const stair = g.stair;
+            const yBottom = getFloorY(stair.fromFloor);
+            const yTop = getFloorY(stair.toFloor);
+            g.x = stair.x;
+
+            if (g.y == null) {
+              g.y = g.climbDir === -1 ? yBottom : yTop;
+            }
+
+            const climbSpeed = (g.speed || 1.15) * 1.25;
+            g.y += g.climbDir * climbSpeed;
+
+            // Reached top floor (ascending)
+            if (g.climbDir === -1 && g.y <= yTop) {
+              g.y = null;
+              g.floor = stair.toFloor;
+              g.isClimbing = false;
+              g.stair = null;
+              g.climbDir = 0;
+              if (levelConfig.isDualBuilding) {
+                if (g.x < arenaW * 0.44) {
+                  g.minX = 25;
+                  g.maxX = Math.round(arenaW * 0.44);
+                } else {
+                  g.minX = Math.round(arenaW * 0.56);
+                  g.maxX = arenaW - 25;
+                }
+              }
+              g.pauseTimer = 14;
+            }
+            // Reached bottom floor (descending)
+            else if (g.climbDir === 1 && g.y >= yBottom) {
+              g.y = null;
+              g.floor = stair.fromFloor;
+              g.isClimbing = false;
+              g.stair = null;
+              g.climbDir = 0;
+              if (levelConfig.isDualBuilding) {
+                if (g.x < arenaW * 0.44) {
+                  g.minX = 25;
+                  g.maxX = Math.round(arenaW * 0.44);
+                } else {
+                  g.minX = Math.round(arenaW * 0.56);
+                  g.maxX = arenaW - 25;
+                }
+              }
+              g.pauseTimer = 14;
+            }
+          } else if (g.pauseTimer > 0) {
             g.pauseTimer -= 1;
           } else if (curPlayer.isHiding) {
             // Player hidden in window: Hunter loses track and paces slowly
@@ -2473,19 +2531,12 @@ export default function ThiefEscapeGame({
                   g.x += g.dir * (g.speed * 1.15);
                   g.x = Math.max(g.minX, Math.min(g.maxX, g.x));
                 } else {
-                  // At ladder: climb to next floor!
+                  // At ladder: start gradual climbing down/up instead of jumping instantly!
                   g.x = best.x;
-                  g.floor += needUp ? 1 : -1;
-                  if (levelConfig.isDualBuilding) {
-                    if (g.x < arenaW * 0.44) {
-                      g.minX = 25;
-                      g.maxX = Math.round(arenaW * 0.44);
-                    } else {
-                      g.minX = Math.round(arenaW * 0.56);
-                      g.maxX = arenaW - 25;
-                    }
-                  }
-                  g.pauseTimer = 18;
+                  g.isClimbing = true;
+                  g.stair = best;
+                  g.climbDir = needUp ? -1 : 1;
+                  g.y = getFloorY(g.floor);
                 }
               } else {
                 g.x += g.dir * g.speed;
@@ -2502,7 +2553,16 @@ export default function ThiefEscapeGame({
 
           // Hunter Catch Check:
           if (!curPlayer.isHiding && !carStateRef.current.isEscaping && !carStateRef.current.thiefInside) {
-            if (g.floor === curPlayer.floor && Math.abs(g.x - curPlayer.x) < 22 && !curPlayer.isClimbing) {
+            const hunterY = g.isClimbing && g.y != null ? g.y : getFloorY(g.floor);
+            const playerY = curPlayer.isClimbing && curPlayer.y != null ? curPlayer.y : getFloorY(curPlayer.floor);
+            const distX = Math.abs(g.x - curPlayer.x);
+            const distY = Math.abs(hunterY - playerY);
+
+            const isCaught =
+              (!g.isClimbing && !curPlayer.isClimbing && g.floor === curPlayer.floor && distX < 22) ||
+              (distX < 18 && distY < 22);
+
+            if (isCaught) {
               if (curPlayer.hasDiamond || diamondTakenRef.current) {
                 curPlayer.hasDiamond = false;
                 curPlayer.diamondsHeld = 0;
@@ -4500,7 +4560,7 @@ export default function ThiefEscapeGame({
               {/* Patrolling Security Guards, Armed Snipers & Bosses */}
               {guards.map((g) => {
                 if (g.isDefeated) return null;
-                const gy = getFloorY(g.floor);
+                const gy = g.isClimbing && g.y != null ? g.y : getFloorY(g.floor);
                 const isAlerted = g.alertTimer > 0;
                 const visLen = g.hasGun ? SNIPER_VISION_LEN : FLASHLIGHT_LEN;
                 const beamRight = g.hasGun ? 'url(#sniperBeamRight)' : 'url(#beamGradRight)';
@@ -4592,9 +4652,20 @@ export default function ThiefEscapeGame({
                     ) : g.isHunter ? (
                       <G>
                         {/* Stealth Hunter Stalker Outfit */}
-                        <Rect x={g.x - 6} y={gy - 26} width={12} height={24} rx={3} fill="#16081F" stroke="#FF0055" strokeWidth={1.8} />
-                        <Circle cx={g.x} cy={gy - 28} r={5} fill="#0B0410" stroke="#FF0055" strokeWidth={1.2} />
-                        <Line x1={g.x - 3} y1={gy - 28} x2={g.x + g.dir * 5} y2={gy - 28} stroke="#FF0055" strokeWidth={2.4} />
+                        {g.isClimbing ? (
+                          <G>
+                            <Line x1={g.x - 10} y1={gy - 18} x2={g.x - 5} y2={gy - 14} stroke="#FF0055" strokeWidth={2.2} />
+                            <Line x1={g.x + 5} y1={gy - 14} x2={g.x + 10} y2={gy - 18} stroke="#FF0055" strokeWidth={2.2} />
+                            <Rect x={g.x - 6} y={gy - 24} width={12} height={20} rx={3} fill="#16081F" stroke="#FF0055" strokeWidth={1.8} />
+                            <Circle cx={g.x} cy={gy - 26} r={5} fill="#0B0410" stroke="#FF0055" strokeWidth={1.2} />
+                          </G>
+                        ) : (
+                          <G>
+                            <Rect x={g.x - 6} y={gy - 26} width={12} height={24} rx={3} fill="#16081F" stroke="#FF0055" strokeWidth={1.8} />
+                            <Circle cx={g.x} cy={gy - 28} r={5} fill="#0B0410" stroke="#FF0055" strokeWidth={1.2} />
+                            <Line x1={g.x - 3} y1={gy - 28} x2={g.x + g.dir * 5} y2={gy - 28} stroke="#FF0055" strokeWidth={2.4} />
+                          </G>
+                        )}
                       </G>
                     ) : (
                       <G>
