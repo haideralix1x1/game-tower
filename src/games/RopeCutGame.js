@@ -339,6 +339,7 @@ export default function RopeCutGame({ onBackToHub, onScoreUpdate, isPaused = fal
 
   const dragModeRef = useRef('NONE');
   const touchLastPosRef = useRef(null);
+  const climbStateRef = useRef(null);
 
   const tickCountRef = useRef(0);
   const portalCooldownRef = useRef(0);
@@ -498,6 +499,7 @@ export default function RopeCutGame({ onBackToHub, onScoreUpdate, isPaused = fal
   }, [initLevel]);
 
   // PanResponder to slice ropes or shoot webs
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const panResponder = useMemo(
     () =>
       // eslint-disable-next-line react-hooks/refs
@@ -517,10 +519,32 @@ export default function RopeCutGame({ onBackToHub, onScoreUpdate, isPaused = fal
             return;
           }
 
-          // 2. Spider Drag: Aim web towards any hook!
+          // 2. Spider Drag: If single web attached, drag spider UP straight on that rope!
           const curSpider = spiderRef.current;
           const distToSpider = Math.hypot(locationX - curSpider.x, locationY - curSpider.y);
           if (distToSpider < 44) {
+            const activeRopes = ropesRef.current.filter((r) => r.intact);
+            if (activeRopes.length === 1) {
+              // Single web attached: Drag spider UP straight on that attached web rope!
+              dragModeRef.current = 'CLIMB_ROPE';
+              const r = activeRopes[0];
+              const dx = curSpider.x - r.ax;
+              const dy = curSpider.y - r.ay;
+              const angle = Math.atan2(dy, dx);
+              const curDist = Math.hypot(dx, dy);
+              climbStateRef.current = {
+                ropeId: r.id,
+                ax: r.ax,
+                ay: r.ay,
+                angle: angle,
+                maxLen: Math.max(r.len, curDist),
+                lastDist: curDist,
+              };
+              triggerLightHaptic();
+              return;
+            }
+
+            // Multiple or 0 webs: Aim web towards any hook!
             dragModeRef.current = 'WEB';
             const aimObj = {
               fromX: curSpider.x,
@@ -546,7 +570,63 @@ export default function RopeCutGame({ onBackToHub, onScoreUpdate, isPaused = fal
           const p2 = { x: locationX, y: locationY };
           touchLastPosRef.current = p2;
 
-          if (dragModeRef.current === 'WEB') {
+          if (dragModeRef.current === 'CLIMB_ROPE') {
+            const cs = climbStateRef.current;
+            if (cs) {
+              const currentRopes = ropesRef.current;
+              const r = currentRopes.find((item) => item.id === cs.ropeId && item.intact);
+              if (r) {
+                // Vector along the straight line of that web rope
+                const nx = Math.cos(cs.angle);
+                const ny = Math.sin(cs.angle);
+                // Project touch position onto the straight line from the hook anchor
+                const projDist = (p2.x - cs.ax) * nx + (p2.y - cs.ay) * ny;
+                // Allow dragging up straight on that web rope (shortening towards anchor)
+                const clampedLen = Math.max(28, Math.min(cs.maxLen, projDist));
+                r.len = clampedLen;
+
+                const curSpider = { ...spiderRef.current };
+                curSpider.x = cs.ax + nx * clampedLen;
+                curSpider.y = cs.ay + ny * clampedLen;
+                curSpider.vx = 0;
+                curSpider.vy = 0;
+                curSpider.legPhase = (curSpider.legPhase + 0.35) % (Math.PI * 2);
+                spiderRef.current = curSpider;
+                setSpider(curSpider);
+                setRopes([...currentRopes]);
+
+                // Check star pickups while climbing
+                const curStars = starsRef.current.map((st) => ({ ...st }));
+                let starCollected = false;
+                for (let st of curStars) {
+                  if (!st.collected && Math.hypot(curSpider.x - st.x, curSpider.y - st.y) < SPIDER_RADIUS + 16) {
+                    st.collected = true;
+                    starCollected = true;
+                    playSliceSound();
+                    triggerPerfectHaptic(1);
+                    setStarsCollected((prev) => prev + 1);
+                    if (juiceRef.current) {
+                      juiceRef.current.burst(st.x, st.y, '#FFE600', 16);
+                    }
+                  }
+                }
+                if (starCollected) {
+                  starsRef.current = [...curStars];
+                  setStars([...curStars]);
+                }
+
+                // Gentle tactile click every 16px climbed
+                if (Math.abs(clampedLen - cs.lastDist) > 16) {
+                  cs.lastDist = clampedLen;
+                  triggerLightHaptic();
+                  playTapSound();
+                  if (juiceRef.current) {
+                    juiceRef.current.burst(curSpider.x, curSpider.y, r.color || '#39FF14', 6);
+                  }
+                }
+              }
+            }
+          } else if (dragModeRef.current === 'WEB') {
             const curSpider = spiderRef.current;
             const currentHooks = hooksRef.current;
             let bestHook = null;
@@ -574,7 +654,9 @@ export default function RopeCutGame({ onBackToHub, onScoreUpdate, isPaused = fal
           }
         },
         onPanResponderRelease: () => {
-          if (dragModeRef.current === 'WEB') {
+          if (dragModeRef.current === 'CLIMB_ROPE') {
+            climbStateRef.current = null;
+          } else if (dragModeRef.current === 'WEB') {
             const aim = webAimRef.current;
             if (aim && aim.targetHook) {
               shootWebToHook(aim.targetHook);
@@ -665,6 +747,12 @@ export default function RopeCutGame({ onBackToHub, onScoreUpdate, isPaused = fal
       }
 
       // 2. Spider Physics (Gravity + Rope Tensions)
+      if (dragModeRef.current === 'CLIMB_ROPE') {
+        // While actively dragging spider up on a single attached web, skip gravity integration
+        animFrameRef.current = requestAnimationFrame(tick);
+        return;
+      }
+
       const curSpider = { ...spiderRef.current };
       curSpider.vy += GRAVITY;
       curSpider.vx *= 0.992;
@@ -1003,6 +1091,19 @@ export default function RopeCutGame({ onBackToHub, onScoreUpdate, isPaused = fal
                     strokeWidth={1.2}
                     opacity={0.8}
                   />
+                  {/* Glowing climbing indicator when single web attached */}
+                  {ropes.filter((item) => item.intact).length === 1 && (
+                    <Line
+                      x1={r.ax}
+                      y1={r.ay}
+                      x2={spider.x}
+                      y2={spider.y}
+                      stroke="#00F5D4"
+                      strokeWidth={8}
+                      strokeDasharray="6 4"
+                      opacity={0.35}
+                    />
+                  )}
                 </G>
               );
             })}
@@ -1069,6 +1170,18 @@ export default function RopeCutGame({ onBackToHub, onScoreUpdate, isPaused = fal
 
             {/* Spider Character */}
             <G transform={`translate(${spider.x}, ${spider.y})`}>
+              {/* Single Web Climbing Glow Aura */}
+              {ropes.filter((r) => r.intact).length === 1 && (
+                <Circle
+                  cx={0}
+                  cy={0}
+                  r={22}
+                  stroke="#00F5D4"
+                  strokeWidth={1.5}
+                  strokeDasharray="4 3"
+                  opacity={0.65}
+                />
+              )}
               {/* Spider Legs - Left */}
               <Path
                 d={`M-5,-2 Q-16,${-10 + legWiggle} -22,-3`}
