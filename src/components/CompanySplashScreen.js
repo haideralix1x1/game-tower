@@ -8,8 +8,10 @@ import {
   Animated,
   Easing,
   Platform,
+  Pressable,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as SplashScreen from 'expo-splash-screen';
 import Svg, { Circle, Line, Defs, RadialGradient, Stop } from 'react-native-svg';
 
 const monoFont = Platform.select({
@@ -46,9 +48,9 @@ export default function CompanySplashScreen({ onFinish }) {
   const [progressPct, setProgressPct] = useState(0);
   const [statusText, setStatusText] = useState('INITIALIZING QUANTUM CORE...');
 
-  // Lazy Animated Values without ref reads in render
-  const [fadeAnim] = useState(() => new Animated.Value(0));
-  const [logoScale] = useState(() => new Animated.Value(0.85));
+  // Lazy Animated Values: fadeAnim MUST start at 1 so splash is immediately 100% opaque (no flash of tower underneath!)
+  const [fadeAnim] = useState(() => new Animated.Value(1));
+  const [logoScale] = useState(() => new Animated.Value(0.88));
   const [logoPulse] = useState(() => new Animated.Value(1));
   const [glowOpacity] = useState(() => new Animated.Value(0.3));
   const [barAnim] = useState(() => new Animated.Value(0));
@@ -61,7 +63,7 @@ export default function CompanySplashScreen({ onFinish }) {
     isFinishedRef.current = true;
     Animated.timing(fadeAnim, {
       toValue: 0,
-      duration: 140,
+      duration: 180,
       easing: Easing.in(Easing.quad),
       useNativeDriver: true,
     }).start(() => {
@@ -70,21 +72,16 @@ export default function CompanySplashScreen({ onFinish }) {
   }, [fadeAnim, onFinish]);
 
   useEffect(() => {
-    // 1. Snappy fade-in and scale-in of the logo
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 200,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-      Animated.timing(logoScale, {
-        toValue: 1,
-        duration: 280,
-        easing: Easing.out(Easing.back(1.2)),
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
+    // Hide native OS splash screen immediately now that our React custom splash is mounted & 100% opaque
+    SplashScreen.hideAsync().catch(() => {});
+
+    // 1. Snappy scale-in of the logo
+    Animated.timing(logoScale, {
+      toValue: 1,
+      duration: 260,
+      easing: Easing.out(Easing.back(1.2)),
+      useNativeDriver: true,
+    }).start(() => {
       // 2. Start continuous subtle breathing/pulse animation
       Animated.loop(
         Animated.sequence([
@@ -166,11 +163,12 @@ export default function CompanySplashScreen({ onFinish }) {
 
   return (
     <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
-      <View style={[StyleSheet.absoluteFill, styles.contentWrap]}>
-        <LinearGradient
-          colors={['#02010A', '#080518', '#03010C']}
-          style={StyleSheet.absoluteFill}
-        />
+      <Pressable style={StyleSheet.absoluteFill} onPress={finishEarly}>
+        <View style={[StyleSheet.absoluteFill, styles.contentWrap]}>
+          <LinearGradient
+            colors={['#02010A', '#080518', '#03010C']}
+            style={StyleSheet.absoluteFill}
+          />
 
         {/* Ambient Particles & Nebula Glow Backdrop */}
         <Svg width={width} height={height} style={StyleSheet.absoluteFill} pointerEvents="none">
@@ -254,6 +252,7 @@ export default function CompanySplashScreen({ onFinish }) {
           <Text style={styles.footerText}>NEO GAME TOWER // SYSTEM BOOT</Text>
         </View>
       </View>
+      </Pressable>
     </Animated.View>
   );
 }

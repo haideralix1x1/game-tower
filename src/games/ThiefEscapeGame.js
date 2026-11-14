@@ -5,7 +5,6 @@ import {
   Pressable,
   StyleSheet,
   Platform,
-  Dimensions,
   Modal,
   ScrollView,
 } from 'react-native';
@@ -32,7 +31,6 @@ import {
   triggerPerfectHaptic,
   triggerGameOverHaptic,
   triggerSelectionHaptic,
-  triggerSliceHaptic,
 } from '../utils/haptics';
 import {
   playTapSound,
@@ -286,8 +284,10 @@ const BUILDING_SHAPES = [
 ];
 const ROOF_PAD = 52; // extra SVG space above the facade for roofs & spires
 
-const getBuildingShape = (lvl) =>
-  BUILDING_SHAPES[Math.floor(Math.max(0, lvl - 1) / 10) % BUILDING_SHAPES.length];
+const getBuildingShape = (lvl) => {
+  if (lvl >= 60 && lvl <= 70) return 'TWO_BUILDINGS';
+  return BUILDING_SHAPES[Math.floor(Math.max(0, lvl - 1) / 10) % BUILDING_SHAPES.length];
+};
 
 /** Roof silhouette points (facade top is y=15) -> polygon point list for the whole building. */
 const buildFacadePoints = (shape, W, H) => {
@@ -660,21 +660,42 @@ function generate100CuratedLevels() {
         stonePickup: { floor: 2, x: arenaW - 90 },
       });
     }
-    // --- Tier 5: Levels 51 - 70 ---
-    else if (lvl <= 70) {
+    // --- Tier 5A: Levels 51 - 59 (Stalker Hunter Guard, Lasers, No Rival Thieves) ---
+    else if (lvl <= 59) {
       const floorsCount = 6;
       const arenaW = 550;
       const ladderPathsCount = 3;
-      const guardCount = 8;
+      const guardCount = 6;
       const stairs = generateStaggeredLadders(floorsCount, arenaW, ladderPathsCount);
-      // 2 guards with guns and high vision
       const guards = generateLevelGuards({
         floorsCount,
         guardCount,
         arenaW,
-        armedGuardIndices: [0, 4],
+        armedGuardIndices: [0, 3],
         lvl,
       });
+
+      // Stalker Hunter Guard: follows player without vision torch!
+      guards.push({
+        id: `g_stalker_${lvl}`,
+        floor: 1,
+        x: 270,
+        dir: 1,
+        speed: 1.16,
+        minX: 45,
+        maxX: arenaW - 45,
+        isHunter: true,
+        noTorch: true,
+        hasGun: false,
+        hasKey: false,
+      });
+
+      const lasers = [
+        { id: `laser_${lvl}`, floor: 3, x: Math.round(arenaW / 2), active: true },
+      ];
+      const laserSwitches = [
+        { id: `sw_${lvl}`, targetLaserId: `laser_${lvl}`, floor: 1, x: 90, isOff: false },
+      ];
 
       const cctvs = [
         { floor: 2, x: 180, sweepDir: 1, angle: -25, maxAngle: 30, speed: 0.9 },
@@ -688,8 +709,9 @@ function generate100CuratedLevels() {
         ladderPathsCount: 3,
         stairs,
         guards,
-        rivalCount: 2,
-        rivalStartShafts: [90, arenaW - 90],
+        lasers,
+        laserSwitches,
+        rivalCount: 0, // No other thieves in levels 51-100!
         requiresPetrol: false,
         diamondsCount: 1,
         diamondLockedInCase: false,
@@ -702,21 +724,128 @@ function generate100CuratedLevels() {
         stonePickup: { floor: 2, x: arenaW / 2 },
       });
     }
-    // --- Tier 6: Levels 71 - 80 ---
+    // --- Tier 5B: Levels 60 - 70 (2 Separated Thin Buildings, Key in Building A, Caged Diamond in Building B) ---
+    else if (lvl <= 70) {
+      const floorsCount = 5;
+      const arenaW = 500;
+      // Dedicated ladder shafts inside each of the two separated thin buildings
+      const stairs = [
+        // Left Building Ladders (bounds 20..215)
+        { fromFloor: 0, toFloor: 1, x: 80 },
+        { fromFloor: 1, toFloor: 2, x: 155 },
+        { fromFloor: 2, toFloor: 3, x: 80 },
+        { fromFloor: 3, toFloor: 4, x: 155 },
+        // Right Building Ladders (bounds 285..480)
+        { fromFloor: 0, toFloor: 1, x: 345 },
+        { fromFloor: 1, toFloor: 2, x: 420 },
+        { fromFloor: 2, toFloor: 3, x: 345 },
+        { fromFloor: 3, toFloor: 4, x: 420 },
+      ];
+
+      const guards = [
+        // Left Building Guards
+        { id: `g_l1_${lvl}`, floor: 1, x: 110, dir: 1, speed: 1.1, minX: 30, maxX: 200, hasGun: false, hasKey: false },
+        { id: `g_l2_${lvl}`, floor: 2, x: 140, dir: -1, speed: 1.15, minX: 30, maxX: 200, hasGun: false, hasKey: false },
+        // Right Building Guards
+        { id: `g_r1_${lvl}`, floor: 1, x: 380, dir: 1, speed: 1.1, minX: 300, maxX: 470, hasGun: true, shootCooldown: 60, hasKey: false },
+        { id: `g_r2_${lvl}`, floor: 2, x: 410, dir: -1, speed: 1.15, minX: 300, maxX: 470, hasGun: false, hasKey: false },
+        { id: `g_r3_${lvl}`, floor: 4, x: 430, dir: -1, speed: 1.1, minX: 300, maxX: 470, hasGun: false, hasKey: false },
+        // Hunter Stalker Guard: follows player across buildings without vision torch
+        { id: `g_stalker_${lvl}`, floor: 0, x: 250, dir: 1, speed: 1.18, minX: 30, maxX: 470, isHunter: true, noTorch: true, hasGun: false, hasKey: false },
+      ];
+
+      // Laser in Right Building blocking the vault corridor; Switch in Left Building!
+      const lasers = [
+        { id: `laser_r_${lvl}`, floor: 3, x: 385, active: true },
+      ];
+      const laserSwitches = [
+        { id: `sw_l_${lvl}`, targetLaserId: `laser_r_${lvl}`, floor: 1, x: 70, isOff: false },
+      ];
+
+      const cctvs = [
+        { floor: 2, x: 120, sweepDir: 1, angle: -20, maxAngle: 25, speed: 0.9 },
+        { floor: 2, x: 380, sweepDir: -1, angle: 20, maxAngle: 25, speed: 0.9 },
+      ];
+
+      levels.push({
+        name,
+        floorsCount,
+        arenaW,
+        ladderPathsCount: 2,
+        isDualBuilding: true,
+        stairs,
+        guards,
+        lasers,
+        laserSwitches,
+        rivalCount: 0, // No rival thieves!
+        requiresPetrol: false,
+        diamondsCount: 1,
+        // Keycard placed on Floor 3 of Left Building; Diamond in cage on Floor 4 of Right Building!
+        keyPickup: { floor: 3, x: 115 },
+        diamond: { floor: 4, x: 385 },
+        diamondLockedInCase: true,
+        initialDiamondFloor: 4,
+        initialDiamondX: 385,
+        hasWeapons: true,
+        gunPickup: { floor: 1, x: 160, ammo: 4 },
+        bombPickup: { floor: 2, x: 345, count: 2 },
+        isBossLevel: false,
+        cctvs,
+        car: { floor: 0, x: 80 },
+        stonePickup: { floor: 2, x: 115 },
+      });
+    }
+    // --- Tier 6: Levels 71 - 80 (Laser Grids, Stalker Guards, No Rival Thieves) ---
     else if (lvl <= 80) {
       const floorsCount = 6;
       const arenaW = 560;
       const ladderPathsCount = 3;
-      const guardCount = 8;
+      const guardCount = 6;
       const stairs = generateStaggeredLadders(floorsCount, arenaW, ladderPathsCount);
-      // Multiple armed guards with guns
       const guards = generateLevelGuards({
         floorsCount,
         guardCount,
         arenaW,
-        armedGuardIndices: [0, 3, 6],
+        armedGuardIndices: [0, 3],
         lvl,
       });
+
+      // 2 Stalker Hunter Guards without torches!
+      guards.push({
+        id: `g_stalker_a_${lvl}`,
+        floor: 1,
+        x: 110,
+        dir: 1,
+        speed: 1.18,
+        minX: 45,
+        maxX: arenaW - 45,
+        isHunter: true,
+        noTorch: true,
+        hasGun: false,
+        hasKey: false,
+      });
+      guards.push({
+        id: `g_stalker_b_${lvl}`,
+        floor: 3,
+        x: arenaW - 110,
+        dir: -1,
+        speed: 1.22,
+        minX: 45,
+        maxX: arenaW - 45,
+        isHunter: true,
+        noTorch: true,
+        hasGun: false,
+        hasKey: false,
+      });
+
+      const lasers = [
+        { id: `l1_${lvl}`, floor: 2, x: 230, active: true },
+        { id: `l2_${lvl}`, floor: 4, x: arenaW - 220, active: true },
+      ];
+      const laserSwitches = [
+        { id: `sw1_${lvl}`, targetLaserId: `l1_${lvl}`, floor: 4, x: arenaW - 90, isOff: false },
+        { id: `sw2_${lvl}`, targetLaserId: `l2_${lvl}`, floor: 1, x: 90, isOff: false },
+      ];
 
       const cctvs = [
         { floor: 2, x: 170, sweepDir: 1, angle: -28, maxAngle: 32, speed: 0.9 },
@@ -731,8 +860,9 @@ function generate100CuratedLevels() {
         ladderPathsCount: 3,
         stairs,
         guards,
-        rivalCount: 2,
-        rivalStartShafts: [90, arenaW - 90],
+        lasers,
+        laserSwitches,
+        rivalCount: 0, // No other thieves in levels 51-100!
         requiresPetrol: false,
         diamondsCount: 2, // 2 Diamonds!
         extraDiamond: { floor: 3, x: arenaW / 2 },
@@ -746,22 +876,58 @@ function generate100CuratedLevels() {
         stonePickup: { floor: 2, x: 80 },
       });
     }
-    // --- Tier 7: Levels 81 - 98 ---
+    // --- Tier 7: Levels 81 - 98 (Locked Case, Lasers, Stalker Guards, No Rival Thieves) ---
     else if (lvl <= 98) {
       const floorsCount = 6;
       const arenaW = 560;
       const ladderPathsCount = 3;
-      const guardCount = 8;
+      const guardCount = 6;
       const stairs = generateStaggeredLadders(floorsCount, arenaW, ladderPathsCount);
-      // Armed guards and designated key guard
       const guards = generateLevelGuards({
         floorsCount,
         guardCount,
         arenaW,
-        armedGuardIndices: [1, 5],
+        armedGuardIndices: [1, 4],
         keyGuardIndex: 2,
         lvl,
       });
+
+      // 2 Stalker Hunter Guards without torches!
+      guards.push({
+        id: `g_stalker_a_${lvl}`,
+        floor: 1,
+        x: 120,
+        dir: 1,
+        speed: 1.2,
+        minX: 45,
+        maxX: arenaW - 45,
+        isHunter: true,
+        noTorch: true,
+        hasGun: false,
+        hasKey: false,
+      });
+      guards.push({
+        id: `g_stalker_b_${lvl}`,
+        floor: 3,
+        x: arenaW - 120,
+        dir: -1,
+        speed: 1.24,
+        minX: 45,
+        maxX: arenaW - 45,
+        isHunter: true,
+        noTorch: true,
+        hasGun: false,
+        hasKey: false,
+      });
+
+      const lasers = [
+        { id: `l1_${lvl}`, floor: 2, x: 240, active: true },
+        { id: `l2_${lvl}`, floor: 4, x: arenaW - 200, active: true },
+      ];
+      const laserSwitches = [
+        { id: `sw1_${lvl}`, targetLaserId: `l1_${lvl}`, floor: 3, x: arenaW - 90, isOff: false },
+        { id: `sw2_${lvl}`, targetLaserId: `l2_${lvl}`, floor: 1, x: 90, isOff: false },
+      ];
 
       const cctvs = [
         { floor: 2, x: 180, sweepDir: 1, angle: -25, maxAngle: 30, speed: 0.95 },
@@ -775,8 +941,9 @@ function generate100CuratedLevels() {
         ladderPathsCount: 3,
         stairs,
         guards,
-        rivalCount: 2,
-        rivalStartShafts: [90, arenaW - 90],
+        lasers,
+        laserSwitches,
+        rivalCount: 0, // No other thieves in levels 51-100!
         requiresPetrol: false,
         diamondsCount: 1,
         diamondLockedInCase: true, // Locked in glass case!
@@ -789,16 +956,12 @@ function generate100CuratedLevels() {
         stonePickup: { floor: 2, x: 80 },
       });
     }
-    // --- Tier 8: Levels 99 - 100 (Final Boss / Treasure Hunt) ---
+    // --- Tier 8: Levels 99 - 100 (Final Boss Fortress, Lasers, Stalker Guards) ---
     else {
       const floorsCount = 6;
       const arenaW = 580;
       const stairs = generateStaggeredLadders(floorsCount, arenaW, 3);
 
-      // Level 99 & 100 Final Fortress:
-      // - 2 guards on top floor guarding the crown diamond (one carries the cage key)
-      // - 10 normal guards (flashlight)
-      // - 5 red light guards (sniper laser vision)
       const topFloor = floorsCount - 1;
       const guards = [
         // 2 Guards on top floor guarding crown diamond in cage
@@ -811,7 +974,7 @@ function generate100CuratedLevels() {
           minX: 50,
           maxX: arenaW / 2 - 20,
           hasGun: false,
-          hasKey: true, // Keycard to unlock the crown diamond cage!
+          hasKey: true,
           isBoss: false,
         },
         {
@@ -822,12 +985,12 @@ function generate100CuratedLevels() {
           speed: 1.1,
           minX: arenaW / 2 + 20,
           maxX: arenaW - 50,
-          hasGun: true, // Red light guard
+          hasGun: true,
           shootCooldown: 0,
           hasKey: false,
           isBoss: false,
         },
-        // 10 Normal Guards (Flashlights)
+        // 8 Normal Guards (Flashlights)
         { id: 'g_norm_0a', floor: 0, x: 120, dir: 1, speed: 1.2, minX: 45, maxX: arenaW / 2 - 30, hasGun: false, hasKey: false },
         { id: 'g_norm_0b', floor: 0, x: arenaW - 120, dir: -1, speed: 1.25, minX: arenaW / 2 + 30, maxX: arenaW - 45, hasGun: false, hasKey: false },
         { id: 'g_norm_1a', floor: 1, x: 90, dir: 1, speed: 1.2, minX: 45, maxX: arenaW / 2 - 20, hasGun: false, hasKey: false },
@@ -836,14 +999,23 @@ function generate100CuratedLevels() {
         { id: 'g_norm_2b', floor: 2, x: arenaW - 110, dir: -1, speed: 1.25, minX: arenaW / 2 + 20, maxX: arenaW - 45, hasGun: false, hasKey: false },
         { id: 'g_norm_3a', floor: 3, x: 130, dir: 1, speed: 1.3, minX: 45, maxX: arenaW / 2 - 20, hasGun: false, hasKey: false },
         { id: 'g_norm_3b', floor: 3, x: arenaW - 130, dir: -1, speed: 1.3, minX: arenaW / 2 + 20, maxX: arenaW - 45, hasGun: false, hasKey: false },
-        { id: 'g_norm_4a', floor: 4, x: 140, dir: 1, speed: 1.35, minX: 45, maxX: arenaW / 2 - 20, hasGun: false, hasKey: false },
-        { id: 'g_norm_4b', floor: 4, x: arenaW - 140, dir: -1, speed: 1.35, minX: arenaW / 2 + 20, maxX: arenaW - 45, hasGun: false, hasKey: false },
-        // 5 Red Light Guards (Snipers)
+        // 4 Red Light Guards (Snipers)
         { id: 'g_red_0', floor: 0, x: arenaW / 2, dir: 1, speed: 1.1, minX: 80, maxX: arenaW - 80, hasGun: true, shootCooldown: 40, hasKey: false },
         { id: 'g_red_1', floor: 1, x: arenaW / 2, dir: -1, speed: 1.15, minX: 80, maxX: arenaW - 80, hasGun: true, shootCooldown: 50, hasKey: false },
         { id: 'g_red_2', floor: 2, x: arenaW / 2, dir: 1, speed: 1.15, minX: 80, maxX: arenaW - 80, hasGun: true, shootCooldown: 45, hasKey: false },
         { id: 'g_red_3', floor: 3, x: arenaW / 2, dir: -1, speed: 1.2, minX: 80, maxX: arenaW - 80, hasGun: true, shootCooldown: 55, hasKey: false },
-        { id: 'g_red_4', floor: 4, x: arenaW / 2, dir: 1, speed: 1.2, minX: 80, maxX: arenaW - 80, hasGun: true, shootCooldown: 50, hasKey: false },
+        // 2 Stalker Hunter Guards without torches!
+        { id: 'g_stalker_boss_1', floor: 1, x: 120, dir: 1, speed: 1.25, minX: 45, maxX: arenaW - 45, isHunter: true, noTorch: true, hasGun: false, hasKey: false },
+        { id: 'g_stalker_boss_2', floor: 3, x: arenaW - 120, dir: -1, speed: 1.28, minX: 45, maxX: arenaW - 45, isHunter: true, noTorch: true, hasGun: false, hasKey: false },
+      ];
+
+      const lasers = [
+        { id: 'l_boss_1', floor: 2, x: 260, active: true },
+        { id: 'l_boss_2', floor: 4, x: arenaW - 240, active: true },
+      ];
+      const laserSwitches = [
+        { id: 'sw_boss_1', targetLaserId: 'l_boss_1', floor: 3, x: arenaW - 90, isOff: false },
+        { id: 'sw_boss_2', targetLaserId: 'l_boss_2', floor: 1, x: 90, isOff: false },
       ];
 
       const cctvs = [
@@ -858,11 +1030,13 @@ function generate100CuratedLevels() {
         ladderPathsCount: 3,
         stairs,
         guards,
-        rivalCount: 0, // In boss level, spotlight is on defeating the Big Guards & fleeing police
+        lasers,
+        laserSwitches,
+        rivalCount: 0, // No rivals in final boss!
         requiresPetrol: false,
         diamondsCount: 1,
         isMasterCrown: true,
-        diamondLockedInCase: true, // Crown diamond is locked in cage! Must steal key from top guard!
+        diamondLockedInCase: true,
         hasWeapons: true,
         gunPickup: { floor: 1, x: arenaW / 2, ammo: 6 },
         bombPickup: { floor: 3, x: arenaW / 2, count: 4 },
@@ -875,10 +1049,14 @@ function generate100CuratedLevels() {
 
     // Default Diamond location (Top Floor)
     const curLevel = levels[levels.length - 1];
-    curLevel.diamond = {
-      floor: curLevel.floorsCount - 1,
-      x: curLevel.arenaW / 2,
-    };
+    if (!curLevel.diamond) {
+      curLevel.diamond = {
+        floor: curLevel.floorsCount - 1,
+        x: curLevel.isDualBuilding ? 385 : Math.round(curLevel.arenaW / 2),
+      };
+    }
+    curLevel.initialDiamondFloor = curLevel.diamond.floor;
+    curLevel.initialDiamondX = curLevel.diamond.x;
   }
 
   return levels;
@@ -1072,6 +1250,19 @@ export default function ThiefEscapeGame({
     bombsRef.current = bombs;
   }, [bombs]);
 
+  // Security Lasers & Laser Toggle Switches
+  const [lasers, setLasers] = useState([]);
+  const lasersRef = useRef(lasers);
+  useEffect(() => {
+    lasersRef.current = lasers;
+  }, [lasers]);
+
+  const [laserSwitches, setLaserSwitches] = useState([]);
+  const laserSwitchesRef = useRef(laserSwitches);
+  useEffect(() => {
+    laserSwitchesRef.current = laserSwitches;
+  }, [laserSwitches]);
+
   const fuelWarningCooldownRef = useRef(false);
 
   // Save current level to persistent storage
@@ -1229,6 +1420,15 @@ export default function ThiefEscapeGame({
       setKeyStealProgress(0);
       keyStealProgressRef.current = 0;
 
+      // Lasers & Switches
+      const initialLasers = (cfg.lasers || []).map((l) => ({ ...l, active: true }));
+      setLasers(initialLasers);
+      lasersRef.current = initialLasers;
+
+      const initialSwitches = (cfg.laserSwitches || []).map((s) => ({ ...s, isOff: false }));
+      setLaserSwitches(initialSwitches);
+      laserSwitchesRef.current = initialSwitches;
+
       // Diamonds & Fuel
       setDiamondTaken(false);
       diamondTakenRef.current = false;
@@ -1303,9 +1503,9 @@ export default function ThiefEscapeGame({
         } else {
           // Return diamond to starting vault position on top floor when player is caught
           const curP = playerRef.current;
-          if (curP.hasDiamond) {
-            levelConfig.diamond.floor = levelConfig.floorsCount - 1;
-            levelConfig.diamond.x = Math.round(arenaW / 2);
+          if (curP.hasDiamond || diamondTakenRef.current) {
+            levelConfig.diamond.floor = levelConfig.initialDiamondFloor ?? (levelConfig.floorsCount - 1);
+            levelConfig.diamond.x = levelConfig.initialDiamondX ?? (levelConfig.isDualBuilding ? 385 : Math.round(arenaW / 2));
             diamondTakenRef.current = false;
             setDiamondTaken(false);
           }
@@ -1503,6 +1703,8 @@ export default function ThiefEscapeGame({
       const curGuards = guardsRef.current.map((g) => ({ ...g }));
       const curRivals = rivalsRef.current.map((r) => ({ ...r }));
       const curCctvs = cctvsRef.current.map((c) => ({ ...c }));
+      const curLasers = lasersRef.current.map((l) => ({ ...l }));
+      const curSwitches = laserSwitchesRef.current.map((s) => ({ ...s }));
 
       // --- 1. Police 10-Second Emergency Countdown ---
       if (policeActiveRef.current) {
@@ -1971,6 +2173,64 @@ export default function ThiefEscapeGame({
         }
       }
 
+      // Keycard Pickup on Floor (e.g. In Dual Building Left Tower)
+      if (levelConfig.keyPickup && !hasKeyRef.current && curPlayer.floor === levelConfig.keyPickup.floor && !curPlayer.isClimbing) {
+        if (Math.abs(curPlayer.x - levelConfig.keyPickup.x) < 28) {
+          hasKeyRef.current = true;
+          setHasKey(true);
+          playPerfectSound();
+          triggerPerfectHaptic();
+          juiceRef.current?.burst(levelConfig.keyPickup.x, getFloorY(levelConfig.keyPickup.floor) - 15, '#FFE600', 30);
+          juiceRef.current?.popup('🗝️ KEYCARD ACQUIRED!', 'Vault key stolen! Cross to unlock diamond cage!', '#FFE600');
+        }
+      }
+
+      // Laser Switch Proximity Interaction Check (Disarm Laser)
+      if (!curPlayer.isClimbing) {
+        let switchUpdated = false;
+        curSwitches.forEach((sw) => {
+          if (sw.floor === curPlayer.floor && Math.abs(curPlayer.x - sw.x) < 26) {
+            if (!sw.isOff) {
+              sw.isOff = true;
+              switchUpdated = true;
+              curLasers.forEach((l) => {
+                if (l.id === sw.targetLaserId) {
+                  l.active = false;
+                }
+              });
+              playSnapTickSound();
+              triggerMediumHaptic();
+              juiceRef.current?.popup('⚡ LASER DEACTIVATED!', 'Security laser grid powered down!', '#00F5FF');
+              juiceRef.current?.burst(sw.x, getFloorY(sw.floor) - 14, '#00F5FF', 24);
+            }
+          }
+        });
+        if (switchUpdated) {
+          lasersRef.current = curLasers;
+          laserSwitchesRef.current = curSwitches;
+          setLasers(curLasers);
+          setLaserSwitches(curSwitches);
+        }
+      }
+
+      // Laser Grid Hazard Check against Player (Touching active laser zaps player!)
+      for (const laser of curLasers) {
+        if (laser.active && curPlayer.floor === laser.floor && !curPlayer.isClimbing && !curPlayer.isHiding) {
+          if (Math.abs(curPlayer.x - laser.x) < 16) {
+            if (curPlayer.hasDiamond || diamondTakenRef.current) {
+              curPlayer.hasDiamond = false;
+              curPlayer.diamondsHeld = 0;
+              levelConfig.diamond.floor = levelConfig.initialDiamondFloor ?? (levelConfig.floorsCount - 1);
+              levelConfig.diamond.x = levelConfig.initialDiamondX ?? (levelConfig.isDualBuilding ? 385 : Math.round(arenaW / 2));
+              diamondTakenRef.current = false;
+              setDiamondTaken(false);
+            }
+            handlePlayerBusted('ZAPPED BY SECURITY LASER!');
+            return;
+          }
+        }
+      }
+
       // --- 4. CCTV Camera Sweeps & Floor Guard Alerts ---
       curCctvs.forEach((cam) => {
         cam.angle += cam.sweepDir * cam.speed;
@@ -2034,8 +2294,106 @@ export default function ThiefEscapeGame({
         if (g.alertTimer > 0) g.alertTimer -= 1;
         if (g.shootCooldown > 0) g.shootCooldown -= 1;
 
+        if (g.isHunter) {
+          // STALKER / HUNTER GUARD: Follows player silently without vision torch
+          if (g.pauseTimer > 0) {
+            g.pauseTimer -= 1;
+          } else if (curPlayer.isHiding) {
+            // Player hidden in window: Hunter loses track and paces slowly
+            g.x += g.dir * (g.speed * 0.7);
+            if (g.x >= g.maxX) {
+              g.x = g.maxX;
+              g.dir = -1;
+              g.pauseTimer = 25;
+            } else if (g.x <= g.minX) {
+              g.x = g.minX;
+              g.dir = 1;
+              g.pauseTimer = 25;
+            }
+          } else {
+            const targetFloor = curPlayer.floor;
+            const targetX = curPlayer.x;
+
+            if (g.floor === targetFloor && !g.isClimbing) {
+              // Same floor: follow player directly towards targetX
+              const dx = targetX - g.x;
+              if (Math.abs(dx) > 6) {
+                g.dir = dx > 0 ? 1 : -1;
+                g.x += g.dir * (g.speed * 1.25);
+                g.x = Math.max(g.minX, Math.min(g.maxX, g.x));
+              }
+            } else if (!g.isClimbing) {
+              // Different floor: find the best ladder to reach player's floor
+              const needUp = targetFloor > g.floor;
+              const candidates = (levelConfig.stairs || []).filter((st) =>
+                needUp
+                  ? st.fromFloor === g.floor && st.toFloor === g.floor + 1
+                  : st.toFloor === g.floor && st.fromFloor === g.floor - 1
+              );
+
+              if (candidates.length > 0) {
+                let best = candidates[0];
+                let bestDist = Math.abs(best.x - g.x);
+                for (let i = 1; i < candidates.length; i++) {
+                  const d = Math.abs(candidates[i].x - g.x);
+                  if (d < bestDist) {
+                    bestDist = d;
+                    best = candidates[i];
+                  }
+                }
+
+                const dx = best.x - g.x;
+                if (Math.abs(dx) > 6) {
+                  g.dir = dx > 0 ? 1 : -1;
+                  g.x += g.dir * (g.speed * 1.15);
+                  g.x = Math.max(g.minX, Math.min(g.maxX, g.x));
+                } else {
+                  // At ladder: climb to next floor!
+                  g.x = best.x;
+                  g.floor += needUp ? 1 : -1;
+                  if (levelConfig.isDualBuilding) {
+                    if (g.x < arenaW * 0.44) {
+                      g.minX = 25;
+                      g.maxX = Math.round(arenaW * 0.44);
+                    } else {
+                      g.minX = Math.round(arenaW * 0.56);
+                      g.maxX = arenaW - 25;
+                    }
+                  }
+                  g.pauseTimer = 18;
+                }
+              } else {
+                g.x += g.dir * g.speed;
+                if (g.x >= g.maxX) {
+                  g.x = g.maxX;
+                  g.dir = -1;
+                } else if (g.x <= g.minX) {
+                  g.x = g.minX;
+                  g.dir = 1;
+                }
+              }
+            }
+          }
+
+          // Hunter Catch Check:
+          if (!curPlayer.isHiding && !carStateRef.current.isEscaping && !carStateRef.current.thiefInside) {
+            if (g.floor === curPlayer.floor && Math.abs(g.x - curPlayer.x) < 22 && !curPlayer.isClimbing) {
+              if (curPlayer.hasDiamond || diamondTakenRef.current) {
+                curPlayer.hasDiamond = false;
+                curPlayer.diamondsHeld = 0;
+                levelConfig.diamond.floor = levelConfig.initialDiamondFloor ?? (levelConfig.floorsCount - 1);
+                levelConfig.diamond.x = levelConfig.initialDiamondX ?? (levelConfig.isDualBuilding ? 385 : Math.round(arenaW / 2));
+                diamondTakenRef.current = false;
+                setDiamondTaken(false);
+                juiceRef.current?.popup('💎 DIAMOND RESET!', 'Stalker guard returned diamond to vault!', '#00F5FF');
+              }
+              handlePlayerBusted('CAUGHT BY STALKER GUARD!');
+              return;
+            }
+          }
+        }
         // A. Guard Chasing Player due to CCTV or Sound Alert
-        if (g.isChasing && g.chaseTimer > 0) {
+        else if (g.isChasing && g.chaseTimer > 0) {
           g.chaseTimer -= 1;
           const distToPlayer = curPlayer.x - g.x;
           if (Math.abs(distToPlayer) > 8) {
@@ -2117,7 +2475,10 @@ export default function ThiefEscapeGame({
           const dy = playerY - gy;
 
           let spotted = false;
-          if (g.hasGun) {
+          if (g.isHunter || g.noTorch) {
+            // Stalker / Hunter guard has NO vision torch: tracks and catches player by physical touch
+            spotted = false;
+          } else if (g.hasGun) {
             // Armed sniper wide angle vision cone
             spotted = dx > 0 && dx < SNIPER_VISION_LEN && Math.abs(dy) <= (dx / SNIPER_VISION_LEN) * 48 + 18;
           } else {
@@ -2135,6 +2496,14 @@ export default function ThiefEscapeGame({
             const stair = levelConfig.stairs[curPlayer.stairIdx];
             if (stair && (g.floor === stair.fromFloor || g.floor === stair.toFloor)) {
               if (Math.abs(g.x - stair.x) < 22 && Math.abs(playerY - gy) < 36) {
+                if (curPlayer.hasDiamond || diamondTakenRef.current) {
+                  curPlayer.hasDiamond = false;
+                  curPlayer.diamondsHeld = 0;
+                  levelConfig.diamond.floor = levelConfig.initialDiamondFloor ?? (levelConfig.floorsCount - 1);
+                  levelConfig.diamond.x = levelConfig.initialDiamondX ?? (levelConfig.isDualBuilding ? 385 : Math.round(arenaW / 2));
+                  diamondTakenRef.current = false;
+                  setDiamondTaken(false);
+                }
                 handlePlayerBusted('GUARD CAUGHT YOU ON THE LADDER!');
                 return;
               }
@@ -3045,10 +3414,14 @@ export default function ThiefEscapeGame({
       guardsRef.current = curGuards;
       rivalsRef.current = curRivals;
       cctvsRef.current = curCctvs;
+      lasersRef.current = curLasers;
+      laserSwitchesRef.current = curSwitches;
       setPlayer(curPlayer);
       setGuards(curGuards);
       setRivals(curRivals);
       setCctvs(curCctvs);
+      setLasers(curLasers);
+      setLaserSwitches(curSwitches);
     }, 20);
 
     return () => clearInterval(interval);
@@ -3354,6 +3727,16 @@ export default function ThiefEscapeGame({
               )}
 
               {/* Roof decorations */}
+              {shape === 'TWO_BUILDINGS' && (
+                <G>
+                  {/* Left Tower Antenna */}
+                  <Line x1={arenaW * 0.22} y1={15} x2={arenaW * 0.22} y2={-ROOF_PAD + 10} stroke={theme.accent} strokeWidth={2} />
+                  <Circle cx={arenaW * 0.22} cy={-ROOF_PAD + 10} r={3} fill={theme.accent} />
+                  {/* Right Tower Antenna */}
+                  <Line x1={arenaW * 0.78} y1={15} x2={arenaW * 0.78} y2={-ROOF_PAD + 10} stroke={theme.accent} strokeWidth={2} />
+                  <Circle cx={arenaW * 0.78} cy={-ROOF_PAD + 10} r={3} fill={theme.accent} />
+                </G>
+              )}
               {shape === 'SPIRE' && (
                 <G>
                   <Line x1={arenaW / 2} y1={-35} x2={arenaW / 2} y2={-ROOF_PAD + 6} stroke={theme.accent} strokeWidth={2} />
@@ -3564,6 +3947,66 @@ export default function ThiefEscapeGame({
                 );
               })}
 
+              {/* Security Lasers */}
+              {lasers.map((laser) => {
+                const fy = getFloorY(laser.floor);
+                const beamTop = fy - 52;
+                const beamBottom = fy;
+                return (
+                  <G key={laser.id}>
+                    {laser.active ? (
+                      <G>
+                        {/* Red Laser Emitters */}
+                        <Rect x={laser.x - 7} y={beamTop - 4} width={14} height={6} rx={2} fill="#1E0A1E" stroke="#FF0055" strokeWidth={1.2} />
+                        <Circle cx={laser.x} cy={beamTop - 1} r={2} fill="#FF0055" />
+                        <Rect x={laser.x - 7} y={beamBottom - 2} width={14} height={5} rx={2} fill="#1E0A1E" stroke="#FF0055" strokeWidth={1.2} />
+                        <Circle cx={laser.x} cy={beamBottom} r={2} fill="#FF0055" />
+                        {/* Glowing Red Laser Beam */}
+                        <Line x1={laser.x} y1={beamTop} x2={laser.x} y2={beamBottom} stroke="#FF0055" strokeWidth={8} opacity={0.35} />
+                        <Line x1={laser.x} y1={beamTop} x2={laser.x} y2={beamBottom} stroke="#FF0055" strokeWidth={3} />
+                        <Line x1={laser.x} y1={beamTop} x2={laser.x} y2={beamBottom} stroke="#FFFFFF" strokeWidth={1.2} strokeDasharray="5 3" />
+                        <SvgText x={laser.x} y={beamTop - 8} fontSize={7} fill="#FF0055" fontWeight="bold" textAnchor="middle">
+                          ⚡ LASER
+                        </SvgText>
+                      </G>
+                    ) : (
+                      <G opacity={0.4}>
+                        {/* Disabled Green Emitters */}
+                        <Rect x={laser.x - 6} y={beamTop - 3} width={12} height={5} rx={2} fill="#0A1E14" stroke="#00F5FF" strokeWidth={1} />
+                        <Circle cx={laser.x} cy={beamTop} r={1.5} fill="#00F5FF" />
+                        <Rect x={laser.x - 6} y={beamBottom - 2} width={12} height={4} rx={2} fill="#0A1E14" stroke="#00F5FF" strokeWidth={1} />
+                        <Circle cx={laser.x} cy={beamBottom} r={1.5} fill="#00F5FF" />
+                        {/* Inactive Dotted Beam */}
+                        <Line x1={laser.x} y1={beamTop} x2={laser.x} y2={beamBottom} stroke="#00F5FF" strokeWidth={1} strokeDasharray="3 4" />
+                        <SvgText x={laser.x} y={beamTop - 6} fontSize={6} fill="#00F5FF" textAnchor="middle">
+                          OFF
+                        </SvgText>
+                      </G>
+                    )}
+                  </G>
+                );
+              })}
+
+              {/* Laser Toggle Switches */}
+              {laserSwitches.map((sw) => {
+                const fy = getFloorY(sw.floor);
+                const swColor = sw.isOff ? '#00F5FF' : '#FF0055';
+                return (
+                  <G key={sw.id}>
+                    {/* Wall Console Panel */}
+                    <Rect x={sw.x - 12} y={fy - 28} width={24} height={24} rx={4} fill="#0A0E24" stroke={swColor} strokeWidth={1.5} />
+                    <Rect x={sw.x - 7} y={fy - 23} width={14} height={14} rx={2} fill="#050714" stroke={swColor} strokeWidth={1} />
+                    {/* Button / Lever */}
+                    <Circle cx={sw.x} cy={fy - 16} r={4.5} fill={swColor} />
+                    <Circle cx={sw.x} cy={fy - 16} r={2} fill="#FFFFFF" />
+                    {/* Label */}
+                    <SvgText x={sw.x} y={fy - 31} fontSize={7} fill={swColor} fontWeight="bold" textAnchor="middle">
+                      {sw.isOff ? 'DISARMED' : '⚡ SWITCH'}
+                    </SvgText>
+                  </G>
+                );
+              })}
+
               {/* Ground Floor Getaway Car */}
               <G opacity={isBlackout ? 0.35 : 1}>
                 {player.hasDiamond && (!levelConfig.requiresPetrol || player.hasPetrol) && !carState.isEscaping && (
@@ -3705,6 +4148,19 @@ export default function ThiefEscapeGame({
                 </G>
               )}
 
+              {/* Floor Keycard Pickup (e.g. in Dual Building Left Tower) */}
+              {!isBlackout && levelConfig.keyPickup && !hasKey && (
+                <G>
+                  <Circle cx={levelConfig.keyPickup.x} cy={getFloorY(levelConfig.keyPickup.floor) - 14} r={11} fill="rgba(255, 230, 0, 0.2)" stroke="#FFE600" strokeWidth={1.2} />
+                  <SvgText x={levelConfig.keyPickup.x} y={getFloorY(levelConfig.keyPickup.floor) - 9} fontSize={12} textAnchor="middle">
+                    🗝️
+                  </SvgText>
+                  <SvgText x={levelConfig.keyPickup.x} y={getFloorY(levelConfig.keyPickup.floor) - 22} fontSize={7} fill="#FFE600" fontWeight="bold" textAnchor="middle">
+                    KEYCARD
+                  </SvgText>
+                </G>
+              )}
+
               {/* Diamond & Crown - In Level 40s Blackout: NOT SHOWN because it's pitch dark! */}
               {!diamondTaken && !isBlackout && (
                 <G>
@@ -3776,31 +4232,43 @@ export default function ThiefEscapeGame({
 
                 return (
                   <G key={g.id}>
-                    {/* Flashlight / Wide Laser Beam */}
-                    {g.hasGun ? (
-                      g.dir === 1 ? (
-                        <Polygon
-                          points={`${g.x + 8},${gy - 18} ${g.x + visLen},${gy - 18 - 48} ${g.x + visLen},${gy - 18 + 48}`}
-                          fill={beamRight}
-                        />
+                    {/* Flashlight / Wide Laser Beam (Omitted if noTorch is true) */}
+                    {!g.noTorch && (
+                      g.hasGun ? (
+                        g.dir === 1 ? (
+                          <Polygon
+                            points={`${g.x + 8},${gy - 18} ${g.x + visLen},${gy - 18 - 48} ${g.x + visLen},${gy - 18 + 48}`}
+                            fill={beamRight}
+                          />
+                        ) : (
+                          <Polygon
+                            points={`${g.x - 8},${gy - 18} ${g.x - visLen},${gy - 18 - 48} ${g.x - visLen},${gy - 18 + 48}`}
+                            fill={beamLeft}
+                          />
+                        )
                       ) : (
-                        <Polygon
-                          points={`${g.x - 8},${gy - 18} ${g.x - visLen},${gy - 18 - 48} ${g.x - visLen},${gy - 18 + 48}`}
-                          fill={beamLeft}
-                        />
+                        g.dir === 1 ? (
+                          <Polygon
+                            points={`${g.x + 8},${gy - 18} ${g.x + visLen},${gy - 32} ${g.x + visLen},${gy - 2}`}
+                            fill={beamRight}
+                          />
+                        ) : (
+                          <Polygon
+                            points={`${g.x - 8},${gy - 18} ${g.x - visLen},${gy - 32} ${g.x - visLen},${gy - 2}`}
+                            fill={beamLeft}
+                          />
+                        )
                       )
-                    ) : (
-                      g.dir === 1 ? (
-                        <Polygon
-                          points={`${g.x + 8},${gy - 18} ${g.x + visLen},${gy - 32} ${g.x + visLen},${gy - 2}`}
-                          fill={beamRight}
-                        />
-                      ) : (
-                        <Polygon
-                          points={`${g.x - 8},${gy - 18} ${g.x - visLen},${gy - 32} ${g.x - visLen},${gy - 2}`}
-                          fill={beamLeft}
-                        />
-                      )
+                    )}
+
+                    {/* Stalker / Hunter Guard Eye Badge */}
+                    {g.isHunter && (
+                      <G>
+                        <Circle cx={g.x} cy={gy - 38} r={6.5} fill="#FF0055" opacity={0.9} />
+                        <SvgText x={g.x} y={gy - 34} fontSize={8} fill="#FFFFFF" textAnchor="middle">
+                          👁️
+                        </SvgText>
+                      </G>
                     )}
 
                     {/* Question Mark Bubble when investigating stone */}
@@ -3838,12 +4306,19 @@ export default function ThiefEscapeGame({
                       </G>
                     )}
 
-                    {/* Guard Body: Big for Bosses, Armed Rifle for Snipers */}
+                    {/* Guard Body: Big for Bosses, Stealth for Hunter, Armed Rifle for Snipers */}
                     {g.isBoss ? (
                       <G>
                         <Rect x={g.x - 10} y={gy - 34} width={20} height={32} rx={4} fill="#1A0D2E" stroke="#FF0055" strokeWidth={2} />
                         <Circle cx={g.x} cy={gy - 36} r={7} fill="#FF0055" />
                         <Line x1={g.x - 6} y1={gy - 20} x2={g.x + g.dir * 16} y2={gy - 20} stroke="#FFE600" strokeWidth={3} />
+                      </G>
+                    ) : g.isHunter ? (
+                      <G>
+                        {/* Stealth Hunter Stalker Outfit */}
+                        <Rect x={g.x - 6} y={gy - 26} width={12} height={24} rx={3} fill="#16081F" stroke="#FF0055" strokeWidth={1.8} />
+                        <Circle cx={g.x} cy={gy - 28} r={5} fill="#0B0410" stroke="#FF0055" strokeWidth={1.2} />
+                        <Line x1={g.x - 3} y1={gy - 28} x2={g.x + g.dir * 5} y2={gy - 28} stroke="#FF0055" strokeWidth={2.4} />
                       </G>
                     ) : (
                       <G>
@@ -4222,6 +4697,10 @@ export default function ThiefEscapeGame({
                 const tierTag =
                   cfg.isBossLevel
                     ? '👑 FINAL BOSS'
+                    : cfg.isDualBuilding
+                    ? '🏢 DUAL TOWERS'
+                    : cfg.lasers && cfg.lasers.length > 0
+                    ? '⚡ LASER SECURITY'
                     : cfg.diamondLockedInCase
                     ? '🗝️ PICKPOCKET KEY'
                     : cfg.diamondsCount === 2
