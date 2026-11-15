@@ -572,6 +572,7 @@ export default function BoxEscapeGame({
   const [modalVisible, setModalVisible] = useState(false);
   const [isPullMode, setIsPullMode] = useState(false);
   const [facing, setFacing] = useState({ dx: 0, dy: 1 });
+  const [crateSkin, setCrateSkin] = useState('CYBER');
 
   // Load high score
   useEffect(() => {
@@ -884,7 +885,59 @@ export default function BoxEscapeGame({
     startLevel(currentLevel);
   }, [startLevel, currentLevel]);
 
-  // Swipe gesture support
+  // BFS pathfinding for tap-to-move
+  const findPathTo = useCallback(
+    (targetX, targetY) => {
+      if (
+        targetX < 0 ||
+        targetX >= levelConfig.width ||
+        targetY < 0 ||
+        targetY >= levelConfig.height
+      ) {
+        return null;
+      }
+      if (levelConfig.walls.some((w) => w.x === targetX && w.y === targetY)) {
+        return null;
+      }
+
+      const queue = [[playerPos.x, playerPos.y, []]];
+      const visited = new Set([`${playerPos.x},${playerPos.y}`]);
+      const lasersActive = !areLasersOpen();
+
+      while (queue.length > 0) {
+        const [cx, cy, path] = queue.shift();
+        if (cx === targetX && cy === targetY) {
+          return path;
+        }
+
+        const dirs = [
+          [0, -1],
+          [1, 0],
+          [0, 1],
+          [-1, 0],
+        ];
+
+        for (const [dx, dy] of dirs) {
+          const nx = cx + dx;
+          const ny = cy + dy;
+          const key = `${nx},${ny}`;
+
+          if (nx < 0 || nx >= levelConfig.width || ny < 0 || ny >= levelConfig.height) continue;
+          if (visited.has(key)) continue;
+          if (levelConfig.walls.some((w) => w.x === nx && w.y === ny)) continue;
+          if (lasersActive && levelConfig.lasers.some((l) => l.x === nx && l.y === ny)) continue;
+          if (boxes.some((b) => b.x === nx && b.y === ny) && !(nx === targetX && ny === targetY)) continue;
+
+          visited.add(key);
+          queue.push([nx, ny, [...path, [dx, dy]]]);
+        }
+      }
+      return null;
+    },
+    [levelConfig, playerPos, areLasersOpen, boxes]
+  );
+
+  // Swipe & Tap gesture support
   const touchStartRef = useRef({ x: 0, y: 0 });
   const handleTouchStart = (e) => {
     touchStartRef.current = {
@@ -904,6 +957,24 @@ export default function BoxEscapeGame({
         handleMove(dx > 0 ? 1 : -1, 0);
       } else {
         handleMove(0, dy > 0 ? 1 : -1);
+      }
+    } else if (Math.max(absX, absY) <= 18) {
+      // Direct Tap-to-Move & Push
+      const locX = e.nativeEvent.locationX;
+      const locY = e.nativeEvent.locationY;
+      if (locX != null && locY != null && cellSize > 0) {
+        const tapX = Math.floor(locX / cellSize);
+        const tapY = Math.floor(locY / cellSize);
+        const diffX = tapX - playerPos.x;
+        const diffY = tapY - playerPos.y;
+        if (Math.abs(diffX) + Math.abs(diffY) === 1) {
+          handleMove(diffX, diffY);
+        } else if (diffX !== 0 || diffY !== 0) {
+          const path = findPathTo(tapX, tapY);
+          if (path && path.length > 0) {
+            handleMove(path[0][0], path[0][1]);
+          }
+        }
       }
     }
   };
@@ -998,6 +1069,22 @@ export default function BoxEscapeGame({
           >
             <Svg width={gridPixelWidth} height={gridPixelHeight}>
               <Defs>
+                <SvgLinearGradient id="crateCyberGrad" x1="0" y1="0" x2="1" y2="1">
+                  <Stop offset="0%" stopColor="#00F5FF" stopOpacity="0.9" />
+                  <Stop offset="50%" stopColor="#7928CA" stopOpacity="0.85" />
+                  <Stop offset="100%" stopColor="#FF007F" stopOpacity="0.9" />
+                </SvgLinearGradient>
+
+                <SvgLinearGradient id="crateCyberCore" x1="0" y1="0" x2="1" y2="1">
+                  <Stop offset="0%" stopColor="#0B132B" stopOpacity="1" />
+                  <Stop offset="100%" stopColor="#1C2541" stopOpacity="1" />
+                </SvgLinearGradient>
+
+                <SvgLinearGradient id="crateActiveSwitchGrad" x1="0" y1="0" x2="1" y2="1">
+                  <Stop offset="0%" stopColor="#39FF14" stopOpacity="0.95" />
+                  <Stop offset="100%" stopColor="#00F5D4" stopOpacity="0.95" />
+                </SvgLinearGradient>
+
                 <SvgLinearGradient id="crateWoodGrad" x1="0" y1="0" x2="0" y2="1">
                   <Stop offset="0%" stopColor="#C88532" stopOpacity="1" />
                   <Stop offset="50%" stopColor="#A46219" stopOpacity="1" />
@@ -1180,6 +1267,81 @@ export default function BoxEscapeGame({
                 const bw = cellSize - pad * 2;
                 const bh = cellSize - pad * 2;
                 const onSwitch = levelConfig.switches.some((s) => s.x === b.x && s.y === b.y);
+
+                if (crateSkin === 'CYBER') {
+                  return (
+                    <G key={b.id}>
+                      {/* Deep Ground Shadow */}
+                      <Rect
+                        x={bx + pad + 2}
+                        y={by + pad + 3.5}
+                        width={bw}
+                        height={bh}
+                        rx={5}
+                        fill="rgba(0, 0, 0, 0.65)"
+                      />
+
+                      {/* Outer Cyber Crate Body */}
+                      <Rect
+                        x={bx + pad}
+                        y={by + pad}
+                        width={bw}
+                        height={bh}
+                        rx={5}
+                        fill={onSwitch ? 'url(#crateActiveSwitchGrad)' : 'url(#crateCyberGrad)'}
+                        stroke={onSwitch ? '#39FF14' : '#00F5FF'}
+                        strokeWidth={onSwitch ? 2 : 1.5}
+                      />
+
+                      {/* Inner Dark Tech Matrix Core */}
+                      <Rect
+                        x={bx + pad + 3.5}
+                        y={by + pad + 3.5}
+                        width={bw - 7}
+                        height={bh - 7}
+                        rx={3}
+                        fill="url(#crateCyberCore)"
+                        stroke={onSwitch ? 'rgba(57, 255, 20, 0.6)' : 'rgba(0, 245, 255, 0.4)'}
+                        strokeWidth={0.8}
+                      />
+
+                      {/* Neon Circuit X Energy Cross */}
+                      <Line
+                        x1={bx + pad + 5}
+                        y1={by + pad + 5}
+                        x2={bx + pad + bw - 5}
+                        y2={by + pad + bh - 5}
+                        stroke={onSwitch ? '#39FF14' : '#00F5FF'}
+                        strokeWidth={onSwitch ? 2.2 : 1.6}
+                        opacity={0.85}
+                      />
+                      <Line
+                        x1={bx + pad + bw - 5}
+                        y1={by + pad + 5}
+                        x2={bx + pad + 5}
+                        y2={by + pad + bh - 5}
+                        stroke={onSwitch ? '#39FF14' : '#00F5FF'}
+                        strokeWidth={onSwitch ? 2.2 : 1.6}
+                        opacity={0.85}
+                      />
+
+                      {/* Center Quantum Power Node */}
+                      <Circle
+                        cx={bx + pad + bw / 2}
+                        cy={by + pad + bh / 2}
+                        r={bw * 0.16}
+                        fill={onSwitch ? '#39FF14' : '#00F5FF'}
+                        opacity={0.9}
+                      />
+                      <Circle
+                        cx={bx + pad + bw / 2}
+                        cy={by + pad + bh / 2}
+                        r={bw * 0.08}
+                        fill="#FFFFFF"
+                      />
+                    </G>
+                  );
+                }
 
                 return (
                   <G key={b.id}>
@@ -1691,6 +1853,22 @@ export default function BoxEscapeGame({
             >
               <Text style={styles.actionBtnText}>⚡ RESTART</Text>
             </Pressable>
+
+            <Pressable
+              onPress={() => {
+                setCrateSkin((s) => (s === 'CYBER' ? 'WOOD' : 'CYBER'));
+                triggerLightHaptic();
+                playTapSound();
+              }}
+              style={({ pressed }) => [
+                styles.actionBtn,
+                pressed && { transform: [{ scale: 0.95 }] },
+              ]}
+            >
+              <Text style={styles.actionBtnText}>
+                {crateSkin === 'CYBER' ? '⚡ CYBER' : '📦 WOOD'}
+              </Text>
+            </Pressable>
           </View>
 
           {/* 4-Way Push Directional D-Pad */}
@@ -1892,7 +2070,9 @@ const styles = StyleSheet.create({
   },
   actionToolBar: {
     flexDirection: 'row',
-    gap: 10,
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 8,
     marginBottom: 12,
   },
   actionBtn: {

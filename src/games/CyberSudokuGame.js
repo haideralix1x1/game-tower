@@ -9,7 +9,6 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, { FadeIn, ZoomIn } from 'react-native-reanimated';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS } from '../../styles';
 import MiniGameHeader from '../components/MiniGameHeader';
@@ -29,6 +28,8 @@ import {
 } from '../utils/sound';
 
 const STORAGE_KEY = '@game_tower:best_sudoku_v1';
+const STORAGE_STATE_PREFIX = '@game_tower:sudoku_state_v2_';
+const STORAGE_MODE_KEY = '@game_tower:sudoku_mode_v2';
 
 const monoFont = Platform.select({
   ios: 'Menlo',
@@ -144,9 +145,16 @@ const generateSudokuPuzzle = (clueCount = 34) => {
   return { puzzle, solution };
 };
 
+// Format timer MM:SS
+const formatTime = (totalSec) => {
+  const mins = Math.floor(totalSec / 60);
+  const secs = totalSec % 60;
+  return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+};
+
 export default function CyberSudokuGame({ onBackToHub, onScoreUpdate }) {
   const insets = useSafeAreaInsets();
-  const { width, height } = useWindowDimensions();
+  const { width } = useWindowDimensions();
   const safeBottom = Math.max(insets.bottom || 0, Platform.OS === 'android' ? 24 : 14);
 
   const boardSize = Math.min(364, width - 24);
@@ -173,30 +181,143 @@ export default function CyberSudokuGame({ onBackToHub, onScoreUpdate }) {
 
   const [selected, setSelected] = useState([4, 4]); // [row, col]
   const [pencilMode, setPencilMode] = useState(false);
-  const [history, setHistory] = useState([]);
   const [mistakes, setMistakes] = useState(0);
   const [score, setScore] = useState(0);
   const [bestScore, setBestScore] = useState(0);
   const [timerSec, setTimerSec] = useState(0);
   const [gameState, setGameState] = useState('PLAYING');
 
+  // Multi-mode active state cache
+  const modeStatesRef = useRef({});
+  const isLoadedRef = useRef(false);
+
+  // Helper to persist current snapshot of a mode to AsyncStorage & in-memory cache
+  const saveModeSnapshot = (key, snapshot) => {
+    modeStatesRef.current[key] = snapshot;
+    try {
+      AsyncStorage.setItem(STORAGE_STATE_PREFIX + key, JSON.stringify(snapshot));
+    } catch {}
+  };
+
+  // Helper to load snapshot from cache or AsyncStorage
+  const loadModeSnapshot = async (key) => {
+    if (modeStatesRef.current[key]) {
+      return modeStatesRef.current[key];
+    }
+    try {
+      const raw = await AsyncStorage.getItem(STORAGE_STATE_PREFIX + key);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && parsed.board && Array.isArray(parsed.board) && parsed.puzzleData) {
+          modeStatesRef.current[key] = parsed;
+          return parsed;
+        }
+      }
+    } catch {}
+    return null;
+  };
+
+
+  // Initialize fresh puzzle for a specific mode
+  const initGame = useCallback(
+    (mKey) => {
+      const targetModeKey = mKey || modeKey;
+      const m = SUDOKU_MODES[targetModeKey] || activeMode;
+      const generated = generateSudokuPuzzle(m.clues);
+      const newBoard = generated.puzzle.map((row, r) =>
+        row.map((val, c) => ({
+          r,
+          c,
+          value: val,
+          initial: val !== 0,
+          notes: [],
+          error: false,
+        }))
+      );
+
+      setModeKey(targetModeKey);
+      setPuzzleData(generated);
+      setBoard(newBoard);
+      setSelected([4, 4]);
+      setPencilMode(false);
+      setMistakes(0);
+      setScore(0);
+      setTimerSec(0);
+      setGameState('PLAYING');
+
+      const freshState = {
+        modeKey: targetModeKey,
+        puzzleData: generated,
+        board: newBoard,
+        selected: [4, 4],
+        mistakes: 0,
+        score: 0,
+        timerSec: 0,
+        gameState: 'PLAYING',
+      };
+      saveModeSnapshot(targetModeKey, freshState);
+      AsyncStorage.setItem(STORAGE_MODE_KEY, targetModeKey).catch(() => {});
+
+      if (juiceRef.current) juiceRef.current.flash(m.accent);
+    },
+    [activeMode, modeKey]
+  );
+
+  // Initial Load: restore best score, active mode, and exact board state
   useEffect(() => {
     (async () => {
       try {
-        const saved = await AsyncStorage.getItem(STORAGE_KEY);
-        if (saved) setBestScore(parseInt(saved, 10) || 0);
-      } catch {}
-    })();
-  }, []);
+        const savedBest = await AsyncStorage.getItem(STORAGE_KEY);
+        if (savedBest) setBestScore(parseInt(savedBest, 10) || 0);
 
-  // Timer
+        const savedMode = await AsyncStorage.getItem(STORAGE_MODE_KEY);
+        const mKey = savedMode && SUDOKU_MODES[savedMode] ? savedMode : 'MEDIUM';
+
+        const saved = await loadModeSnapshot(mKey);
+        if (saved && saved.board && Array.isArray(saved.board) && saved.puzzleData) {
+          setModeKey(mKey);
+          setPuzzleData(saved.puzzleData);
+          setBoard(saved.board);
+          setSelected(saved.selected || [4, 4]);
+          setMistakes(saved.mistakes || 0);
+          setScore(saved.score || 0);
+          setTimerSec(saved.timerSec || 0);
+          setGameState(saved.gameState || 'PLAYING');
+        } else {
+          initGame(mKey);
+        }
+      } catch {
+        initGame('MEDIUM');
+      } finally {
+        isLoadedRef.current = true;
+      }
+    })();
+  }, [initGame]);
+
+  // Timer with background periodic autosave
   useEffect(() => {
     if (gameState !== 'PLAYING') return () => {};
     const interval = setInterval(() => {
-      setTimerSec((s) => s + 1);
+      setTimerSec((s) => {
+        const next = s + 1;
+        if (next % 5 === 0) {
+          const snapshot = {
+            modeKey,
+            puzzleData,
+            board,
+            selected,
+            mistakes,
+            score,
+            timerSec: next,
+            gameState,
+          };
+          saveModeSnapshot(modeKey, snapshot);
+        }
+        return next;
+      });
     }, 1000);
     return () => clearInterval(interval);
-  }, [gameState]);
+  }, [gameState, modeKey, puzzleData, board, selected, mistakes, score]);
 
   const updateBest = useCallback(
     async (nextScore) => {
@@ -211,39 +332,50 @@ export default function CyberSudokuGame({ onBackToHub, onScoreUpdate }) {
     [bestScore, onScoreUpdate]
   );
 
-  const initGame = useCallback((mKey) => {
-    const m = mKey ? SUDOKU_MODES[mKey] : activeMode;
-    const generated = generateSudokuPuzzle(m.clues);
-    setPuzzleData(generated);
-    setBoard(
-      generated.puzzle.map((row, r) =>
-        row.map((val, c) => ({
-          r,
-          c,
-          value: val,
-          initial: val !== 0,
-          notes: [],
-          error: false,
-        }))
-      )
-    );
-    setSelected([4, 4]);
-    setHistory([]);
-    setMistakes(0);
-    setTimerSec(0);
-    setGameState('PLAYING');
-    if (juiceRef.current) juiceRef.current.flash(m.accent);
-  }, [activeMode]);
 
-  const switchMode = useCallback((newKey) => {
-    if (newKey === modeKey) return;
-    triggerLightHaptic();
-    playTapSound();
-    setModeKey(newKey);
-    initGame(newKey);
-  }, [modeKey, initGame]);
+  // Mode Switcher: saves current mode and restores previous mode data
+  const switchMode = useCallback(
+    async (newKey) => {
+      if (newKey === modeKey) return;
+      triggerLightHaptic();
+      playTapSound();
 
-  // Deep clone of board for immutable state updates & history
+      // 1. Snapshot current active mode state
+      const currentSnapshot = {
+        modeKey,
+        puzzleData,
+        board,
+        selected,
+        mistakes,
+        score,
+        timerSec,
+        gameState,
+      };
+      saveModeSnapshot(modeKey, currentSnapshot);
+      AsyncStorage.setItem(STORAGE_MODE_KEY, newKey).catch(() => {});
+
+      // 2. Load target mode state
+      const saved = await loadModeSnapshot(newKey);
+      if (saved && saved.board && Array.isArray(saved.board) && saved.puzzleData) {
+        setModeKey(newKey);
+        setPuzzleData(saved.puzzleData);
+        setBoard(saved.board);
+        setSelected(saved.selected || [4, 4]);
+        setPencilMode(false);
+        setMistakes(saved.mistakes || 0);
+        setScore(saved.score || 0);
+        setTimerSec(saved.timerSec || 0);
+        setGameState(saved.gameState || 'PLAYING');
+        if (juiceRef.current) juiceRef.current.flash(SUDOKU_MODES[newKey].accent);
+      } else {
+        // First time in this mode: generate fresh puzzle
+        initGame(newKey);
+      }
+    },
+    [modeKey, puzzleData, board, selected, mistakes, score, timerSec, gameState, initGame]
+  );
+
+  // Deep clone of board for immutable state updates
   const cloneBoard = (currentBoard) =>
     currentBoard.map((row) =>
       row.map((cell) => ({
@@ -252,15 +384,13 @@ export default function CyberSudokuGame({ onBackToHub, onScoreUpdate }) {
       }))
     );
 
-  // Keypad Number Press Handler
+  // Keypad Number Press Handler with persistence
   const handleNumberInput = useCallback(
     (num) => {
       if (gameState !== 'PLAYING' || !selected) return;
       const [r, c] = selected;
       const cell = board[r][c];
       if (cell.initial) return;
-
-      const previousBoard = cloneBoard(board);
 
       if (pencilMode) {
         // Toggle Pencil Note
@@ -275,8 +405,17 @@ export default function CyberSudokuGame({ onBackToHub, onScoreUpdate }) {
           targetCell.notes = [...targetCell.notes, num].sort((a, b) => a - b);
         }
 
-        setHistory((prev) => [...prev, previousBoard]);
         setBoard(newBoard);
+        saveModeSnapshot(modeKey, {
+          modeKey,
+          puzzleData,
+          board: newBoard,
+          selected,
+          mistakes,
+          score,
+          timerSec,
+          gameState,
+        });
         triggerLightHaptic();
         playTapSound();
       } else {
@@ -284,6 +423,10 @@ export default function CyberSudokuGame({ onBackToHub, onScoreUpdate }) {
         const newBoard = cloneBoard(board);
         const targetCell = newBoard[r][c];
         const correctVal = puzzleData.solution[r][c];
+
+        let nextMistakes = mistakes;
+        let nextScore = score;
+        let nextGameState = gameState;
 
         if (targetCell.value === num) {
           // Toggle off
@@ -299,10 +442,11 @@ export default function CyberSudokuGame({ onBackToHub, onScoreUpdate }) {
           if (isWrong) {
             triggerSliceHaptic();
             playSliceSound();
-            const nextMistakes = mistakes + 1;
+            nextMistakes = mistakes + 1;
             setMistakes(nextMistakes);
 
             if (nextMistakes >= 3) {
+              nextGameState = 'GAME_OVER';
               setGameState('GAME_OVER');
               triggerGameOverHaptic();
               playGameOverSound();
@@ -337,8 +481,9 @@ export default function CyberSudokuGame({ onBackToHub, onScoreUpdate }) {
 
             // Score gain
             const gained = 15;
-            setScore((s) => s + gained);
-            updateBest(score + gained);
+            nextScore = score + gained;
+            setScore(nextScore);
+            updateBest(nextScore);
 
             // Check Puzzle Completion
             let complete = true;
@@ -353,9 +498,11 @@ export default function CyberSudokuGame({ onBackToHub, onScoreUpdate }) {
             }
 
             if (complete) {
+              nextGameState = 'WON';
               setGameState('WON');
               const finalBonus = activeMode.bonus + Math.max(0, 300 - timerSec);
-              const finalScore = score + gained + finalBonus;
+              const finalScore = nextScore + finalBonus;
+              nextScore = finalScore;
               setScore(finalScore);
               updateBest(finalScore);
               triggerPerfectHaptic(3);
@@ -371,11 +518,20 @@ export default function CyberSudokuGame({ onBackToHub, onScoreUpdate }) {
           }
         }
 
-        setHistory((prev) => [...prev, previousBoard]);
         setBoard(newBoard);
+        saveModeSnapshot(modeKey, {
+          modeKey,
+          puzzleData,
+          board: newBoard,
+          selected,
+          mistakes: nextMistakes,
+          score: nextScore,
+          timerSec,
+          gameState: nextGameState,
+        });
       }
     },
-    [gameState, selected, board, pencilMode, puzzleData, score, timerSec, activeMode, updateBest, mistakes]
+    [gameState, selected, board, pencilMode, puzzleData, score, timerSec, activeMode, updateBest, mistakes, modeKey]
   );
 
   // Erase button
@@ -386,28 +542,33 @@ export default function CyberSudokuGame({ onBackToHub, onScoreUpdate }) {
     if (cell.initial) return;
 
     if (cell.value !== 0 || cell.notes.length > 0) {
-      const previousBoard = cloneBoard(board);
       const newBoard = cloneBoard(board);
       newBoard[r][c].value = 0;
       newBoard[r][c].notes = [];
       newBoard[r][c].error = false;
 
-      setHistory((prev) => [...prev, previousBoard]);
       setBoard(newBoard);
+      saveModeSnapshot(modeKey, {
+        modeKey,
+        puzzleData,
+        board: newBoard,
+        selected,
+        mistakes,
+        score,
+        timerSec,
+        gameState,
+      });
       triggerLightHaptic();
       playTapSound();
     }
-  }, [gameState, selected, board]);
+  }, [gameState, selected, board, modeKey, puzzleData, mistakes, score, timerSec]);
 
-  // Undo button
-  const handleUndo = useCallback(() => {
-    if (history.length === 0 || gameState !== 'PLAYING') return;
-    const prevBoard = history[history.length - 1];
-    setHistory((h) => h.slice(0, h.length - 1));
-    setBoard(prevBoard);
+  // New Game button
+  const handleNewGame = useCallback(() => {
     triggerLightHaptic();
     playTapSound();
-  }, [history, gameState]);
+    initGame(modeKey);
+  }, [initGame, modeKey]);
 
   // Hint button
   const handleHint = useCallback(() => {
@@ -419,27 +580,28 @@ export default function CyberSudokuGame({ onBackToHub, onScoreUpdate }) {
     const correctVal = puzzleData.solution[r][c];
     if (cell.value === correctVal) return;
 
-    const previousBoard = cloneBoard(board);
     const newBoard = cloneBoard(board);
     newBoard[r][c].value = correctVal;
     newBoard[r][c].notes = [];
     newBoard[r][c].error = false;
 
-    setHistory((prev) => [...prev, previousBoard]);
     setBoard(newBoard);
+    saveModeSnapshot(modeKey, {
+      modeKey,
+      puzzleData,
+      board: newBoard,
+      selected,
+      mistakes,
+      score,
+      timerSec,
+      gameState,
+    });
     playPerfectSound(4);
     triggerLightHaptic();
     if (juiceRef.current) {
       juiceRef.current.popup(`HINT: ${correctVal}`, 'CELL DECODED', activeMode.accent);
     }
-  }, [gameState, selected, board, puzzleData, activeMode]);
-
-  // Format timer MM:SS
-  const formatTime = (totalSec) => {
-    const mins = Math.floor(totalSec / 60);
-    const secs = totalSec % 60;
-    return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-  };
+  }, [gameState, selected, board, puzzleData, activeMode, modeKey, mistakes, score, timerSec]);
 
   // Selected cell coordinates and value
   const selRow = selected ? selected[0] : -1;
@@ -570,13 +732,13 @@ export default function CyberSudokuGame({ onBackToHub, onScoreUpdate }) {
                     cellBg = 'rgba(255, 255, 255, 0.05)';
                   }
 
-                  let cellTextColor = '#FFFFFF';
-                  if (cell.error) {
-                    cellTextColor = COLORS.danger;
-                  } else if (cell.initial) {
-                    cellTextColor = '#E2E8F0';
+                  let cellTextColor = '#CBD5E1';
+                  if (cell.initial) {
+                    cellTextColor = '#CBD5E1'; // Initial starting clue: clean neutral slate
+                  } else if (cell.error) {
+                    cellTextColor = '#EF4444'; // Wrong digit: vibrant RED
                   } else {
-                    cellTextColor = activeMode.accent;
+                    cellTextColor = '#38BDF8'; // Player entered digit: electric BLUE
                   }
 
                   return (
@@ -661,18 +823,18 @@ export default function CyberSudokuGame({ onBackToHub, onScoreUpdate }) {
             onBackToHub={onBackToHub}
           />
 
-          {/* Action Tools Bar (Undo, Erase, Pencil Mode, Hint) */}
+          {/* Action Tools Bar (New Game, Erase, Pencil Mode, Hint) */}
           <View style={[localStyles.actionsRow, { width: boardSize }]}>
-            {/* Undo */}
+            {/* New Game Button */}
             <Pressable
-              onPress={handleUndo}
+              onPress={handleNewGame}
               style={({ pressed }) => [
                 localStyles.actionBtn,
-                pressed && { opacity: 0.7 },
+                pressed && { opacity: 0.7, transform: [{ scale: 0.95 }] },
               ]}
             >
-              <Text style={localStyles.actionBtnIcon}>↩️</Text>
-              <Text style={localStyles.actionBtnLabel}>UNDO</Text>
+              <Text style={localStyles.actionBtnIcon}>✨</Text>
+              <Text style={localStyles.actionBtnLabel}>NEW</Text>
             </Pressable>
 
             {/* Erase */}
@@ -680,7 +842,7 @@ export default function CyberSudokuGame({ onBackToHub, onScoreUpdate }) {
               onPress={handleErase}
               style={({ pressed }) => [
                 localStyles.actionBtn,
-                pressed && { opacity: 0.7 },
+                pressed && { opacity: 0.7, transform: [{ scale: 0.95 }] },
               ]}
             >
               <Text style={localStyles.actionBtnIcon}>⌫</Text>

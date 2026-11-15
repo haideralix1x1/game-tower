@@ -94,16 +94,10 @@ export const UNLOCK_REQUIREMENTS = {
   },
 
   // PUZZLES CATEGORY
-  hanoi_tower: {
+  tap_away: {
     reqGame: 'block_blast',
     targetScore: 150,
     desc: 'Score 150+ in BLOCK BLAST 8x8',
-    category: 'PUZZLES',
-  },
-  tap_away: {
-    reqGame: 'hanoi_tower',
-    targetScore: 1,
-    desc: 'Clear 1 level in TOWER OF HANOI',
     category: 'PUZZLES',
   },
   cyber_pathfinder: {
@@ -179,7 +173,6 @@ export const GAME_CATEGORY_MAP = {
 
   // Puzzles
   block_blast: 'PUZZLES',
-  hanoi_tower: 'PUZZLES',
   tap_away: 'PUZZLES',
   cyber_pathfinder: 'PUZZLES',
 

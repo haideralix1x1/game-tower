@@ -153,8 +153,14 @@ export default function IcyTowerClimberGame({ onBackToHub, onScoreUpdate, isPaus
       // Platform Type Distribution based on altitude / gradual difficulty
       let type = 'NORMAL';
       const rand = Math.random();
-      const prevWasSpike =
-        newPlats.length > 0 && newPlats[newPlats.length - 1].type === 'SPIKE';
+      const allRecent = [...platformsRef.current, ...newPlats];
+      const lastPlat = allRecent.length > 0 ? allRecent[allRecent.length - 1] : null;
+      const secondLastPlat = allRecent.length > 1 ? allRecent[allRecent.length - 2] : null;
+
+      const prevWasSpike = lastPlat?.type === 'SPIKE';
+      // Strictly prevent two crumble/breakable platforms from spawning adjacent or near each other
+      const recentWasCrumble =
+        lastPlat?.type === 'CRUMBLE' || secondLastPlat?.type === 'CRUMBLE';
 
       if (floor <= 30) {
         // Floors 0-30: Simple & Gentle! Only Normal & Super Bounce platforms!
@@ -165,7 +171,7 @@ export default function IcyTowerClimberGame({ onBackToHub, onScoreUpdate, isPaus
         // Floors 31-65: Gentle Movement & Crumble (Zero lethal hazards!)
         if (rand < 0.22) {
           type = 'MOVING';
-        } else if (rand < 0.38) {
+        } else if (!recentWasCrumble && rand < 0.38) {
           type = 'CRUMBLE';
         } else if (rand < 0.52) {
           type = 'BOUNCE';
@@ -178,7 +184,7 @@ export default function IcyTowerClimberGame({ onBackToHub, onScoreUpdate, isPaus
           type = 'FIRE';
         } else if (rand < 0.44) {
           type = 'MOVING';
-        } else if (rand < 0.58) {
+        } else if (!recentWasCrumble && rand < 0.58) {
           type = 'CRUMBLE';
         } else if (rand < 0.72) {
           type = 'BOUNCE';
@@ -191,7 +197,7 @@ export default function IcyTowerClimberGame({ onBackToHub, onScoreUpdate, isPaus
           type = 'FIRE';
         } else if (rand < 0.48) {
           type = 'MOVING';
-        } else if (rand < 0.64) {
+        } else if (!recentWasCrumble && rand < 0.64) {
           type = 'CRUMBLE';
         } else if (rand < 0.78) {
           type = 'BOUNCE';
@@ -539,14 +545,23 @@ export default function IcyTowerClimberGame({ onBackToHub, onScoreUpdate, isPaus
           }
         }
 
-        // Handle Crumbling platforms
-        if (plat.type === 'CRUMBLE' && plat.crumbleTimer > 0) {
-          plat.crumbleTimer -= 1;
-          if (plat.crumbleTimer <= 0) {
-            plat.broken = true;
-            if (p.currentPlatId === plat.id) {
-              p.isGrounded = false;
-              p.currentPlatId = null;
+        // Handle Crumbling platforms & Auto-regeneration (softlock prevention)
+        if (plat.type === 'CRUMBLE') {
+          if (plat.crumbleTimer > 0) {
+            plat.crumbleTimer -= 1;
+            if (plat.crumbleTimer <= 0) {
+              plat.broken = true;
+              plat.respawnTimer = 180; // Regenerate after ~3 seconds so player is never trapped
+              if (p.currentPlatId === plat.id) {
+                p.isGrounded = false;
+                p.currentPlatId = null;
+              }
+            }
+          } else if (plat.broken) {
+            plat.respawnTimer = (plat.respawnTimer || 180) - 1;
+            if (plat.respawnTimer <= 0) {
+              plat.broken = false;
+              plat.crumbleTimer = 0;
             }
           }
         }

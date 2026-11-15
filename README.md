@@ -31,7 +31,6 @@ The main menu is designed and shaped like a **20-Floor Futuristic Skyscraper / M
 |:---:|:---|:---:|:---|
 | **FL 20** | **Space Shooter Neo** | Arcade | 60 FPS starfighter auto-lasers, plasma asteroids, cruiser waves, shield lives |
 | **FL 19** | **Number Hunt 25** | Brain | High-speed Schulte table reflex challenge tapping scrambled digits 1–25 |
-| **FL 18** | **Tower of Hanoi** | Puzzle | 3/4/5 quantum ring spire transfer puzzle with optimal move telemetry |
 | **FL 17** | **Color Stroop** | Brain | Psychological reflex clash: identify ink color vs conflicting word text |
 | **FL 16** | **Math Blitz** | Brain | Rapid-fire mental arithmetic rush with depleting turbo timer |
 | **FL 15** | **Whack-A-Bot** | Arcade | 3x3 reflex bot smasher with golden drones and lethal EMP plasma bombs |

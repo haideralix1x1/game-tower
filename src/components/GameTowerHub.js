@@ -41,7 +41,6 @@ import BoxEscapeGame from '../games/BoxEscapeGame';
 import BlockBlastGame from '../games/BlockBlastGame';
 import MathBlitzGame from '../games/MathBlitzGame';
 import ColorStroopGame from '../games/ColorStroopGame';
-import HanoiTowerGame from '../games/HanoiTowerGame';
 import NumberHuntGame from '../games/NumberHuntGame';
 import SpaceShooterGame from '../games/SpaceShooterGame';
 import CyberSudokuGame from '../games/CyberSudokuGame';
@@ -58,7 +57,6 @@ import ThiefEscapeGame from '../games/ThiefEscapeGame';
 import {
   triggerLightHaptic,
   triggerMediumHaptic,
-  triggerSliceHaptic,
   triggerSelectionHaptic,
 } from '../utils/haptics';
 import { playTapSound, playSnapTickSound } from '../utils/sound';
@@ -377,20 +375,6 @@ export const TOWER_GAMES = [
     secondary: '#0088FF',
     icon: '⏱️',
     storageKey: '@game_tower:best_schulte_v1',
-  },
-  {
-    id: 'hanoi_tower',
-    floorNum: 4,
-    floor: 'FLOOR 04',
-    tier: 'BASE',
-    title: 'TOWER OF HANOI',
-    category: 'PUZZLE',
-    badge: 'QUANTUM RINGS',
-    desc: 'Transfer the energy spire rings to Node Gamma using minimal optimal moves.',
-    accent: '#FFD166',
-    secondary: '#FF6D00',
-    icon: '🗼',
-    storageKey: '@game_tower:best_hanoi_v1',
   },
   {
     id: 'color_stroop',
@@ -896,14 +880,6 @@ export default function GameTowerHub({ initialGameId = null, isSplashActive = fa
             isPaused={isPaused}
             onBackToHub={requestExitToHub}
             onScoreUpdate={(s) => handleScoreUpdate('color_stroop', s)}
-          />
-        );
-      case 'hanoi_tower':
-        return (
-          <HanoiTowerGame
-            isPaused={isPaused}
-            onBackToHub={requestExitToHub}
-            onScoreUpdate={(s) => handleScoreUpdate('hanoi_tower', s)}
           />
         );
       case 'number_hunt':
