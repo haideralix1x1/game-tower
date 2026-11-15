@@ -1096,15 +1096,28 @@ export default function BoxEscapeGame({
                   <Stop offset="100%" stopColor="#8C4D0E" stopOpacity="1" />
                 </SvgLinearGradient>
 
-                <SvgLinearGradient id="charJacketGrad" x1="0" y1="0" x2="0" y2="1">
-                  <Stop offset="0%" stopColor="#38BDF8" stopOpacity="1" />
-                  <Stop offset="50%" stopColor="#0284C7" stopOpacity="1" />
-                  <Stop offset="100%" stopColor="#0369A1" stopOpacity="1" />
+                <SvgLinearGradient id="cyberChassisGrad" x1="0" y1="0" x2="0" y2="1">
+                  <Stop offset="0%" stopColor="#1E293B" stopOpacity="1" />
+                  <Stop offset="50%" stopColor="#0F172A" stopOpacity="1" />
+                  <Stop offset="100%" stopColor="#020617" stopOpacity="1" />
                 </SvgLinearGradient>
 
-                <SvgLinearGradient id="charCapGrad" x1="0" y1="0" x2="1" y2="1">
-                  <Stop offset="0%" stopColor="#F97316" stopOpacity="1" />
-                  <Stop offset="100%" stopColor="#C2410C" stopOpacity="1" />
+                <SvgLinearGradient id="cyberArmorGrad" x1="0" y1="0" x2="1" y2="1">
+                  <Stop offset="0%" stopColor="#00F5FF" stopOpacity="1" />
+                  <Stop offset="50%" stopColor="#0284C7" stopOpacity="1" />
+                  <Stop offset="100%" stopColor="#7928CA" stopOpacity="1" />
+                </SvgLinearGradient>
+
+                <SvgLinearGradient id="cyberVisorGrad" x1="0" y1="0" x2="1" y2="0">
+                  <Stop offset="0%" stopColor="#00F5D4" stopOpacity="1" />
+                  <Stop offset="60%" stopColor="#00F5FF" stopOpacity="1" />
+                  <Stop offset="100%" stopColor="#38BDF8" stopOpacity="1" />
+                </SvgLinearGradient>
+
+                <SvgLinearGradient id="cyberCoreGrad" x1="0" y1="0" x2="1" y2="1">
+                  <Stop offset="0%" stopColor="#FFFFFF" stopOpacity="1" />
+                  <Stop offset="50%" stopColor="#00F5FF" stopOpacity="0.9" />
+                  <Stop offset="100%" stopColor="#0284C7" stopOpacity="1" />
                 </SvgLinearGradient>
 
                 <SvgLinearGradient id="portalGrad" x1="0" y1="0" x2="1" y2="1">
@@ -1574,228 +1587,263 @@ export default function BoxEscapeGame({
                       width={s * 0.56}
                       height={s * 0.22}
                       rx={s * 0.11}
-                      fill="rgba(0, 0, 0, 0.55)"
+                      fill="rgba(0, 0, 0, 0.65)"
                     />
 
-                    {/* Cargo Pants & Heavy Work Boots */}
-                    {/* Left Leg & Boot */}
+                    {/* Cybernetic Armored Legs & Mag-Boots */}
+                    {/* Left Leg */}
                     <Rect
                       x={cx - s * 0.22}
                       y={cy + s * 0.14}
                       width={s * 0.16}
                       height={s * 0.26}
-                      rx={s * 0.07}
-                      fill="#1E293B"
-                      stroke="#0F172A"
-                      strokeWidth={0.8}
-                    />
-                    <Rect
-                      x={cx - s * 0.24}
-                      y={cy + s * 0.3}
-                      width={s * 0.18}
-                      height={s * 0.12}
-                      rx={s * 0.05}
-                      fill="#D97706"
-                      stroke="#92400E"
-                      strokeWidth={0.8}
-                    />
-                    {/* Right Leg & Boot */}
-                    <Rect
-                      x={cx + s * 0.06}
-                      y={cy + s * 0.14}
-                      width={s * 0.16}
-                      height={s * 0.26}
-                      rx={s * 0.07}
-                      fill="#1E293B"
-                      stroke="#0F172A"
-                      strokeWidth={0.8}
-                    />
-                    <Rect
-                      x={cx + s * 0.06}
-                      y={cy + s * 0.3}
-                      width={s * 0.18}
-                      height={s * 0.12}
-                      rx={s * 0.05}
-                      fill="#D97706"
-                      stroke="#92400E"
-                      strokeWidth={0.8}
-                    />
-
-                    {/* Character Body / Work Jacket */}
-                    <Rect
-                      x={cx - s * 0.24}
-                      y={cy - s * 0.1}
-                      width={s * 0.48}
-                      height={s * 0.32}
-                      rx={s * 0.09}
-                      fill="url(#charJacketGrad)"
-                      stroke="#0284C7"
-                      strokeWidth={1.2}
-                    />
-                    {/* Jacket Seam & Zipper */}
-                    <Line
-                      x1={cx}
-                      y1={cy - s * 0.08}
-                      x2={cx}
-                      y2={cy + s * 0.14}
-                      stroke="#E2E8F0"
+                      rx={s * 0.06}
+                      fill="#0F172A"
+                      stroke="#00F5FF"
                       strokeWidth={1}
                     />
-                    {/* Utility Belt */}
+                    {/* Left Mag-Thruster Boot */}
                     <Rect
-                      x={cx - s * 0.22}
-                      y={cy + s * 0.12}
-                      width={s * 0.44}
-                      height={s * 0.07}
-                      rx={s * 0.02}
-                      fill="#0F172A"
+                      x={cx - s * 0.25}
+                      y={cy + s * 0.28}
+                      width={s * 0.20}
+                      height={s * 0.14}
+                      rx={s * 0.05}
+                      fill="url(#cyberChassisGrad)"
+                      stroke="#00F5D4"
+                      strokeWidth={1.2}
                     />
-                    {/* Gold Buckle */}
-                    <Rect
-                      x={cx - s * 0.04}
-                      y={cy + s * 0.11}
-                      width={s * 0.08}
-                      height={s * 0.09}
-                      rx={s * 0.02}
-                      fill="#FACC15"
+                    <Line
+                      x1={cx - s * 0.23}
+                      y1={cy + s * 0.38}
+                      x2={cx - s * 0.07}
+                      y2={cy + s * 0.38}
+                      stroke="#00F5FF"
+                      strokeWidth={2}
+                      strokeLinecap="round"
                     />
 
-                    {/* Arms & Heavy Worker Pushing Gloves */}
-                    {/* Left Arm & Padded Glove */}
+                    {/* Right Leg */}
                     <Rect
-                      x={cx - s * 0.35}
-                      y={cy - s * 0.08}
-                      width={s * 0.13}
-                      height={s * 0.27}
-                      rx={s * 0.06}
-                      fill="url(#charJacketGrad)"
-                      stroke="#0284C7"
-                      strokeWidth={0.8}
-                    />
-                    <Circle
-                      cx={cx - s * 0.29}
-                      cy={cy + s * 0.19}
-                      r={s * 0.075}
-                      fill="#F8FAFC"
-                      stroke="#64748B"
-                      strokeWidth={0.9}
-                    />
-                    {/* Right Arm & Padded Glove */}
-                    <Rect
-                      x={cx + s * 0.22}
-                      y={cy - s * 0.08}
-                      width={s * 0.13}
-                      height={s * 0.27}
-                      rx={s * 0.06}
-                      fill="url(#charJacketGrad)"
-                      stroke="#0284C7"
-                      strokeWidth={0.8}
-                    />
-                    <Circle
-                      cx={cx + s * 0.29}
-                      cy={cy + s * 0.19}
-                      r={s * 0.075}
-                      fill="#F8FAFC"
-                      stroke="#64748B"
-                      strokeWidth={0.9}
-                    />
-
-                    {/* Neck */}
-                    <Rect
-                      x={cx - s * 0.08}
-                      y={cy - s * 0.14}
+                      x={cx + s * 0.06}
+                      y={cy + s * 0.14}
                       width={s * 0.16}
-                      height={s * 0.08}
-                      fill="#FED7AA"
+                      height={s * 0.26}
+                      rx={s * 0.06}
+                      fill="#0F172A"
+                      stroke="#00F5FF"
+                      strokeWidth={1}
+                    />
+                    {/* Right Mag-Thruster Boot */}
+                    <Rect
+                      x={cx + s * 0.05}
+                      y={cy + s * 0.28}
+                      width={s * 0.20}
+                      height={s * 0.14}
+                      rx={s * 0.05}
+                      fill="url(#cyberChassisGrad)"
+                      stroke="#00F5D4"
+                      strokeWidth={1.2}
+                    />
+                    <Line
+                      x1={cx + s * 0.07}
+                      y1={cy + s * 0.38}
+                      x2={cx + s * 0.23}
+                      y2={cy + s * 0.38}
+                      stroke="#00F5FF"
+                      strokeWidth={2}
+                      strokeLinecap="round"
                     />
 
-                    {/* Head / Face */}
-                    <Circle
-                      cx={cx}
-                      cy={cy - s * 0.21}
-                      r={s * 0.21}
-                      fill="#FED7AA"
-                      stroke="#F97316"
-                      strokeWidth={0.8}
+                    {/* Exosuit Main Torso / Heavy Carbon Chassis */}
+                    <Rect
+                      x={cx - s * 0.25}
+                      y={cy - s * 0.12}
+                      width={s * 0.50}
+                      height={s * 0.34}
+                      rx={s * 0.08}
+                      fill="url(#cyberChassisGrad)"
+                      stroke="#00F5FF"
+                      strokeWidth={1.4}
                     />
-
-                    {/* Character Cap */}
+                    {/* Cyber Armor Inset Panels */}
                     <Rect
                       x={cx - s * 0.21}
-                      y={cy - s * 0.39}
+                      y={cy - s * 0.08}
                       width={s * 0.42}
-                      height={s * 0.2}
-                      rx={s * 0.1}
-                      fill="url(#charCapGrad)"
-                      stroke="#9A3412"
+                      height={s * 0.16}
+                      rx={s * 0.04}
+                      fill="#060A17"
+                      stroke="rgba(0, 245, 255, 0.4)"
+                      strokeWidth={0.8}
+                    />
+
+                    {/* Central Glowing Arc Reactor Core */}
+                    <Circle
+                      cx={cx}
+                      cy={cy + s * 0.01}
+                      r={s * 0.09}
+                      fill="url(#cyberCoreGrad)"
+                      stroke="#00F5FF"
+                      strokeWidth={1.5}
+                    />
+                    <Circle
+                      cx={cx}
+                      cy={cy + s * 0.01}
+                      r={s * 0.04}
+                      fill="#FFFFFF"
+                    />
+
+                    {/* Cyber Utility Tactical Belt */}
+                    <Rect
+                      x={cx - s * 0.23}
+                      y={cy + s * 0.13}
+                      width={s * 0.46}
+                      height={s * 0.06}
+                      rx={s * 0.02}
+                      fill="#020617"
+                      stroke="#38BDF8"
+                      strokeWidth={0.8}
+                    />
+                    <Rect
+                      x={cx - s * 0.05}
+                      y={cy + s * 0.125}
+                      width={s * 0.10}
+                      height={s * 0.07}
+                      rx={s * 0.02}
+                      fill="#00F5D4"
+                    />
+
+                    {/* Hydraulic Piston Arms & Heavy Cyber Gauntlets */}
+                    {/* Left Arm & Gauntlet */}
+                    <Rect
+                      x={cx - s * 0.36}
+                      y={cy - s * 0.10}
+                      width={s * 0.13}
+                      height={s * 0.28}
+                      rx={s * 0.06}
+                      fill="url(#cyberArmorGrad)"
+                      stroke="#00F5FF"
                       strokeWidth={1}
                     />
-                    {/* Cap Brim */}
-                    <Rect
-                      x={cx - s * 0.24 + fx * s * 0.05}
-                      y={cy - s * 0.25 + fy * s * 0.03}
-                      width={s * 0.48}
-                      height={s * 0.08}
-                      rx={s * 0.04}
-                      fill="#C2410C"
-                    />
-                    {/* Cap Top Button */}
-                    <Circle cx={cx} cy={cy - s * 0.39} r={s * 0.03} fill="#FED7AA" />
-
-                    {/* Face Details: Expressive Eyes with Direction Tracking */}
-                    {/* Left Eye */}
                     <Circle
-                      cx={cx - s * 0.08 + eyeOffsetX}
-                      cy={cy - s * 0.2 + eyeOffsetY}
-                      r={s * 0.05}
-                      fill="#FFFFFF"
-                      stroke="#0F172A"
-                      strokeWidth={0.6}
-                    />
-                    <Circle
-                      cx={cx - s * 0.08 + eyeOffsetX * 1.5}
-                      cy={cy - s * 0.2 + eyeOffsetY * 1.5}
-                      r={s * 0.028}
+                      cx={cx - s * 0.30}
+                      cy={cy + s * 0.18}
+                      r={s * 0.07}
                       fill="#0F172A"
-                    />
-                    <Circle
-                      cx={cx - s * 0.09 + eyeOffsetX * 1.5}
-                      cy={cy - s * 0.21 + eyeOffsetY * 1.5}
-                      r={s * 0.012}
-                      fill="#FFFFFF"
-                    />
-
-                    {/* Right Eye */}
-                    <Circle
-                      cx={cx + s * 0.08 + eyeOffsetX}
-                      cy={cy - s * 0.2 + eyeOffsetY}
-                      r={s * 0.05}
-                      fill="#FFFFFF"
-                      stroke="#0F172A"
-                      strokeWidth={0.6}
-                    />
-                    <Circle
-                      cx={cx + s * 0.08 + eyeOffsetX * 1.5}
-                      cy={cy - s * 0.2 + eyeOffsetY * 1.5}
-                      r={s * 0.028}
-                      fill="#0F172A"
-                    />
-                    <Circle
-                      cx={cx + s * 0.07 + eyeOffsetX * 1.5}
-                      cy={cy - s * 0.21 + eyeOffsetY * 1.5}
-                      r={s * 0.012}
-                      fill="#FFFFFF"
-                    />
-
-                    {/* Smile / Confident Smirk */}
-                    <Line
-                      x1={cx - s * 0.05 + eyeOffsetX * 0.5}
-                      y1={cy - s * 0.11}
-                      x2={cx + s * 0.05 + eyeOffsetX * 0.5}
-                      y2={cy - s * 0.11}
-                      stroke="#C2410C"
+                      stroke="#00F5D4"
                       strokeWidth={1.2}
+                    />
+                    <Circle
+                      cx={cx - s * 0.30}
+                      cy={cy + s * 0.18}
+                      r={s * 0.03}
+                      fill="#00F5FF"
+                    />
+
+                    {/* Right Arm & Gauntlet */}
+                    <Rect
+                      x={cx + s * 0.23}
+                      y={cy - s * 0.10}
+                      width={s * 0.13}
+                      height={s * 0.28}
+                      rx={s * 0.06}
+                      fill="url(#cyberArmorGrad)"
+                      stroke="#00F5FF"
+                      strokeWidth={1}
+                    />
+                    <Circle
+                      cx={cx + s * 0.30}
+                      cy={cy + s * 0.18}
+                      r={s * 0.07}
+                      fill="#0F172A"
+                      stroke="#00F5D4"
+                      strokeWidth={1.2}
+                    />
+                    <Circle
+                      cx={cx + s * 0.30}
+                      cy={cy + s * 0.18}
+                      r={s * 0.03}
+                      fill="#00F5FF"
+                    />
+
+                    {/* Armored Neck Collar */}
+                    <Rect
+                      x={cx - s * 0.10}
+                      y={cy - s * 0.18}
+                      width={s * 0.20}
+                      height={s * 0.08}
+                      rx={s * 0.02}
+                      fill="#0F172A"
+                      stroke="#00F5FF"
+                      strokeWidth={0.8}
+                    />
+
+                    {/* Cybernetic Helmet */}
+                    <Circle
+                      cx={cx}
+                      cy={cy - s * 0.25}
+                      r={s * 0.22}
+                      fill="url(#cyberChassisGrad)"
+                      stroke="#00F5FF"
+                      strokeWidth={1.4}
+                    />
+
+                    {/* Dual Telemetry Antenna / Sensor Fins */}
+                    <Line
+                      x1={cx - s * 0.18}
+                      y1={cy - s * 0.25}
+                      x2={cx - s * 0.25}
+                      y2={cy - s * 0.40}
+                      stroke="#00F5FF"
+                      strokeWidth={2}
                       strokeLinecap="round"
+                    />
+                    <Circle cx={cx - s * 0.25} cy={cy - s * 0.40} r={s * 0.035} fill="#00F5D4" />
+
+                    <Line
+                      x1={cx + s * 0.18}
+                      y1={cy - s * 0.25}
+                      x2={cx + s * 0.25}
+                      y2={cy - s * 0.40}
+                      stroke="#00F5FF"
+                      strokeWidth={2}
+                      strokeLinecap="round"
+                    />
+                    <Circle cx={cx + s * 0.25} cy={cy - s * 0.40} r={s * 0.035} fill="#00F5D4" />
+
+                    {/* Glowing Curved Holographic Visor with Direction Tracking */}
+                    <Rect
+                      x={cx - s * 0.17 + eyeOffsetX}
+                      y={cy - s * 0.30 + eyeOffsetY}
+                      width={s * 0.34}
+                      height={s * 0.13}
+                      rx={s * 0.06}
+                      fill="url(#cyberVisorGrad)"
+                      stroke="#FFFFFF"
+                      strokeWidth={0.8}
+                    />
+                    {/* Holographic Scanline inside Visor */}
+                    <Line
+                      x1={cx - s * 0.14 + eyeOffsetX}
+                      y1={cy - s * 0.24 + eyeOffsetY}
+                      x2={cx + s * 0.14 + eyeOffsetX}
+                      y2={cy - s * 0.24 + eyeOffsetY}
+                      stroke="rgba(255, 255, 255, 0.75)"
+                      strokeWidth={1}
+                    />
+                    {/* Glowing Optic Sensors */}
+                    <Circle
+                      cx={cx - s * 0.07 + eyeOffsetX * 1.3}
+                      cy={cy - s * 0.24 + eyeOffsetY * 1.3}
+                      r={s * 0.035}
+                      fill="#FFFFFF"
+                    />
+                    <Circle
+                      cx={cx + s * 0.07 + eyeOffsetX * 1.3}
+                      cy={cy - s * 0.24 + eyeOffsetY * 1.3}
+                      r={s * 0.035}
+                      fill="#FFFFFF"
                     />
                   </G>
                 );
