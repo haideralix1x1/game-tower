@@ -55,7 +55,7 @@ const GAME_H = 340;
 
 const GRAVITY = 0.52;
 const MOVE_SPEED = 2.4;
-const JUMP_FORCE = -8.6;
+const JUMP_FORCE = -9.2;
 
 const PLAYER_W = 20;
 const PLAYER_H = 28;

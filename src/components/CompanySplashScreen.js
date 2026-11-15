@@ -20,7 +20,7 @@ const monoFont = Platform.select({
   default: 'monospace',
 });
 
-const companyLogoAsset = require('../../assets/Company-dark.png');
+const appLogoAsset = require('../../assets/icon.png');
 
 // Background ambient floating cyber particles
 const NUM_PARTICLES = 18;
@@ -202,7 +202,7 @@ export default function CompanySplashScreen({ onFinish }) {
           {/* Pulsing Neon Glow Aura */}
           <Animated.View style={[styles.glowAura, { opacity: glowOpacity }]} />
 
-          {/* Company Logo (Nameless Forge) with Breathing Scale */}
+          {/* App Logo (NGT Neo Game Tower) with Breathing Scale */}
           <Animated.View
             style={[
               styles.logoWrapper,
@@ -212,14 +212,15 @@ export default function CompanySplashScreen({ onFinish }) {
             ]}
           >
             <Image
-              source={companyLogoAsset}
+              source={appLogoAsset}
               style={styles.logoImage}
               resizeMode="contain"
             />
           </Animated.View>
 
-          {/* Studio Title */}
-          <Text style={styles.presentedByText}>A NAMELESS FORGE PRODUCTION</Text>
+          {/* App Title & Subtitle */}
+          <Text style={styles.presentedByText}>NEO GAME TOWER</Text>
+          <Text style={styles.studioSubText}>ARCADE MEGASTRUCTURE</Text>
 
           {/* Loading Bar Section */}
           <View style={[styles.loadingSection, { width: maxBarWidth }]}>
@@ -304,20 +305,31 @@ const styles = StyleSheet.create({
     elevation: 14,
   },
   logoImage: {
-    width: 210,
-    height: 184,
+    width: 140,
+    height: 140,
+    borderRadius: 30,
   },
   presentedByText: {
     fontFamily: monoFont,
-    fontSize: 11.5,
-    fontWeight: '800',
+    fontSize: 16,
+    fontWeight: '900',
     color: '#00F5FF',
     letterSpacing: 3,
-    marginBottom: 36,
+    marginTop: 18,
+    marginBottom: 4,
     opacity: 0.95,
     textShadowColor: 'rgba(0, 245, 255, 0.65)',
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 10,
+  },
+  studioSubText: {
+    fontFamily: monoFont,
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: '#FFE600',
+    letterSpacing: 2,
+    marginBottom: 32,
+    opacity: 0.9,
   },
   loadingSection: {
     alignItems: 'stretch',

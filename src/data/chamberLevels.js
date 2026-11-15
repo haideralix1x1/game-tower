@@ -2267,8 +2267,13 @@ const ALL_CHAMBER_LEVELS = {
       "crates": [
           {
               "id": "c1",
-              "x": 90,
-              "y": 260
+              "x": 130,
+              "y": 274
+          },
+          {
+              "id": "c2",
+              "x": 156,
+              "y": 274
           }
       ],
       "platforms": [
@@ -3431,8 +3436,13 @@ const ALL_CHAMBER_LEVELS = {
       "crates": [
           {
               "id": "c1",
-              "x": 90,
-              "y": 260
+              "x": 130,
+              "y": 274
+          },
+          {
+              "id": "c2",
+              "x": 156,
+              "y": 274
           }
       ],
       "plates": [
@@ -3717,8 +3727,13 @@ const ALL_CHAMBER_LEVELS = {
       "crates": [
           {
               "id": "c1",
-              "x": 90,
-              "y": 260
+              "x": 130,
+              "y": 274
+          },
+          {
+              "id": "c2",
+              "x": 156,
+              "y": 274
           }
       ],
       "platforms": [
@@ -4503,8 +4518,13 @@ const ALL_CHAMBER_LEVELS = {
       "crates": [
           {
               "id": "c1",
-              "x": 90,
-              "y": 260
+              "x": 130,
+              "y": 274
+          },
+          {
+              "id": "c2",
+              "x": 156,
+              "y": 274
           }
       ],
       "platforms": [
@@ -5196,8 +5216,13 @@ const ALL_CHAMBER_LEVELS = {
       "crates": [
           {
               "id": "c1",
-              "x": 90,
-              "y": 260
+              "x": 130,
+              "y": 274
+          },
+          {
+              "id": "c2",
+              "x": 156,
+              "y": 274
           }
       ],
       "springs": [],
@@ -5810,8 +5835,13 @@ const ALL_CHAMBER_LEVELS = {
       "crates": [
           {
               "id": "c1",
-              "x": 90,
-              "y": 260
+              "x": 130,
+              "y": 274
+          },
+          {
+              "id": "c2",
+              "x": 156,
+              "y": 274
           }
       ],
       "springs": [],
@@ -6519,8 +6549,13 @@ const ALL_CHAMBER_LEVELS = {
       "crates": [
           {
               "id": "c1",
-              "x": 90,
-              "y": 260
+              "x": 130,
+              "y": 274
+          },
+          {
+              "id": "c2",
+              "x": 156,
+              "y": 274
           }
       ],
       "springs": [],
@@ -7133,8 +7168,13 @@ const ALL_CHAMBER_LEVELS = {
       "crates": [
           {
               "id": "c1",
-              "x": 90,
-              "y": 260
+              "x": 130,
+              "y": 274
+          },
+          {
+              "id": "c2",
+              "x": 156,
+              "y": 274
           }
       ],
       "springs": [],
@@ -7679,16 +7719,21 @@ const ALL_CHAMBER_LEVELS = {
           {
               "id": "mid_wall",
               "x": 220,
-              "y": 170,
+              "y": 220,
               "w": 14,
-              "h": 130
+              "h": 80
           }
       ],
       "crates": [
           {
               "id": "c1",
-              "x": 90,
-              "y": 260
+              "x": 166,
+              "y": 274
+          },
+          {
+              "id": "c2",
+              "x": 192,
+              "y": 274
           }
       ],
       "springs": [],

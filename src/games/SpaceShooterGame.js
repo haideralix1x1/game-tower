@@ -34,6 +34,10 @@ import {
   playSliceSound,
   playPerfectSound,
   playGameOverSound,
+  playLaserBlastSound,
+  playExplosionSound,
+  startBGM,
+  stopBGM,
 } from '../utils/sound';
 
 const STORAGE_KEY = '@game_tower:best_shooter_v1';
@@ -268,7 +272,7 @@ export default function SpaceShooterGame({ onBackToHub, onScoreUpdate, isPaused 
               { id: `br_${ts}`, x: sx + shipW - 12, y: sy, vx: 0, vy: -500, w: 4, h: 13, color: '#00F5FF' }
             );
           }
-          playTapSound();
+          playLaserBlastSound();
         }
 
         // --- 3. Dynamic Enemy Spawning: Multi-Enemy Squadrons & Dive Bombers ---
@@ -426,6 +430,7 @@ export default function SpaceShooterGame({ onBackToHub, onScoreUpdate, isPaused 
                 setScore(eng.score);
                 persistBest(eng.score);
                 triggerSliceHaptic();
+                playExplosionSound();
                 playPerfectSound((eng.score / 25) % 8 + 1);
 
                 // Spawn localized in-arena blast particles right over the enemy!
@@ -558,7 +563,7 @@ export default function SpaceShooterGame({ onBackToHub, onScoreUpdate, isPaused 
               eng.activePowerup = null;
               setActivePowerup(null);
               en.alive = false;
-              playSliceSound();
+              playExplosionSound();
               triggerSliceHaptic();
               if (juiceRef.current) {
                 juiceRef.current.shake(10, 6);
@@ -625,7 +630,7 @@ export default function SpaceShooterGame({ onBackToHub, onScoreUpdate, isPaused 
               eng.hasShield = false;
               eng.activePowerup = null;
               setActivePowerup(null);
-              playSliceSound();
+              playExplosionSound();
               triggerSliceHaptic();
               if (juiceRef.current) {
                 juiceRef.current.shake(8, 5);

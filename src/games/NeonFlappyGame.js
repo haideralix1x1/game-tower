@@ -27,6 +27,9 @@ import {
   playGameOverSound,
   playSliceSound,
   playSpeedUpSound,
+  playJumpSound,
+  startBGM,
+  stopBGM,
 } from '../utils/sound';
 
 const STORAGE_KEY = '@game_tower:best_flappy_v1';
@@ -185,7 +188,7 @@ export default function NeonFlappyGame({ onBackToHub, onScoreUpdate, isPaused = 
 
     eng.vy = -320;
     triggerLightHaptic();
-    playTapSound();
+    playJumpSound();
 
     // Burst of glowing plasma particles behind the jet plane on thrust tap
     const burstColors = ['#FFFFFF', '#00F5FF', '#00F5D4', '#FF007F', '#FFE600'];

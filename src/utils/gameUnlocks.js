@@ -128,16 +128,22 @@ export const UNLOCK_REQUIREMENTS = {
   },
 
   // STRATEGY & PHYSICS CATEGORY
+  cyber_chase: {
+    reqGame: 'tic_tac_toe',
+    targetScore: 100,
+    desc: 'Score 100+ in SURVIVOR',
+    category: 'STRATEGY',
+  },
   neon_mines: {
     reqGame: 'tic_tac_toe',
     targetScore: 100,
-    desc: 'Score 100+ in BOX ESCAPE',
+    desc: 'Score 100+ in SURVIVOR',
     category: 'STRATEGY',
   },
   rope_cut: {
-    reqGame: 'neon_mines',
+    reqGame: 'chess',
     targetScore: 1,
-    desc: 'Clear 1 minefield in NEON MINES',
+    desc: 'Survive or win 1 match in CHESS',
     category: 'STRATEGY',
   },
   thief_escape: {
@@ -162,6 +168,8 @@ export const GAME_CATEGORY_MAP = {
   // Words
   wordly_neo: 'WORDS',
   knife_hit: 'WORDS',
+  word_link: 'WORDS',
+  word_search: 'WORDS',
 
   // Arcade
   cyber_snake: 'ARCADE',
@@ -170,6 +178,9 @@ export const GAME_CATEGORY_MAP = {
   space_shooter: 'ARCADE',
   icy_climber: 'ARCADE',
   cyber_tetris: 'ARCADE',
+  bubble_shooter: 'ARCADE',
+  neon_zuma: 'ARCADE',
+  neo_pac: 'ARCADE',
 
   // Puzzles
   block_blast: 'PUZZLES',
@@ -184,6 +195,9 @@ export const GAME_CATEGORY_MAP = {
 
   // Strategy
   tic_tac_toe: 'STRATEGY',
+  table_soccer: 'STRATEGY',
+  chess: 'STRATEGY',
+  cyber_chase: 'STRATEGY',
   neon_mines: 'STRATEGY',
   rope_cut: 'STRATEGY',
   thief_escape: 'STRATEGY',

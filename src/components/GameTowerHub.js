@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
+  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -28,16 +29,21 @@ import { COLORS } from '../../styles';
 import TowerAnimatedBackground from './TowerAnimatedBackground';
 import JuiceEngine from './JuiceEngine';
 
-// Floor 01 - 20 Game Screen Imports
+// Floor Mini-Game Screen Imports
 import Game2048 from '../games/Game2048';
 import WordlyGame from '../games/WordlyGame';
-import NeonMinesGame from '../games/NeonMinesGame';
+import ChessGame from '../games/ChessGame';
+import WordLinkGame from '../games/WordLinkGame';
+import BubbleShooterGame from '../games/BubbleShooterGame';
+import WordSearchGame from '../games/WordSearchGame';
+import NeonZumaGame from '../games/NeonZumaGame';
+import NeoPacGame from '../games/NeoPacGame';
 import MemoryMatrixGame from '../games/MemoryMatrixGame';
 import SlidingPuzzleGame from '../games/SlidingPuzzleGame';
 import BrickBreakerGame from '../games/BrickBreakerGame';
 import CyberSnakeGame from '../games/CyberSnakeGame';
 import NeonFlappyGame from '../games/NeonFlappyGame';
-import BoxEscapeGame from '../games/BoxEscapeGame';
+import SurvivorGame from '../games/SurvivorGame';
 import BlockBlastGame from '../games/BlockBlastGame';
 import MathBlitzGame from '../games/MathBlitzGame';
 import ColorStroopGame from '../games/ColorStroopGame';
@@ -51,8 +57,9 @@ import CyberTetrisGame from '../games/CyberTetrisGame';
 import TapAwayArrowsGame from '../games/TapAwayArrowsGame';
 import IcyTowerClimberGame from '../games/IcyTowerClimberGame';
 import WordScrambleGame from '../games/WordScrambleGame';
-import CyberPathGame from '../games/CyberPathGame';
+import SnowBrosChamberGame from '../games/SnowBrosChamberGame';
 import ThiefEscapeGame from '../games/ThiefEscapeGame';
+import TableSoccerGame from '../games/TableSoccerGame';
 
 import {
   triggerLightHaptic,
@@ -82,6 +89,34 @@ const monoFont = Platform.select({
 });
 
 export const TOWER_GAMES = [
+  {
+    id: 'neo_pac',
+    floorNum: 27,
+    floor: 'FLOOR 27',
+    tier: 'APEX',
+    title: 'NEO PAC',
+    category: 'ARCADE MAZE',
+    badge: 'BUFFERED CONTROLS',
+    desc: 'Classic maze chase featuring responsive swipe & glowing buffered D-pad controls, power energizers, and 4 smart chasing ghosts!',
+    accent: '#FFE600',
+    secondary: '#00F5FF',
+    icon: '🟡',
+    storageKey: '@game_tower:best_neopac_v1',
+  },
+  {
+    id: 'neon_zuma',
+    floorNum: 26,
+    floor: 'FLOOR 26',
+    tier: 'APEX',
+    title: 'NEON ZUMA',
+    category: 'MARBLE SHOOTER',
+    badge: 'TRACK DEFENSE',
+    desc: 'Aim the central plasma turret, fire colored orbs, match 3+ chains, and trigger magnetic attraction pullbacks before the line reaches the singularity core!',
+    accent: '#FF007F',
+    secondary: '#00F5FF',
+    icon: '🔮',
+    storageKey: '@game_tower:best_neonzuma_v1',
+  },
   {
     id: 'thief_escape',
     floorNum: 25,
@@ -195,18 +230,18 @@ export const TOWER_GAMES = [
     storageKey: '@game_tower:best_climber_v1',
   },
   {
-    id: 'knife_hit',
+    id: 'word_search',
     floorNum: 17,
     floor: 'FLOOR 17',
     tier: 'SKY',
-    title: 'WORD SCRAMBLE',
-    category: 'ANAGRAM MATRIX',
-    badge: 'LETTER DIAL',
-    desc: 'Unscramble glowing letter dials to forge 2 to 7+ letter words. Find more and more words to crack levels.',
+    title: 'WORD SEARCH',
+    category: 'WORD MATRIX',
+    badge: 'FIND HIDDEN WORDS',
+    desc: 'Find and swipe hidden themed words across horizontal, vertical, and diagonal orientations on the neon matrix!',
     accent: '#00F5FF',
     secondary: '#7928CA',
-    icon: '🔠',
-    storageKey: '@game_tower:best_scramble_v1',
+    icon: '🔍',
+    storageKey: '@game_tower:best_wordsearch_v1',
   },
   {
     id: 'cyber_slide',
@@ -297,28 +332,28 @@ export const TOWER_GAMES = [
     floorNum: 10,
     floor: 'FLOOR 10',
     tier: 'CORE',
-    title: 'BOX ESCAPE',
-    category: 'STRATEGY',
-    badge: 'PHYSICS CRATE',
-    desc: 'Push heavy quantum crates with physical force to clear a pathway to the escape portal. Each level escalates in complexity!',
-    accent: '#06D6A0',
-    secondary: '#118AB2',
-    icon: '📦',
-    storageKey: '@game_tower:best_boxescape_v1',
+    title: 'SURVIVOR',
+    category: 'SURVIVAL',
+    badge: 'ROGUELITE SWARM',
+    desc: 'Survive infinite neon swarms in an auto-firing rogue-lite arena! Collect XP gems, unlock orbital blades and tesla lightning, and defeat elite bosses.',
+    accent: '#00F5FF',
+    secondary: '#FF0055',
+    icon: '⚔️',
+    storageKey: '@game_tower:best_survivor_v1',
   },
   {
     id: 'cyber_pathfinder',
     floorNum: 9,
     floor: 'FLOOR 09',
     tier: 'CORE',
-    title: 'CHAMBER ESCAPE',
-    category: 'PUZZLE',
-    badge: 'ROOM ESCAPE',
-    desc: 'Locked inside security chambers. Jump, push heavy crates onto pressure plates, flip energy switches, and find keys to unlock the exit door!',
+    title: 'DUAL GRAVITY',
+    category: 'SNOW CHAMBERS',
+    badge: '50 ROUNDS & BOSSES',
+    desc: 'Snow Bros style action platformer! Control two parallel heroes in normal and inverted gravity chambers. Freeze enemies into rolling snowballs across 50 rounds and 5 boss showdowns!',
     accent: '#00F5D4',
-    secondary: '#39FF14',
-    icon: '🚪',
-    storageKey: '@game_tower:best_chamber_v1',
+    secondary: '#38BDF8',
+    icon: '☃️',
+    storageKey: '@game_tower:snow_chamber_level_v1',
   },
   {
     id: 'tap_away',
@@ -356,7 +391,7 @@ export const TOWER_GAMES = [
     title: 'SPIDER ROPE SWING',
     category: 'PHYSICS',
     badge: 'WEB CUT & SWING',
-    desc: 'Swipe and cut web strands to swing the cyber spider, catch golden stars, and land safely in the glowing web nest!',
+    desc: 'Swipe and cut web strands to swing the spider, catch golden stars, and land safely in the glowing web nest!',
     accent: '#00F5D4',
     secondary: '#FFD166',
     icon: '🕷️',
@@ -377,46 +412,60 @@ export const TOWER_GAMES = [
     storageKey: '@game_tower:best_schulte_v1',
   },
   {
-    id: 'color_stroop',
+    id: 'table_soccer',
+    floorNum: 4,
+    floor: 'FLOOR 04',
+    tier: 'BASE',
+    title: 'TABLE SOCCER',
+    category: 'STRATEGY',
+    badge: 'TURN-BASED 1v1',
+    desc: 'Turn-based table disc soccer against an intelligent AI bot! Aim, pull back, and flick your pieces to defend your net, score epic goals, and outplay the bot.',
+    accent: '#00F5FF',
+    secondary: '#39FF14',
+    icon: '⚽',
+    storageKey: '@game_tower:best_soccer_v1',
+  },
+  {
+    id: 'bubble_shooter',
     floorNum: 3,
     floor: 'FLOOR 03',
     tier: 'BASE',
-    title: 'COLOR STROOP',
-    category: 'BRAIN',
-    badge: 'REFLEX CLASH',
-    desc: 'Identify the ink color before your neural cortex reads the word itself.',
-    accent: '#FF007F',
-    secondary: '#B5179E',
-    icon: '🎨',
-    storageKey: '@game_tower:best_stroop_v1',
+    title: 'BUBBLE SHOOTER',
+    category: 'ARCADE PUZZLE',
+    badge: 'MATCH-3 BURST',
+    desc: 'Aim the quantum laser cannon, bounce shots off plasma walls, and match 3 or more bubbles to pop clusters and drop orphan chains!',
+    accent: '#00F0FF',
+    secondary: '#FF007F',
+    icon: '🫧',
+    storageKey: '@game_tower:best_bubbleshooter_v1',
   },
   {
-    id: 'math_blitz',
+    id: 'word_link',
     floorNum: 2,
     floor: 'FLOOR 02',
     tier: 'BASE',
-    title: 'MATH BLITZ',
-    category: 'BRAIN',
-    badge: 'SPEED ARITHMETIC',
-    desc: 'Solve escalating arithmetic equations against the hyper-depleting turbo clock.',
-    accent: '#80FF72',
+    title: 'WORD LINK',
+    category: 'CROSSWORD DIAL',
+    badge: 'CONNECT LETTERS',
+    desc: 'Connect letter wheels with glowing paths to solve interlocking crossword puzzle grids!',
+    accent: '#FFE600',
     secondary: '#00F5D4',
-    icon: '💡',
-    storageKey: '@game_tower:best_mathblitz_v1',
+    icon: '🔤',
+    storageKey: '@game_tower:best_wordlink_v1',
   },
   {
-    id: 'neon_mines',
+    id: 'chess',
     floorNum: 1,
     floor: 'FLOOR 01',
     tier: 'BASE',
-    title: 'NEON MINES',
+    title: 'CHESS',
     category: 'STRATEGY',
-    badge: 'MINESWEEPER',
-    desc: 'Scan the 7x7 grid, flag hidden plasma mines, and sweep safe sectors.',
-    accent: '#FF007F',
-    secondary: '#B5179E',
-    icon: '🚩',
-    storageKey: '@game_tower:best_mines_v1',
+    badge: 'KING & QUEEN',
+    desc: 'Master the classic 8x8 chessboard against Bot AI across Easy, Medium, and Hard difficulty with legal move engine & checkmate alerts.',
+    accent: '#00F5FF',
+    secondary: '#FFE600',
+    icon: '♟️',
+    storageKey: '@game_tower:best_chess_v1',
   },
 ];
 
@@ -785,6 +834,21 @@ export default function GameTowerHub({ initialGameId = null, isSplashActive = fa
     if (!activeGameId) return null;
     const isPaused = showExitConfirm;
     switch (activeGameId) {
+      case 'neo_pac':
+        return (
+          <NeoPacGame
+            onExit={requestExitToHub}
+            onScoreUpdate={(s) => handleScoreUpdate('neo_pac', s)}
+          />
+        );
+      case 'neon_zuma':
+        return (
+          <NeonZumaGame
+            isPaused={isPaused}
+            onBackToHub={requestExitToHub}
+            onScoreUpdate={(s) => handleScoreUpdate('neon_zuma', s)}
+          />
+        );
       case 'cyber_2048':
         return (
           <Game2048
@@ -801,12 +865,36 @@ export default function GameTowerHub({ initialGameId = null, isSplashActive = fa
             onScoreUpdate={(s) => handleScoreUpdate('wordly_neo', s)}
           />
         );
+      case 'chess':
       case 'neon_mines':
+      case 'cyber_chase':
         return (
-          <NeonMinesGame
+          <ChessGame
             isPaused={isPaused}
             onBackToHub={requestExitToHub}
-            onScoreUpdate={(s) => handleScoreUpdate('neon_mines', s)}
+            onScoreUpdate={(s) => handleScoreUpdate('chess', s)}
+          />
+        );
+      case 'word_link':
+        return (
+          <WordLinkGame
+            onBackToHub={requestExitToHub}
+            onExit={requestExitToHub}
+            onScoreUpdate={(s) => handleScoreUpdate('word_link', s)}
+          />
+        );
+      case 'bubble_shooter':
+        return (
+          <BubbleShooterGame
+            onExit={requestExitToHub}
+            onScoreUpdate={(s) => handleScoreUpdate('bubble_shooter', s)}
+          />
+        );
+      case 'word_search':
+        return (
+          <WordSearchGame
+            onExit={requestExitToHub}
+            onScoreUpdate={(s) => handleScoreUpdate('word_search', s)}
           />
         );
       case 'memory_matrix':
@@ -851,8 +939,10 @@ export default function GameTowerHub({ initialGameId = null, isSplashActive = fa
         );
       case 'tic_tac_toe':
       case 'box_escape':
+      case 'cyber_survivors':
+      case 'survivor':
         return (
-          <BoxEscapeGame
+          <SurvivorGame
             isPaused={isPaused}
             onBackToHub={requestExitToHub}
             onScoreUpdate={(s) => handleScoreUpdate('tic_tac_toe', s)}
@@ -868,18 +958,17 @@ export default function GameTowerHub({ initialGameId = null, isSplashActive = fa
         );
       case 'math_blitz':
         return (
-          <MathBlitzGame
-            isPaused={isPaused}
+          <WordLinkGame
             onBackToHub={requestExitToHub}
-            onScoreUpdate={(s) => handleScoreUpdate('math_blitz', s)}
+            onExit={requestExitToHub}
+            onScoreUpdate={(s) => handleScoreUpdate('word_link', s)}
           />
         );
       case 'color_stroop':
         return (
-          <ColorStroopGame
-            isPaused={isPaused}
-            onBackToHub={requestExitToHub}
-            onScoreUpdate={(s) => handleScoreUpdate('color_stroop', s)}
+          <BubbleShooterGame
+            onExit={requestExitToHub}
+            onScoreUpdate={(s) => handleScoreUpdate('bubble_shooter', s)}
           />
         );
       case 'number_hunt':
@@ -888,6 +977,14 @@ export default function GameTowerHub({ initialGameId = null, isSplashActive = fa
             isPaused={isPaused}
             onBackToHub={requestExitToHub}
             onScoreUpdate={(s) => handleScoreUpdate('number_hunt', s)}
+          />
+        );
+      case 'table_soccer':
+        return (
+          <TableSoccerGame
+            isPaused={isPaused}
+            onBackToHub={requestExitToHub}
+            onScoreUpdate={(s) => handleScoreUpdate('table_soccer', s)}
           />
         );
       case 'space_shooter':
@@ -956,17 +1053,17 @@ export default function GameTowerHub({ initialGameId = null, isSplashActive = fa
         );
       case 'knife_hit':
         return (
-          <WordScrambleGame
-            isPaused={isPaused}
-            onBackToHub={requestExitToHub}
-            onScoreUpdate={(s) => handleScoreUpdate('knife_hit', s)}
+          <WordSearchGame
+            onExit={requestExitToHub}
+            onScoreUpdate={(s) => handleScoreUpdate('word_search', s)}
           />
         );
       case 'cyber_pathfinder':
         return (
-          <CyberPathGame
+          <SnowBrosChamberGame
             isPaused={isPaused}
             onBackToHub={requestExitToHub}
+            onExit={requestExitToHub}
             onScoreUpdate={(s) => handleScoreUpdate('cyber_pathfinder', s)}
           />
         );
@@ -1086,18 +1183,33 @@ export default function GameTowerHub({ initialGameId = null, isSplashActive = fa
           {/* Top Title & Utilities Row */}
           <View style={hubStyles.hudTitleRow}>
             <View style={hubStyles.titleGroup}>
-              <Text
-                style={hubStyles.hubTitle}
-                numberOfLines={1}
-                adjustsFontSizeToFit
-              >
-                NEO GAME TOWER
-              </Text>
-              <View style={hubStyles.arcadeOnlinePill}>
-                <View style={hubStyles.greenDot} />
-                <Text style={hubStyles.arcadeOnlineText}>
-                  {`${TOWER_GAMES.length}-FLOOR MEGASTRUCTURE`}
-                </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <Image
+                  source={require('../../assets/icon.png')}
+                  style={{
+                    width: 38,
+                    height: 38,
+                    borderRadius: 10,
+                    borderWidth: 1.5,
+                    borderColor: '#00F0FF',
+                  }}
+                  resizeMode="contain"
+                />
+                <View>
+                  <Text
+                    style={hubStyles.hubTitle}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                  >
+                    NEO GAME TOWER
+                  </Text>
+                  <View style={hubStyles.arcadeOnlinePill}>
+                    <View style={hubStyles.greenDot} />
+                    <Text style={hubStyles.arcadeOnlineText}>
+                      {`${TOWER_GAMES.length}-FLOOR MEGASTRUCTURE`}
+                    </Text>
+                  </View>
+                </View>
               </View>
             </View>
 

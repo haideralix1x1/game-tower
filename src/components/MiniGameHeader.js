@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
+import { View, Text, Image, Pressable, StyleSheet, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
@@ -124,15 +124,18 @@ export default function MiniGameHeader({
               pressed && !disabled && { opacity: 0.65, transform: [{ scale: 0.92 }] },
             ]}
           >
-            <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
-              <Path
-                d="M15 18L9 12L15 6"
-                stroke={accentColor}
-                strokeWidth={3.0}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </Svg>
+            <Image
+              source={require('../../assets/icon.png')}
+              style={{
+                width: 20,
+                height: 20,
+                borderRadius: 5,
+                borderWidth: 1,
+                borderColor: hexToRgba(accentColor, 0.7),
+                marginRight: 2,
+              }}
+              resizeMode="contain"
+            />
             <Text style={[localStyles.backText, { color: accentColor }]}>
               HUB
             </Text>

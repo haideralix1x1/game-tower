@@ -12,7 +12,16 @@ import { COLORS } from '../../styles';
 import MiniGameHeader from '../components/MiniGameHeader';
 import GameResultModal from '../components/GameResultModal';
 import JuiceEngine from '../components/JuiceEngine';
-import { playTapSound, playSliceSound, playGameOverSound, playPerfectSound } from '../utils/sound';
+import {
+  playTapSound,
+  playSliceSound,
+  playGameOverSound,
+  playPerfectSound,
+  playBrickShatterSound,
+  playVictorySound,
+  startBGM,
+  stopBGM,
+} from '../utils/sound';
 import { triggerLightHaptic, triggerMediumHaptic, triggerPerfectHaptic, triggerGameOverHaptic } from '../utils/haptics';
 
 const monoFont = Platform.select({
@@ -310,7 +319,11 @@ export default function CyberTetrisGame({ onBackToHub, onScoreUpdate, isPaused =
     }
 
     if (lines > 0) {
-      playSliceSound();
+      if (lines >= 4) {
+        playVictorySound();
+      } else {
+        playBrickShatterSound();
+      }
       triggerMediumHaptic();
 
       // Screen shake and spark bursts

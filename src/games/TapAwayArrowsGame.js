@@ -69,16 +69,20 @@ function createRng(seed) {
 }
 
 /**
- * Smooth difficulty scaling from Level 1 (5 arrows) to Level 200 (52 arrows)
+ * Escalating difficulty scaling:
+ * - Low levels (1..10): 5 to 14 arrows, gentler untangling
+ * - Mid levels (11..35): 15 to 35 arrows, dense interlocking
+ * - High levels (36..70): 36 to 58 arrows, tightly packed labyrinth
+ * - Master levels (71..200): 59 to 82 arrows, maximum density jigsaw with minimal gap
  */
 function getTargetArrowCount(lvl) {
   if (lvl <= 1) return 5;
-  if (lvl <= 5) return 4 + lvl; // 5..9
-  if (lvl <= 15) return 9 + Math.floor((lvl - 5) * 0.5); // 10..14
-  if (lvl <= 35) return 14 + Math.floor((lvl - 15) * 0.45); // 15..23
-  if (lvl <= 70) return 23 + Math.floor((lvl - 35) * 0.35); // 24..35
-  if (lvl <= 120) return 35 + Math.floor((lvl - 70) * 0.2); // 36..45
-  return Math.min(52, 45 + Math.floor((lvl - 120) * 0.09)); // 46..52
+  if (lvl <= 5) return 5 + (lvl - 1); // 5..9
+  if (lvl <= 15) return 10 + Math.floor((lvl - 6) * 0.9); // 10..18
+  if (lvl <= 30) return 19 + Math.floor((lvl - 16) * 0.85); // 19..30
+  if (lvl <= 60) return 31 + Math.floor((lvl - 31) * 0.7); // 31..51
+  if (lvl <= 100) return 52 + Math.floor((lvl - 61) * 0.45); // 52..69
+  return Math.min(82, 70 + Math.floor((lvl - 101) * 0.13)); // 70..82
 }
 
 /**
@@ -154,7 +158,7 @@ function centerArrows(arrows) {
 
 /**
  * Reverse-generate guaranteed 100% solvable labyrinths for levels 1..200
- * Tightly packs arrows side-by-side with multi-turn shapes (L, U, spiral, straight)
+ * Tightly packs arrows side-by-side with high adjacency and interlocking blocks
  */
 function generateDenseLabyrinth(lvl = 1) {
   const safeLvl = Math.max(1, Math.min(MAX_LEVEL, lvl));
@@ -171,8 +175,8 @@ function generateDenseLabyrinth(lvl = 1) {
     const midC = Math.floor(COLS / 2);
 
     // Initial bounding spread expands gradually as level increases
-    const rSpread = Math.min(Math.floor(ROWS / 2) - 1, 2 + Math.floor(safeLvl * 0.06));
-    const cSpread = Math.min(Math.floor(COLS / 2) - 1, 2 + Math.floor(safeLvl * 0.05));
+    const rSpread = Math.min(Math.floor(ROWS / 2) - 1, 2 + Math.floor(safeLvl * 0.04));
+    const cSpread = Math.min(Math.floor(COLS / 2) - 1, 2 + Math.floor(safeLvl * 0.04));
 
     for (let id = 0; id < targetCount; id++) {
       let placed = false;
@@ -181,17 +185,20 @@ function generateDenseLabyrinth(lvl = 1) {
       if (placedPoints.length === 0) {
         for (let dr = -rSpread; dr <= rSpread; dr++) {
           for (let dc = -cSpread; dc <= cSpread; dc++) {
-            candidates.push({ r: midR + dr, c: midC + dc });
+            candidates.push({ r: midR + dr, c: midC + dc, score: 0 });
           }
         }
       } else {
         for (let r = 1; r < ROWS - 1; r++) {
           for (let c = 1; c < COLS - 1; c++) {
             if (grid[r][c] === null) {
-              const isAdj = placedPoints.some(
-                (p) => Math.abs(p.r - r) + Math.abs(p.c - c) === 1
-              );
-              if (isAdj) candidates.push({ r, c });
+              let adj = 0;
+              for (const p of placedPoints) {
+                const dist = Math.abs(p.r - r) + Math.abs(p.c - c);
+                if (dist === 1) adj += 2;
+                else if (dist === 2) adj += 1;
+              }
+              if (adj > 0) candidates.push({ r, c, score: adj });
             }
           }
         }
@@ -201,17 +208,14 @@ function generateDenseLabyrinth(lvl = 1) {
         for (let r = 1; r < ROWS - 1; r++) {
           for (let c = 1; c < COLS - 1; c++) {
             if (grid[r][c] === null) {
-              candidates.push({ r, c });
+              candidates.push({ r, c, score: 0 });
             }
           }
         }
       }
 
-      // Shuffle candidates with seeded RNG
-      for (let i = candidates.length - 1; i > 0; i--) {
-        const j = Math.floor(rng() * (i + 1));
-        [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
-      }
+      // Sort candidates by adjacency score with subtle noise so arrows tightly hug one another
+      candidates.sort((a, b) => (b.score + (rng() - 0.5) * 2) - (a.score + (rng() - 0.5) * 2));
 
       for (const cand of candidates) {
         const hr = cand.r;
@@ -259,10 +263,10 @@ function generateDenseLabyrinth(lvl = 1) {
           let curC = step1C;
           let bodyDir = (dIdx + 2) % 4;
 
-          // Arrow length limits scale smoothly with level
-          const minLen = safeLvl <= 5 ? 2 : safeLvl <= 20 ? 3 : 4;
+          // For tight dense packing, keep lengths compact so more arrows nest directly against each other
+          const minLen = safeLvl <= 5 ? 2 : safeLvl <= 15 ? 2 : 3;
           const maxLenLimit =
-            safeLvl <= 5 ? 3 : safeLvl <= 15 ? 5 : safeLvl <= 50 ? 7 : 11;
+            safeLvl <= 5 ? 3 : safeLvl <= 25 ? 4 : safeLvl <= 60 ? 5 : 6;
           const maxLen = minLen + Math.floor(rng() * (maxLenLimit - minLen + 1));
 
           for (let s = 2; s < maxLen; s++) {
@@ -534,16 +538,18 @@ export default function TapAwayArrowsGame({
     const c = (locationX - boardPadding) / cellW;
     const r = (locationY - boardPadding) / cellH;
 
-    // Find arrow whose path is closest to tap point
+    // Find arrow whose path is closest to tap point (favoring unblocked arrows on close borders)
     let bestArrow = null;
-    let minDistance = 0.95;
+    let minDistance = 1.1;
 
     for (const arrow of arrows) {
       if (!arrow || !arrow.path) continue;
+      const isMovable = movableArrowIds.has(arrow.id);
       for (const pt of arrow.path) {
         const d = Math.hypot(pt.c + 0.5 - c, pt.r + 0.5 - r);
-        if (d < minDistance) {
-          minDistance = d;
+        const effectiveDist = d - (isMovable ? 0.35 : 0);
+        if (effectiveDist < minDistance) {
+          minDistance = effectiveDist;
           bestArrow = arrow;
         }
       }

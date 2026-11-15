@@ -21,7 +21,14 @@ import Svg, {
 } from 'react-native-svg';
 import MiniGameHeader from '../components/MiniGameHeader';
 import GameResultModal from '../components/GameResultModal';
-import { playTapSound, playSliceSound, playGameOverSound } from '../utils/sound';
+import {
+  playTapSound,
+  playSliceSound,
+  playGameOverSound,
+  playJumpSound,
+  startBGM,
+  stopBGM,
+} from '../utils/sound';
 import {
   triggerLightHaptic,
   triggerMediumHaptic,
@@ -45,6 +52,7 @@ const PLAT_HEIGHT = 14;
 export default function IcyTowerClimberGame({ onBackToHub, onScoreUpdate, isPaused = false }) {
   const isPausedRef = useRef(isPaused);
   isPausedRef.current = isPaused;
+
   const { width, height } = useWindowDimensions();
   const arenaWidth = width;
   const arenaHeight = height - 130;
@@ -443,7 +451,7 @@ export default function IcyTowerClimberGame({ onBackToHub, onScoreUpdate, isPaus
       p.vx = 0;
     }
 
-    playTapSound();
+    playJumpSound();
     triggerLightHaptic();
   }, []);
 

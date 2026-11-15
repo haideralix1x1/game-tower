@@ -23,6 +23,9 @@ import {
   playTapSound,
   playPerfectSound,
   playGameOverSound,
+  playPacChompSound,
+  startBGM,
+  stopBGM,
 } from '../utils/sound';
 
 const STORAGE_KEY = '@game_tower:best_snake_v1';
@@ -217,6 +220,7 @@ export default function CyberSnakeGame({ onBackToHub, onScoreUpdate, isPaused = 
         setScore(eng.score);
         persistBest(eng.score);
         triggerPerfectHaptic(2);
+        playPacChompSound();
         playPerfectSound(Math.min(8, Math.floor(eng.score / 40) + 1));
 
         if (juiceRef.current) {

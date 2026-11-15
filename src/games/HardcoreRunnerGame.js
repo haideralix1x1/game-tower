@@ -21,7 +21,15 @@ import Svg, {
 } from 'react-native-svg';
 import MiniGameHeader from '../components/MiniGameHeader';
 import GameResultModal from '../components/GameResultModal';
-import { playTapSound, playSliceSound, playGameOverSound, playPerfectSound } from '../utils/sound';
+import {
+  playTapSound,
+  playSliceSound,
+  playGameOverSound,
+  playPerfectSound,
+  playJumpSound,
+  startBGM,
+  stopBGM,
+} from '../utils/sound';
 import {
   triggerLightHaptic,
   triggerMediumHaptic,
@@ -682,7 +690,7 @@ export default function HardcoreRunnerGame({ onBackToHub, onScoreUpdate, isPause
       playerVyRef.current = JUMP_VELOCITY;
       isGroundedRef.current = false;
       lastGroundedTimeRef.current = 0;
-      playTapSound();
+      playJumpSound();
       triggerLightHaptic();
     }
   };

@@ -2,6 +2,7 @@ import React from 'react';
 import {
   View,
   Text,
+  Image,
   TouchableOpacity,
   StyleSheet,
   Platform,
@@ -149,6 +150,18 @@ export default function GameResultModal({
       <View style={localStyles.overlay}>
         {/* Modal Card */}
         <View style={[localStyles.card, { borderColor: accent }]}>
+          <Image
+            source={require('../../assets/icon.png')}
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: 12,
+              borderWidth: 1.5,
+              borderColor: accent,
+              marginBottom: 8,
+            }}
+            resizeMode="contain"
+          />
           <Text style={localStyles.icon}>{icon}</Text>
           <Text style={[localStyles.title, { color: accent }]}>
             {displayTitle}

@@ -29,6 +29,10 @@ import {
   playSpeedUpSound,
   playGameOverSound,
   playPerfectSound,
+  playPaddleBounceSound,
+  playBrickShatterSound,
+  startBGM,
+  stopBGM,
 } from '../utils/sound';
 
 const STORAGE_KEY = '@game_tower:best_breaker_v5';
@@ -357,7 +361,8 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
 
   // Generate Bricks Grid from Artistic Design
   const createBricksForLevel = useCallback((lvl, curMode) => {
-    const design = BRICK_DESIGNS[(lvl - 1) % BRICK_DESIGNS.length];
+    const safeIdx = Math.max(0, (lvl - 1) % BRICK_DESIGNS.length);
+    const design = BRICK_DESIGNS[safeIdx] || BRICK_DESIGNS[0];
     const rows = design.rows;
     const numCols = 8;
     const numRows = rows.length;
@@ -638,6 +643,7 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
       safeHaptic(triggerPerfectHaptic);
 
       const nextLvl = (clearedLvl % BRICK_DESIGNS.length) + 1;
+      AsyncStorage.setItem('@game_tower:brick_breaker_level_v1', String(nextLvl)).catch(() => {});
 
       if (juiceRef.current) {
         juiceRef.current.flash(COLORS.matrixMint);
@@ -665,10 +671,19 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
   );
 
   useEffect(() => {
-    const timer = setTimeout(() => {
+    (async () => {
+      try {
+        const savedLvl = await AsyncStorage.getItem('@game_tower:brick_breaker_level_v1');
+        if (savedLvl !== null) {
+          const parsed = parseInt(savedLvl, 10);
+          if (!isNaN(parsed) && parsed >= 1 && parsed <= BRICK_DESIGNS.length) {
+            resetGame(mode, parsed);
+            return;
+          }
+        }
+      } catch {}
       resetGame(mode, 1);
-    }, 0);
-    return () => clearTimeout(timer);
+    })();
   }, [mode, resetGame]);
 
   // Launch Balls on Tap or Release Caught Balls
@@ -1382,7 +1397,7 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
                     juiceRef.current.popup('💥 AI RECOILED!', 'HEAVY IMPACT', '#FF0055');
                   }
                 } else {
-                  safeSound(playTapSound);
+                  safeSound(playPaddleBounceSound);
                   safeHaptic(triggerLightHaptic);
                 }
               } else if (nextY - b.r < 0) {
@@ -1516,7 +1531,7 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
                   juiceRef.current.popup('💥 HEAVY IMPACT!', 'PADDLE RECOIL', '#FF6D00');
                 }
               } else {
-                safeSound(playTapSound);
+                safeSound(playPaddleBounceSound);
                 safeHaptic(triggerLightHaptic);
               }
             }
@@ -1570,7 +1585,7 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
                     setAiScore(eng.aiScore);
                   }
 
-                  safeSound(playTapSound);
+                  safeSound(playPaddleBounceSound);
                   safeHaptic(triggerLightHaptic);
 
                   // Guarantee ball speed never drops below baseline on brick collision
@@ -1592,7 +1607,7 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
 
                   if (brk.hp <= 0) {
                     eng.bricks.splice(j, 1);
-                    safeSound(playSliceSound);
+                    safeSound(playBrickShatterSound);
 
                     // Drop falling power-up capsule
                     if (brk.type === 'POWERUP' || Math.random() < 0.28) {
@@ -1957,7 +1972,8 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
     safeHaptic(triggerLightHaptic);
   };
 
-  const currentDesign = BRICK_DESIGNS[(level - 1) % BRICK_DESIGNS.length];
+  const safeDesignIdx = Math.max(0, (level - 1) % BRICK_DESIGNS.length);
+  const currentDesign = BRICK_DESIGNS[safeDesignIdx] || BRICK_DESIGNS[0];
 
   return (
     <JuiceEngine ref={juiceRef}>
@@ -1978,7 +1994,11 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
             bestScore={bestScore}
             accentColor={mode === 'HARD_SPHERE_DUEL' ? '#FF0055' : '#00F5FF'}
             onBack={onBackToHub}
-            onReset={() => resetGame(mode, level)}
+            onReset={() => {
+              AsyncStorage.setItem('@game_tower:brick_breaker_level_v1', '1').catch(() => {});
+              resetGame(mode, 1, true);
+            }}
+            resetLabel="NEW"
             disabled={modalVisible}
           />
 
@@ -2036,10 +2056,10 @@ export default function BrickBreakerGame({ onBackToHub, onScoreUpdate, isPaused 
                     }}
                   >
                     <Text style={localStyles.heartLabel}>
-                      LVL {level}/{BRICK_DESIGNS.length}: {currentDesign.name} {currentDesign.icon} ⚡▼
+                      LVL {level}/{BRICK_DESIGNS.length}: {currentDesign?.name || 'LEVEL'} {currentDesign?.icon || '⚡'} ⚡▼
                     </Text>
                     <Text style={localStyles.subInfoText}>
-                      BRICKS: {renderState.bricks.filter((b) => b.type !== 'UNBREAKABLE').length} REMAINING
+                      BRICKS: {(renderState.bricks || []).filter((b) => b && b.type !== 'UNBREAKABLE').length} REMAINING
                     </Text>
                   </Pressable>
 

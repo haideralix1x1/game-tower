@@ -1021,17 +1021,17 @@ function generate100CuratedLevels() {
           hasKey: false,
           isBoss: false,
         },
-        // 8 Normal Guards (Flashlights)
-        { id: 'g_norm_0a', floor: 0, x: 120, dir: 1, speed: 1.2, minX: 45, maxX: arenaW / 2 - 30, hasGun: false, hasKey: false },
-        { id: 'g_norm_0b', floor: 0, x: arenaW - 120, dir: -1, speed: 1.25, minX: arenaW / 2 + 30, maxX: arenaW - 45, hasGun: false, hasKey: false },
+        // 8 Normal Guards (Flashlights) - Patrolling inside the fortress (Floors 1-3)
+        { id: 'g_norm_0a', floor: 1, x: 120, dir: 1, speed: 1.2, minX: 45, maxX: arenaW / 2 - 30, hasGun: false, hasKey: false },
+        { id: 'g_norm_0b', floor: 1, x: arenaW - 120, dir: -1, speed: 1.25, minX: arenaW / 2 + 30, maxX: arenaW - 45, hasGun: false, hasKey: false },
         { id: 'g_norm_1a', floor: 1, x: 90, dir: 1, speed: 1.2, minX: 45, maxX: arenaW / 2 - 20, hasGun: false, hasKey: false },
         { id: 'g_norm_1b', floor: 1, x: arenaW - 90, dir: -1, speed: 1.3, minX: arenaW / 2 + 20, maxX: arenaW - 45, hasGun: false, hasKey: false },
         { id: 'g_norm_2a', floor: 2, x: 110, dir: 1, speed: 1.25, minX: 45, maxX: arenaW / 2 - 20, hasGun: false, hasKey: false },
         { id: 'g_norm_2b', floor: 2, x: arenaW - 110, dir: -1, speed: 1.25, minX: arenaW / 2 + 20, maxX: arenaW - 45, hasGun: false, hasKey: false },
         { id: 'g_norm_3a', floor: 3, x: 130, dir: 1, speed: 1.3, minX: 45, maxX: arenaW / 2 - 20, hasGun: false, hasKey: false },
         { id: 'g_norm_3b', floor: 3, x: arenaW - 130, dir: -1, speed: 1.3, minX: arenaW / 2 + 20, maxX: arenaW - 45, hasGun: false, hasKey: false },
-        // 4 Red Light Guards (Snipers)
-        { id: 'g_red_0', floor: 0, x: arenaW / 2, dir: 1, speed: 1.1, minX: 80, maxX: arenaW - 80, hasGun: true, shootCooldown: 40, hasKey: false },
+        // 4 Red Light Guards (Snipers) - Inside building floors 1-4
+        { id: 'g_red_0', floor: 4, x: arenaW / 2, dir: 1, speed: 1.1, minX: 80, maxX: arenaW - 80, hasGun: true, shootCooldown: 40, hasKey: false },
         { id: 'g_red_1', floor: 1, x: arenaW / 2, dir: -1, speed: 1.15, minX: 80, maxX: arenaW - 80, hasGun: true, shootCooldown: 50, hasKey: false },
         { id: 'g_red_2', floor: 2, x: arenaW / 2, dir: 1, speed: 1.15, minX: 80, maxX: arenaW - 80, hasGun: true, shootCooldown: 45, hasKey: false },
         { id: 'g_red_3', floor: 3, x: arenaW / 2, dir: -1, speed: 1.2, minX: 80, maxX: arenaW - 80, hasGun: true, shootCooldown: 55, hasKey: false },
@@ -1314,8 +1314,10 @@ export default function ThiefEscapeGame({
       const cfg = CURATED_LEVELS[Math.min(lvl - 1, CURATED_LEVELS.length - 1)];
       const w = cfg.arenaW;
 
-      setShieldActive(false);
-      shieldUntilRef.current = 0;
+      // 3.0-second Spawn Protection Shield on level start
+      const spawnShieldTime = Date.now() + 3000;
+      shieldUntilRef.current = spawnShieldTime;
+      setShieldActive(true);
 
       const initialPlayer = {
         floor: 0,
@@ -1604,34 +1606,32 @@ export default function ThiefEscapeGame({
           playPerfectSound();
           triggerPerfectHaptic();
 
-          // Reposition all follower / hunter guards back to their top-floor starting position near the diamond!
+          // Reset ALL guards back to their level starting positions so player is NEVER spawn-camped!
           const diamondFloor = levelConfig.diamond.floor;
           const diamondX = levelConfig.diamond.x;
           let hCount = 0;
-          const updatedGuards = guardsRef.current.map((g) => {
+          const updatedGuards = levelConfig.guards.map((g) => {
+            let startFloor = Math.max(1, g.floor);
+            let startX = g.x;
             if (g.isHunter) {
               const offset = hCount % 2 === 0 ? -48 : 48;
               hCount++;
-              let startX = diamondX + offset;
-              if (levelConfig.isDualBuilding) {
-                startX = Math.max(310, Math.min(460, startX));
-              } else {
-                startX = Math.max(50, Math.min(arenaW - 50, startX));
-              }
-              return {
-                ...g,
-                floor: diamondFloor,
-                x: startX,
-                y: null,
-                isClimbing: false,
-                stair: null,
-                climbDir: 0,
-                pauseTimer: 50,
-                isChasing: false,
-                isInvestigating: false,
-              };
+              startX = diamondX + offset;
+              startFloor = diamondFloor;
             }
-            return g;
+            return {
+              ...g,
+              floor: startFloor,
+              x: startX,
+              y: null,
+              isClimbing: false,
+              stair: null,
+              climbDir: 0,
+              pauseTimer: 60,
+              isChasing: false,
+              isInvestigating: false,
+              isDefeated: false,
+            };
           });
           guardsRef.current = updatedGuards;
           setGuards(updatedGuards);

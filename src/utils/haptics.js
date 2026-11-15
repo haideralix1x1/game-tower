@@ -21,6 +21,15 @@ export const triggerMediumHaptic = async () => {
   }
 };
 
+export const triggerHeavyHaptic = async () => {
+  if (!isHapticsAvailable) return;
+  try {
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+  } catch {
+    // Ignore on unsupported hardware/simulators
+  }
+};
+
 export const triggerSliceHaptic = async () => {
   if (!isHapticsAvailable) return;
   try {
